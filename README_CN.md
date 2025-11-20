@@ -62,7 +62,7 @@
 | **OLTP**                 | ✅                    | ✅             | ❌          | ❌          | ✅                       | ✅                            | ❌          | ❌                                   |
 | **OLAP**                 | ✅                    | ✅             | ❌          | ❌          | ❌                       | ✅                            | ✅          | ⚠️                                  |
 | **License**  | Apache 2.0           | MulanPubL 2.0 | Apache 2.0 | Apache 2.0 | GPL 2.0                 | PostgreSQL License           | MIT        | AGPLv3<br/>+SSPLv1<br/>+Elastic 2.0 |
-> [1] Embedded capability is removed in MySQL 8.0
+> [1] MySQL 8.0 移除了嵌入式能力
 > - ✅ 支持
 > - ❌ 不支持
 > - ⚠️ 有限支持
