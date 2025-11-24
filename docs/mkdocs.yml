@@ -16,11 +16,10 @@ plugins:
           default: true
           name: English
           build: true
-          link: /developer-guide/en/
         - locale: zh
           name: 中文
           build: true
-          link: /developer-guide/zh/
+          link: /zh/
   - git-authors
 nav:
   - README.md

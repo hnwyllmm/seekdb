@@ -38,6 +38,7 @@ jobs:
         id: pages
         run: |
           cd docs
+          mv developer-guide docs
           mkdocs build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

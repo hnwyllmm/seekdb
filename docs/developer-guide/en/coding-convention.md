@@ -2,7 +2,7 @@
 title: Coding Convention
 ---
 
-OceanBase SeekDB is a giant project that has been developed for more than ten years and contains millions of lines of C++ code. It already has many unique programming habits. Here are some OceanBase SeekDB programming habits to help people who come into contact with the OceanBase SeekDB source code for the first time have an easier time accepting and understanding. For more detailed information, please refer to ["OceanBase SeekDB C++ Coding Standard"](./coding_standard.md).
+OceanBase SeekDB is a giant project that has been developed for more than ten years and contains millions of lines of C++ code. It already has many unique programming habits. Here are some OceanBase SeekDB programming habits to help people who come into contact with the OceanBase SeekDB source code for the first time have an easier time accepting and understanding. For more detailed information, please refer to ["OceanBase SeekDB C++ Coding Standard"](./coding-standard.md).
 
 # Naming Convention
 
@@ -38,7 +38,7 @@ SeekDB does not encourage the use of some syntax of the new C++ standard, such a
 - Smart pointers cannot solve the problem of object memory usage, and improper use can also cause performance problems;
 - The use of move is extremely complex, and it will lead to deeply hidden BUGs without ensuring that everyone understands it correctly.
 
-Of course, SeekDB does not exclude all new standards, such as encouraging the use of override, final, constexpr, etc. If you are not sure whether a certain syntax can be used, you can search and confirm in ["OceanBase SeekDB C++ Coding Standard"](./coding_standard.md).
+Of course, SeekDB does not exclude all new standards, such as encouraging the use of override, final, constexpr, etc. If you are not sure whether a certain syntax can be used, you can search and confirm in ["OceanBase SeekDB C++ Coding Standard"](./coding-standard.md).
 
 ## Single Entrance and Single Exit
 

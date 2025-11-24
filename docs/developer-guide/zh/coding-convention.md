@@ -4,7 +4,7 @@ title: 编程惯例
 
 OceanBase SeekDB 编程惯例
 
-OceanBase SeekDB 是一个发展了十几年的、包含几百万行C++代码的巨型工程，它已经有了很多自己特有的编程习惯，这里介绍一些首次接触SeekDB源码同学一些需要注意的事项，也可以让大家更方便的阅读SeekDB源码。更详细的内容可以参考[OceanBase SeekDB C++编程规范](coding_standard.md)。
+OceanBase SeekDB 是一个发展了十几年的、包含几百万行C++代码的巨型工程，它已经有了很多自己特有的编程习惯，这里介绍一些首次接触SeekDB源码同学一些需要注意的事项，也可以让大家更方便的阅读SeekDB源码。更详细的内容可以参考[OceanBase SeekDB C++编程规范](coding-standard.md)。
 
 # 命名习惯
 ## 文件命名
