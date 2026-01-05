@@ -35,6 +35,7 @@ TEST(TestObPluginMgr, test_find_plugin)
   ASSERT_EQ(nullptr, plugin_entry);
 
   ASSERT_EQ(OB_SUCCESS, plugin_mgr.load_builtin_plugins());
+  ASSERT_EQ(1, 1);
 
   const char *not_exist_names[] = {
     "", "not_exist", "fake"

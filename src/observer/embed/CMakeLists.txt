@@ -6,7 +6,7 @@ if(BUILD_EMBED_MODE)
   endif()
   set(Python3_FOUND FALSE)
 
-  message(STATUS "Target Python version: ${PYTHON_VERSION}")
+  message(STATUS "[test] Target Python version: ${PYTHON_VERSION}")
 
   # First try to find the specified Python version from system
   message(STATUS "Searching for Python ${PYTHON_VERSION} in system first...")

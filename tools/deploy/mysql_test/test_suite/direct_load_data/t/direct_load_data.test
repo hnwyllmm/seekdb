@@ -5,6 +5,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 # owner group: Storage Group
 # description: direct load data
 
+hello
 --source mysql_test/test_suite/direct_load_data/include/copy_data_for_direct_load.inc
 
 connect (conn_query,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
