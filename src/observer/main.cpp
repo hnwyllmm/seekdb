@@ -457,5 +457,6 @@ int main(int argc, char *argv[])
       ret = OB_ERR_UNEXPECTED;
     }
   }
+  LOG_INFO("this is a test");
   return ret;
 }
