@@ -17,15 +17,18 @@
 #ifndef SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_S3_BASE_H_
 #define SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_S3_BASE_H_
 
+#include "lib/restore/ob_i_storage.h"
+#include "lib/container/ob_array.h"
+#include "lib/container/ob_se_array.h"
+#include "common/storage/ob_device_common.h"
+
+#ifdef OB_BUILD_S3
 #include <openssl/md5.h>
 #ifdef __linux__
 #include <malloc.h>
 #elif defined(__APPLE__)
 #include <stdlib.h> // malloc is in stdlib.h on macOS
 #endif
-#include "lib/restore/ob_i_storage.h"
-#include "lib/container/ob_array.h"
-#include "lib/container/ob_se_array.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_se_array_iterator.h"
 #include "lib/allocator/ob_vslice_alloc.h"
@@ -707,4 +710,111 @@ private:
 } // common
 } // oceanbase
 
-#endif
+#else // !OB_BUILD_S3
+// Stub implementations when S3 is disabled (e.g. Android)
+
+namespace oceanbase
+{
+namespace common
+{
+
+inline int init_s3_env() { return OB_SUCCESS; }
+inline void fin_s3_env() {}
+
+static constexpr int64_t S3_CONNECT_TIMEOUT_MS = 10 * 1000;
+static constexpr int64_t S3_REQUEST_TIMEOUT_MS = 10 * 1000;
+static constexpr int64_t MAX_S3_CONNECTIONS_PER_CLIENT = 128;
+static constexpr int64_t STOP_S3_TIMEOUT_US = 10 * 1000L;
+static constexpr int MAX_S3_REGION_LENGTH = 128;
+static constexpr int MAX_S3_ENDPOINT_LENGTH = 256;
+static constexpr int MAX_S3_ACCESS_ID_LENGTH = 256;
+static constexpr int MAX_S3_SECRET_KEY_LENGTH = 256;
+static constexpr int MAX_S3_CLIENT_NUM = 97;
+static constexpr int MAX_S3_PART_NUM = 10000;
+static constexpr int64_t S3_MULTIPART_UPLOAD_BUFFER_SIZE = 8 * 1024 * 1024L;
+static constexpr char OB_STORAGE_S3_ALLOCATOR[] = "StorageS3";
+static constexpr char S3_SDK[] = "S3SDK";
+
+class ObStorageS3Util : public ObIStorageUtil
+{
+public:
+  ObStorageS3Util() : is_opened_(false), storage_info_(NULL) {}
+  virtual ~ObStorageS3Util() {}
+  virtual int open(ObObjectStorageInfo *) override { return OB_SUCCESS; }
+  virtual void close() override {}
+  virtual int is_exist(const ObString &, bool &exist) override { exist = false; return OB_NOT_SUPPORTED; }
+  virtual int get_file_length(const ObString &, int64_t &) override { return OB_NOT_SUPPORTED; }
+  virtual int head_object_meta(const ObString &, ObStorageObjectMetaBase &) override { return OB_NOT_SUPPORTED; }
+  virtual int del_file(const ObString &) override { return OB_NOT_SUPPORTED; }
+  virtual int batch_del_files(const ObString &, hash::ObHashMap<ObString, int64_t> &, ObIArray<int64_t> &) override { return OB_NOT_SUPPORTED; }
+  virtual int write_single_file(const ObString &, const char *, const int64_t) override { return OB_NOT_SUPPORTED; }
+  virtual int mkdir(const ObString &) override { return OB_NOT_SUPPORTED; }
+  virtual int list_files(const ObString &, ObBaseDirEntryOperator &) override { return OB_NOT_SUPPORTED; }
+  virtual int list_files(const ObString &, ObStorageListCtxBase &) override { return OB_NOT_SUPPORTED; }
+  virtual int del_dir(const ObString &) override { return OB_NOT_SUPPORTED; }
+  virtual int list_directories(const ObString &, ObBaseDirEntryOperator &) override { return OB_NOT_SUPPORTED; }
+  virtual int is_tagging(const ObString &, bool &) override { return OB_NOT_SUPPORTED; }
+  virtual int del_unmerged_parts(const ObString &) override { return OB_NOT_SUPPORTED; }
+private:
+  bool is_opened_;
+  ObObjectStorageInfo *storage_info_;
+};
+
+class ObStorageS3Reader : public ObIStorageReader
+{
+public:
+  virtual int open(const ObString &, ObObjectStorageInfo *, bool = true) override { return OB_NOT_SUPPORTED; }
+  virtual int pread(char *, int64_t, int64_t, int64_t &) override { return OB_NOT_SUPPORTED; }
+  virtual int close() override { return OB_SUCCESS; }
+  virtual int64_t get_length() const override { return 0; }
+  virtual bool is_opened() const override { return false; }
+};
+
+class ObStorageS3Writer : public ObIStorageWriter
+{
+public:
+  virtual int open(const ObString &, ObObjectStorageInfo *) override { return OB_NOT_SUPPORTED; }
+  virtual int write(const char *, int64_t) override { return OB_NOT_SUPPORTED; }
+  virtual int pwrite(const char *, int64_t, int64_t) override { return OB_NOT_SUPPORTED; }
+  virtual int close() override { return OB_SUCCESS; }
+  virtual int64_t get_length() const override { return 0; }
+  virtual bool is_opened() const override { return false; }
+};
+
+class ObStorageS3AppendWriter : public ObStorageS3Writer
+{
+public:
+  ObStorageS3AppendWriter() : ObStorageS3Writer() {}
+};
+
+class ObStorageS3MultiPartWriter : public ObStorageS3Writer, public ObIStorageMultiPartWriter, public ObStoragePartInfoHandler
+{
+public:
+  ObStorageS3MultiPartWriter() : ObStorageS3Writer(), ObStoragePartInfoHandler() {}
+  virtual int open(const ObString &, ObObjectStorageInfo *) override { return OB_NOT_SUPPORTED; }
+  virtual int write(const char *, int64_t) override { return OB_NOT_SUPPORTED; }
+  virtual int pwrite(const char *, int64_t, int64_t) override { return OB_NOT_SUPPORTED; }
+  virtual int complete() override { return OB_NOT_SUPPORTED; }
+  virtual int abort() override { return OB_SUCCESS; }
+  virtual int close() override { return OB_SUCCESS; }
+  virtual int64_t get_length() const override { return 0; }
+  virtual bool is_opened() const override { return false; }
+};
+
+class ObStorageParallelS3MultiPartWriter : public ObStorageS3Writer, public ObIStorageParallelMultipartWriter, public ObStoragePartInfoHandler
+{
+public:
+  ObStorageParallelS3MultiPartWriter() : ObStorageS3Writer(), ObStoragePartInfoHandler() {}
+  virtual int open(const ObString &, ObObjectStorageInfo *) override { return OB_NOT_SUPPORTED; }
+  virtual int upload_part(const char *, int64_t, int64_t) override { return OB_NOT_SUPPORTED; }
+  virtual int complete() override { return OB_NOT_SUPPORTED; }
+  virtual int abort() override { return OB_SUCCESS; }
+  virtual int close() override { return OB_SUCCESS; }
+  virtual bool is_opened() const override { return false; }
+};
+
+} // common
+} // oceanbase
+
+#endif // OB_BUILD_S3
+#endif // SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_S3_BASE_H_

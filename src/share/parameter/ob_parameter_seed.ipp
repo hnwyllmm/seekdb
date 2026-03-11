@@ -112,9 +112,9 @@ DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "True",
 DEF_INT(max_string_print_length, OB_CLUSTER_PARAMETER, "500", "[0,]",
         "truncate very long string when printing to log file. Range:[0,]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_sql_audit, OB_CLUSTER_PARAMETER, "true",
+DEF_BOOL(enable_sql_audit, OB_CLUSTER_PARAMETER, "false",
          "specifies whether SQL audit is turned on. "
-         "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
+         "The default value is FALSE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_record_trace_id, OB_CLUSTER_PARAMETER, "False",
          "specifies whether record app trace id is turned on.",
@@ -2048,7 +2048,7 @@ DEF_CAP(_ob_ash_size, OB_CLUSTER_PARAMETER, "0M", "[0,1G]",
         "to limit the memory size for ash buffer. Range: [0,1G] 0 means using default ash size"
         ", 30MB in normal case, 10M in mini mode",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_ob_ash_enable, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(_ob_ash_enable, OB_CLUSTER_PARAMETER, "False",
          "enable active session history",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_ash_disk_write_enable, OB_CLUSTER_PARAMETER, "True",
@@ -2223,7 +2223,7 @@ DEF_BOOL(enable_rpc_authentication_bypass, OB_CLUSTER_PARAMETER, "True",
         "cluster and provide service when rpc authentication is turned on.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(_checkpoint_diagnose_preservation_count, OB_CLUSTER_PARAMETER, "100", "[0,800]",
+DEF_INT(_checkpoint_diagnose_preservation_count, OB_CLUSTER_PARAMETER, "0", "[0,800]",
         "the count of checkpoint diagnose info preservation",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_preserve_order_for_pagination, OB_CLUSTER_PARAMETER, "False",

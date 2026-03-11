@@ -839,7 +839,7 @@ int ObExprRegexContext::check_binary_compatible(const ObExprResType *types, int6
 
 OB_SERIALIZE_MEMBER(ObExprRegexpSessionVariables, regexp_stack_limit_, regexp_time_limit_);
 
-#if defined(__x86_64__)
+#ifdef OB_BUILD_HYPERSCAN
 ObExprHsRegexCtx::ObExprHsRegexCtx()
   : ObExprOperatorCtx(),
     inited_(false),

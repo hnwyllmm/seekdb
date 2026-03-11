@@ -14,6 +14,7 @@
  * limitations under the License.
  */
  #define USING_LOG_PREFIX SQL_ENG
+#ifdef OB_BUILD_ARROW
 #include "ob_orc_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
 #include "share/external_table/ob_external_table_utils.h"
@@ -1647,3 +1648,4 @@ DEF_TO_STRING(ObOrcIteratorState)
 
 }
 }
+#endif // OB_BUILD_ARROW

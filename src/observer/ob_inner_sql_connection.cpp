@@ -385,7 +385,17 @@ int ObInnerSQLConnection::init_session_info(
       LOG_WARN("fail to update max packet size", K(ret));
     } else if (OB_FAIL(session->init_tenant(OB_SYS_TENANT_NAME, OB_SYS_TENANT_ID))) {
       LOG_WARN("fail to init tenant", K(ret));
-    } else {
+    } else if (OB_NOT_NULL(GCTX.schema_service_)) {
+      share::schema::ObSchemaGetterGuard schema_guard;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+        LOG_WARN("get schema guard failed, use defaults", K(ret));
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(session->load_all_sys_vars(schema_guard))) {
+        LOG_WARN("load all sys vars failed, use defaults", K(ret));
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (!is_extern_session) { // if not exetern session
         if(OB_FAIL(session->switch_tenant(OB_SYS_TENANT_ID))) {
           LOG_WARN("Init sys tenant in session error", K(ret));

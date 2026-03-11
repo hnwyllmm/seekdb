@@ -16,8 +16,10 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 
+#ifdef OB_BUILD_ARROW
 #include <parquet/arrow/schema.h>
 #include <orc/Writer.hh>
+#endif
 
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/parser/parse_malloc.h"
@@ -7995,6 +7997,7 @@ int ObResolverUtils::resolve_file_compression_format(const ParseNode *node, ObEx
   } else {
     switch (format.format_type_) {
       case ObExternalFileFormat::PARQUET_FORMAT: {
+#ifdef OB_BUILD_ARROW
         for (int32_t compress_idx = 0; !find && compress_idx <= parquet::Compression::LZ4_HADOOP; compress_idx++) {
           if (0 == string_v.case_compare(ObParquetGeneralFormat::COMPRESSION_ALGORITHMS[compress_idx])) {
             format.parquet_format_.compress_type_index_ = compress_idx;
@@ -8009,9 +8012,14 @@ int ObResolverUtils::resolve_file_compression_format(const ParseNode *node, ObEx
           LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
           LOG_WARN("failed. compress type for parquet file is not supported yet", K(ret), K(string_v));
         }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("parquet not supported in this build", K(ret));
+#endif
         break;
       }
       case ObExternalFileFormat::ORC_FORMAT: {
+#ifdef OB_BUILD_ARROW
         for (int32_t compress_idx = 0; !find && compress_idx <= orc::CompressionKind::CompressionKind_ZSTD; compress_idx++) {
           if (0 == string_v.case_compare(ObOrcGeneralFormat::COMPRESSION_ALGORITHMS[compress_idx])) {
             format.orc_format_.compress_type_index_ = compress_idx;
@@ -8024,6 +8032,10 @@ int ObResolverUtils::resolve_file_compression_format(const ParseNode *node, ObEx
           LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
           LOG_WARN("failed. compress type for orc file is not supported yet", K(ret), K(string_v));
         }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("orc not supported in this build", K(ret));
+#endif
         break;
       }
       case ObExternalFileFormat::ODPS_FORMAT: {

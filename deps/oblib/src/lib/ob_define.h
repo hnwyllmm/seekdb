@@ -1988,7 +1988,9 @@ const int64_t OB_MYSQL_PACKET_BUFF_SIZE = 6 * 1024; //6KB
 const int64_t OB_MAX_THREAD_NUM = 4096;
 const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthread_create, such as easy
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
-#if __x86_64__
+#ifdef __ANDROID__
+const int64_t OB_MAX_CPU_NUM = 16;
+#elif __x86_64__
 const int64_t OB_MAX_CPU_NUM = 64;
 #elif __aarch64__
 const int64_t OB_MAX_CPU_NUM = 128;

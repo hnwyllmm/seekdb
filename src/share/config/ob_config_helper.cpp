@@ -1478,11 +1478,11 @@ bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
 {
   bool valid = false;
   if (0 == ObString::make_string("Hyperscan").case_compare(t.str())) {
-#if defined(__x86_64__)
+#ifdef OB_BUILD_HYPERSCAN
     valid = true;
 #else
     valid = false;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using hyperscan as regex engine in platforms other than x86");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hyperscan regex engine is disabled in this build");
 #endif
   } else {
     valid = (0 == ObString::make_string("ICU").case_compare(t.str()));
@@ -1511,10 +1511,14 @@ bool ObConfigS3URLEncodeTypeChecker::check(const ObConfigItem &t) const
   common::ObString tmp_str(t.str());
   if (0 == tmp_str.case_compare("default")) {
     bret = true;
+#ifdef OB_BUILD_S3
     Aws::Http::SetCompliantRfc3986Encoding(false);
+#endif
   } else if (0 == tmp_str.case_compare("compliantRfc3986Encoding")) {
     bret = true;
+#ifdef OB_BUILD_S3
     Aws::Http::SetCompliantRfc3986Encoding(true);
+#endif
   } else {
     bret = false;
   }

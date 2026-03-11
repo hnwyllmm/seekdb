@@ -17,6 +17,7 @@
 #ifndef OB_PARQUET_TABLE_ROW_ITER_H
 #define OB_PARQUET_TABLE_ROW_ITER_H
 
+#ifdef OB_BUILD_ARROW
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/reader.h>
@@ -182,4 +183,5 @@ private:
 }
 }
 
+#endif // OB_BUILD_ARROW
 #endif // OB_PARQUET_TABLE_ROW_ITER_H

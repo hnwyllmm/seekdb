@@ -93,6 +93,9 @@ int ObCheckpointDiagnoseMgr::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init ObCheckpointDiagnoseMgr twice", KR(ret));
+  } else if (0 == max_trace_info_size_) {
+    LOG_INFO("checkpoint diagnose disabled, skip hash map creation to save memory");
+    is_inited_ = true;
   } else {
     for (int i = 0; OB_SUCC(ret) && i < MAX_TRACE_INFO_ARR_SIZE; i++) {
       const int64_t bucket_count = hash::cal_next_prime(100);

@@ -985,6 +985,9 @@ int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
                                 ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
+#ifdef __ANDROID__
+  return ret;
+#endif
   if (OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid cache obj", K(ret));

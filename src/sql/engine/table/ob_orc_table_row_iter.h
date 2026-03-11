@@ -17,6 +17,7 @@
 #ifndef OB_ORC_TABLE_ROW_ITER_H
 #define OB_ORC_TABLE_ROW_ITER_H
 
+#ifdef OB_BUILD_ARROW
 #include "share/ob_i_tablet_scan.h"
 #include "lib/file/ob_file.h"
 #include "common/row/ob_row_iterator.h"
@@ -205,4 +206,5 @@ private:
 }
 }
 
+#endif // OB_BUILD_ARROW
 #endif

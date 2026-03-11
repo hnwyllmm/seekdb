@@ -135,8 +135,10 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "Fail to init allocator ", K(ret));
     } else if (OB_FAIL(lock_.init(mem_attr))) {
       OB_LOG(WARN, "fail to init lock", KR(ret));
+#ifdef OB_BUILD_S3
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+#endif
     } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
         &ObClusterVersionMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
@@ -145,18 +147,15 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to register sts crendential", K(ret));
     } else if (OB_FAIL(ObDeviceCredentialMgr::get_instance().init())) {
       OB_LOG(WARN, "fail to init device credential mgr", K(ret));
+#ifdef OB_BUILD_S3
     } else {
-      // When compliantRfc3986Encoding is set to true:
-      // - Adhere to RFC 3986 by supporting the encoding of reserved characters
-      //   such as '-', '_', '.', '$', '@', etc.
-      // - This approach mitigates inconsistencies in server behavior when accessing
-      //   COS using the S3 SDK.
-      // Otherwise, the reserved characters will not be encoded,
-      // following the default behavior of the S3 SDK.
       const bool compliantRfc3986Encoding =
           (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
       Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
     }
+#else
+    }
+#endif
   }
 
   if (OB_SUCCESS == ret) {
@@ -199,7 +198,9 @@ void ObDeviceManager::destroy()
       del_device_key = NULL;
     }
     allocator_.reset();
+#ifdef OB_BUILD_S3
     fin_s3_env();
+#endif
     lock_.destroy();
     ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;

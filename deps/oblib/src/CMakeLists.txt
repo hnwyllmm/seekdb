@@ -23,8 +23,8 @@ target_include_directories(
   ${DEP_DIR}/include/apr-1/
   ${DEP_DIR}/include/icu
   ${DEP_DIR}/include/icu/common
-  ${DEP_DIR}/include/apache-arrow
-  ${DEP_DIR}/include/apache-orc
+  $<$<BOOL:${OB_BUILD_ARROW}>:${DEP_DIR}/include/apache-arrow>
+  $<$<BOOL:${OB_BUILD_ARROW}>:${DEP_DIR}/include/apache-orc>
   ${DEP_DIR}/include/fast_float
   ${USSL_INCLUDE_DIRS}
 )
@@ -213,11 +213,11 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
-  ${_LIB_PATH}/libarrow.a
-  ${_LIB_PATH}/libparquet.a
-  $<$<NOT:$<PLATFORM_ID:Darwin>>:${_LIB_PATH}/libarrow_bundled_dependencies.a>
-  $<$<PLATFORM_ID:Darwin>:-L/opt/homebrew/lib -lutf8proc -lthrift -lre2 -lbrotlicommon -lbrotlienc -lbrotlidec -lbz2>
-  ${_LIB_PATH}/liborc.a
+  $<$<BOOL:${OB_BUILD_ARROW}>:${_LIB_PATH}/libarrow.a>
+  $<$<BOOL:${OB_BUILD_ARROW}>:${_LIB_PATH}/libparquet.a>
+  $<$<AND:$<BOOL:${OB_BUILD_ARROW}>,$<NOT:$<PLATFORM_ID:Darwin>>>:${_LIB_PATH}/libarrow_bundled_dependencies.a>
+  $<$<AND:$<BOOL:${OB_BUILD_ARROW}>,$<PLATFORM_ID:Darwin>>:-L/opt/homebrew/lib -lutf8proc -lthrift -lre2 -lbrotlicommon -lbrotlienc -lbrotlidec -lbz2>
+  $<$<BOOL:${OB_BUILD_ARROW}>:${_LIB_PATH}/liborc.a>
   ${_LIB_PATH}/libsnappy.a
   $<$<NOT:$<BOOL:${ANDROID}>>:${_LIB_PATH}/libprotoc.a>
   ${_LIB_PATH}/libprotobuf.a

@@ -19,12 +19,16 @@
 
 
 #include "sql/engine/ob_operator.h"
+#ifdef OB_BUILD_ARROW
 #include "sql/engine/basic/ob_arrow_basic.h"
+#endif
 #include "lib/file/ob_file.h"
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#ifdef OB_BUILD_ARROW
 #include <parquet/api/writer.h>
+#endif
 #include "ob_select_into_basic.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 
@@ -136,6 +140,7 @@ private:
   int64_t &write_offset_;
 };
 
+#ifdef OB_BUILD_ARROW
 class ObBatchFileWriter : public ObExternalFileWriter
 {
 public:
@@ -274,6 +279,7 @@ private:
   std::unique_ptr<orc::Writer> orc_file_writer_;
   std::unique_ptr<orc::ColumnVectorBatch> orc_row_batch_;
 };
+#endif // OB_BUILD_ARROW
 
 }
 }

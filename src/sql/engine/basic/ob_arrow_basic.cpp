@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #define USING_LOG_PREFIX SQL_ENG
+#ifdef OB_BUILD_ARROW
 
 #include "ob_arrow_basic.h"
 #include <parquet/api/reader.h>
@@ -302,3 +303,4 @@ arrow::Result<int64_t> ObParquetOutputStream::Tell() const
 
 } // end of oceanbase namespace
 } // end of oceanbase namespace
+#endif // OB_BUILD_ARROW

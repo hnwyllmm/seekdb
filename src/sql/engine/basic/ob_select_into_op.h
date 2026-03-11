@@ -18,13 +18,17 @@
 #define SRC_SQL_ENGINE_BASIC_OB_SELECT_INTO_OP_H_
 
 #include "sql/engine/ob_operator.h"
+#ifdef OB_BUILD_ARROW
 #include "sql/engine/basic/ob_arrow_basic.h"
+#endif
 #include "lib/file/ob_file.h"
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 
+#ifdef OB_BUILD_ARROW
 #include <parquet/api/writer.h>
+#endif
 #include "sql/engine/basic/ob_select_into_basic.h"
 #include "sql/engine/basic/ob_external_file_writer.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
@@ -150,10 +154,12 @@ public:
       is_odps_cpp_table_(false),
       is_odps_java_table_(false),
       block_id_(0),
-      need_commit_(true),
-      arrow_alloc_(),
-      parquet_writer_schema_(nullptr),
-      orc_schema_(nullptr)
+      need_commit_(true)
+#ifdef OB_BUILD_ARROW
+      , arrow_alloc_()
+      , parquet_writer_schema_(nullptr)
+      , orc_schema_(nullptr)
+#endif
   {
   }
 
@@ -294,7 +300,7 @@ private:
   char *get_shared_buf() { return shared_buf_; }
   int64_t get_shared_buf_len() { return shared_buf_len_; }
 
-  // methods for handling parquet
+#ifdef OB_BUILD_ARROW
   int init_parquet_env();
   int get_parquet_logical_type(
       std::shared_ptr<const parquet::LogicalType> &logical_type,
@@ -349,6 +355,7 @@ private:
                      const bool is_strict_mode,
                      const ObDateSqlMode date_sql_mode);
   int check_orc_file_size(ObOrcFileWriter &data_writer);
+#endif // OB_BUILD_ARROW
   int get_data_from_expr_vector(const common::ObIVector* expr_vector,
                                 int row_idx,
                                 ObObjType type,
@@ -397,16 +404,18 @@ private:
   bool is_odps_java_table_;
   uint32_t block_id_;
   bool need_commit_;
-  // Handle parquet variables
+#ifdef OB_BUILD_ARROW
   ObArrowMemPool arrow_alloc_;
   std::shared_ptr<parquet::schema::GroupNode> parquet_writer_schema_;
+#endif
   static const int64_t SHARED_BUFFER_SIZE = 2LL * 1024 * 1024;
   static const int64_t MAX_OSS_FILE_SIZE = 5LL * 1024 * 1024 * 1024;
   static const int32_t ODPS_DATE_MIN_VAL = -719162; // '0001-1-1'
-
+#ifdef OB_BUILD_ARROW
   orc::WriterOptions options_;
   ObOrcMemPool orc_alloc_;
   std::unique_ptr<orc::Type> orc_schema_;
+#endif
 };
 
 

@@ -23,6 +23,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_errno.h"
 #include "share/ob_define.h"
+#include "share/config/ob_server_config.h"
 
 #define ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(T, trace_id) \
   checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*); \
@@ -460,7 +461,11 @@ public:
       is_inited_(false)
   {}
   virtual ~ObCheckpointDiagnoseMgr() {}
-  static int mtl_init(ObCheckpointDiagnoseMgr* &m) { return m->init(); }
+  static int mtl_init(ObCheckpointDiagnoseMgr* &m)
+  {
+    m->max_trace_info_size_ = GCONF._checkpoint_diagnose_preservation_count;
+    return m->init();
+  }
   int init();
   void destroy() { is_inited_ = false; };
   int update_max_trace_info_size(int64_t max_trace_info_size);

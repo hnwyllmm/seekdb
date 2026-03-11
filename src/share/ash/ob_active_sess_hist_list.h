@@ -71,10 +71,10 @@ public:
       // Worst case is the fixup buffer never got release because user thread's wait event never ends.
     }
   }
-  void set_read_pos(int64_t read_pos) { ash_buffer_->set_read_pos(read_pos); }
-  int64_t write_pos() const { return ash_buffer_->write_pos(); }
-  inline int64_t size() const { return ash_buffer_->size(); }
-  inline int64_t free_slots_num() const { return ash_buffer_->free_slots_num(); }
+  void set_read_pos(int64_t read_pos) { if (ash_buffer_.is_valid()) ash_buffer_->set_read_pos(read_pos); }
+  int64_t write_pos() const { return ash_buffer_.is_valid() ? ash_buffer_->write_pos() : 0; }
+  inline int64_t size() const { return ash_buffer_.is_valid() ? ash_buffer_->size() : 0; }
+  inline int64_t free_slots_num() const { return ash_buffer_.is_valid() ? ash_buffer_->free_slots_num() : 0; }
   const ObActiveSessionStatItem &get(int64_t pos) const {
     return ash_buffer_->get(pos);
   }

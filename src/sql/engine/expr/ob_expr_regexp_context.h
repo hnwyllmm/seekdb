@@ -25,7 +25,7 @@
 #include "lib/charset/ob_charset.h"
 #include <icu/i18n/unicode/uregex.h>
 #include "sql/engine/expr/ob_expr_operator.h"
-#if defined(__x86_64__)
+#ifdef OB_BUILD_HYPERSCAN
 #include <hyperscan/hs/hs.h>
 #endif
 
@@ -158,7 +158,7 @@ private:
   URegularExpression *regexp_engine_;
 };
 
-#if defined(__x86_64__)
+#ifdef OB_BUILD_HYPERSCAN
 class ObExprHsRegexCtx : public ObExprOperatorCtx
 {
   static const int MAX_PATTERN_LEN = 2000;
@@ -235,7 +235,7 @@ private:
   hs_compile_error_t *hs_compile_err_;
 };
 #else
-  // empty class
+  // Stub when hyperscan disabled (e.g. Android)
   class ObExprHsRegexCtx {};
 #endif
 }

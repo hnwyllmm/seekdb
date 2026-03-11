@@ -196,7 +196,7 @@ ob_set_subtarget(ob_sql engine_aggregate
 )
 
 ob_set_subtarget(ob_sql engine_basic
-  engine/basic/ob_arrow_basic.cpp
+  $<$<BOOL:${OB_BUILD_ARROW}>:engine/basic/ob_arrow_basic.cpp>
   engine/basic/ob_batch_result_holder.cpp
   engine/basic/ob_compact_row.cpp
   engine/basic/ob_temp_block_store.cpp
@@ -975,8 +975,8 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
   engine/table/ob_csv_table_row_iter.cpp
-  engine/table/ob_orc_table_row_iter.cpp
-  engine/table/ob_parquet_table_row_iter.cpp
+  $<$<BOOL:${OB_BUILD_ARROW}>:engine/table/ob_orc_table_row_iter.cpp>
+  $<$<BOOL:${OB_BUILD_ARROW}>:engine/table/ob_parquet_table_row_iter.cpp>
   engine/table/ob_file_prefetch_buffer.cpp
   engine/table/ob_ddl_block_sample_scan_op.cpp
 )

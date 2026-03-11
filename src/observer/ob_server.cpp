@@ -483,7 +483,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init backup meta cache failed", KR(ret));
     } else if (OB_FAIL(ObDictCache::get_instance().init("dict_cache"))) {
       LOG_ERROR("init dict cache failed", KR(ret));
-    } else if (OB_FAIL(ObActiveSessHistList::get_instance().init())) {
+    } else if (GCONF._ob_ash_enable && OB_FAIL(ObActiveSessHistList::get_instance().init())) {
       LOG_ERROR("init ASH failed", KR(ret));
 #ifndef OB_BUILD_LITE
     } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_,

@@ -37,8 +37,11 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_expr_regexp.h"
+#include "sql/engine/table/ob_external_table_access_service.h"
+#ifdef OB_BUILD_ARROW
 #include "sql/engine/table/ob_orc_table_row_iter.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
+#endif
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/catalog/ob_catalog_utils.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
@@ -3318,7 +3321,7 @@ int ObDMLResolver::set_basic_column_properties(ObColumnSchemaV2 &column_schema,
   }
   return ret;
 }
-// Build column schema
+#ifdef OB_BUILD_ARROW
 int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
                                                 const ColumnIndexType column_index_type,
                                                 ObTableSchema& table_schema) 
@@ -3588,6 +3591,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
   }
   return ret;
 }
+#endif // OB_BUILD_ARROW
 
 
 int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &format,
@@ -3878,6 +3882,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
     }
     case ObExternalFileFormat::FormatType::PARQUET_FORMAT:
     {
+#ifdef OB_BUILD_ARROW
       ObSqlString full_file_name;
       ObString sampled_file_name;
       ObExternalDataAccessDriver data_access_driver_;
@@ -3940,7 +3945,6 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
 
         } catch(const std::exception& e) {
           if (OB_SUCC(ret)) {
-            //invalid file
             ret = OB_INVALID_EXTERNAL_FILE;
             LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());
             LOG_WARN("unexpected error", K(ret), "Info", e.what());
@@ -3952,10 +3956,15 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
           }
         }
       }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parquet not supported in this build", K(ret));
+#endif
       break;
     }
     case ObExternalFileFormat::FormatType::ORC_FORMAT:
     {
+#ifdef OB_BUILD_ARROW
       ObSqlString full_file_name;
       ObExternalDataAccessDriver data_access_driver_;
       ObString sampled_file_name;
@@ -4027,6 +4036,10 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
           }
         }
       }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("orc not supported in this build", K(ret));
+#endif
       break;
     }
     default:

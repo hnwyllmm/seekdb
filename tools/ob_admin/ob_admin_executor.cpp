@@ -187,9 +187,13 @@ int ObAdminExecutor::set_s3_url_encode_type(const char *type_str) const
   } else if (OB_FAIL(common::ObDeviceManager::get_instance().init_devices_env())) {
     STORAGE_LOG(WARN, "fail to init device env", KR(ret), K(type_str));
   } else if (0 == STRCASECMP("default", type_str)) {
+#ifdef OB_BUILD_S3
     Aws::Http::SetCompliantRfc3986Encoding(false);
+#endif
   } else if (0 == STRCASECMP("compliantRfc3986Encoding", type_str)) {
+#ifdef OB_BUILD_S3
     Aws::Http::SetCompliantRfc3986Encoding(true);
+#endif
   } else {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "type str is invalid, expect 'dafault'/'compliantRfc3986Encoding'",

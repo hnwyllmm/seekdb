@@ -16,15 +16,19 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#ifdef OB_BUILD_ARROW
 #include <arrow/api.h>
 #include <arrow/io/file.h>
 #include <arrow/util/logging.h>
 #include <parquet/api/writer.h>
 #include <parquet/exception.h>
-#include <cmath>
 #include <orc/Writer.hh>
 #include <orc/OrcFile.hh>
 #include <orc/Type.hh>
+#include <arrow/c/bridge.h>
+#include <arrow/array.h>
+#endif
+#include <cmath>
 #include <memory>
 
 #include "ob_select_into_op.h"
@@ -35,16 +39,15 @@
 #include "lib/udt/ob_collection_type.h"
 #include "share/config/ob_server_config.h"
 
-#include <arrow/c/bridge.h>
-#include <arrow/array.h>
-
 
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
+#ifdef OB_BUILD_ARROW
 #define ARROW_FAIL(statement) (OB_UNLIKELY(!(statement).ok()))
+#endif
 
 OB_SERIALIZE_MEMBER(ObSelectIntoOpInput, task_id_, sqc_id_);
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_, outfile_name_,
@@ -99,16 +102,26 @@ int ObSelectIntoOp::inner_open()
       }
       case ObExternalFileFormat::FormatType::PARQUET_FORMAT:
       {
+#ifdef OB_BUILD_ARROW
         if (OB_FAIL(init_parquet_env())) {
-          LOG_WARN("failed to init csv env", K(ret));
+          LOG_WARN("failed to init parquet env", K(ret));
         }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("parquet not supported in this build", K(ret));
+#endif
         break;
       }
       case ObExternalFileFormat::FormatType::ORC_FORMAT:
       {
+#ifdef OB_BUILD_ARROW
         if (OB_FAIL(init_orc_env())) {
-          LOG_WARN("failed to init csv env", K(ret));
+          LOG_WARN("failed to init orc env", K(ret));
         }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("orc not supported in this build", K(ret));
+#endif
         break;
       }
       default:
@@ -198,6 +211,7 @@ void ObSelectIntoOp::set_csv_format_options()
   }
 }
 
+#ifdef OB_BUILD_ARROW
 int ObSelectIntoOp::init_parquet_env()
 {
   int ret = OB_SUCCESS;
@@ -230,6 +244,7 @@ int ObSelectIntoOp::init_orc_env()
   }
   return ret;
 }
+#endif // OB_BUILD_ARROW
 
 int ObSelectIntoOp::init_env_common()
 {
@@ -455,7 +470,9 @@ int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
             if (OB_FAIL(into_outfile_batch_csv(brs_, data_writer))) {
               LOG_WARN("csv into outfile batch failed", K(ret));
             }
-          } else if (ObExternalFileFormat::FormatType::PARQUET_FORMAT == format_type_) {
+          }
+#ifdef OB_BUILD_ARROW
+          else if (ObExternalFileFormat::FormatType::PARQUET_FORMAT == format_type_) {
             if (OB_FAIL(into_outfile_batch_parquet(brs_, data_writer))) {
               LOG_WARN("parquet into outfile batch failed", K(ret));
             }
@@ -463,7 +480,9 @@ int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
             if (OB_FAIL(into_outfile_batch_orc(brs_, data_writer))) {
               LOG_WARN("orc into outfile batch failed", K(ret));
             }
-          } else {
+          }
+#endif
+          else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support to write into outfile format.", K(ret), K(format_type_));
           }
@@ -1436,6 +1455,7 @@ int ObSelectIntoOp::into_outfile_batch_csv(const ObBatchRows &brs, ObExternalFil
   return ret;
 }
 
+#ifdef OB_BUILD_ARROW
 int ObSelectIntoOp::get_parquet_logical_type(std::shared_ptr<const parquet::LogicalType> &logical_type,
                                              const ObObjType &obj_type,
                                              const int32_t precision,
@@ -2067,6 +2087,7 @@ int ObSelectIntoOp::check_orc_file_size(ObOrcFileWriter &data_writer)
   }
   return ret;
 }
+#endif // OB_BUILD_ARROW
 
 bool ObSelectIntoOp::file_need_split(int64_t file_size)
 {
@@ -2083,6 +2104,7 @@ int ObSelectIntoOp::check_oracle_number(ObObjType obj_type, int16_t &precision, 
   return ret;
 }
 
+#ifdef OB_BUILD_ARROW
 int ObSelectIntoOp::calc_parquet_decimal_array(const common::ObIVector* expr_vector,
                                                int row_idx,
                                                const ObDatumMeta &datum_meta,
@@ -2397,6 +2419,7 @@ int ObSelectIntoOp::build_parquet_cell(parquet::RowGroupWriter* rg_writer,
   }
   return ret;
 }
+#endif // OB_BUILD_ARROW
 
 int ObSelectIntoOp::into_dumpfile(ObExternalFileWriter *data_writer)
 {
@@ -2696,22 +2719,32 @@ int ObSelectIntoOp::new_data_writer(ObExternalFileWriter *&data_writer)
     }
     case ObExternalFileFormat::FormatType::PARQUET_FORMAT:
     {
+#ifdef OB_BUILD_ARROW
       if (OB_ISNULL(ptr = ctx_.get_allocator().alloc(sizeof(ObParquetFileWriter)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate data writer", K(ret), K(sizeof(ObParquetFileWriter)));
       } else {
         data_writer = new(ptr) ObParquetFileWriter(access_info_, file_location_, parquet_writer_schema_);
       }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parquet not supported in this build", K(ret));
+#endif
       break;
     }
     case ObExternalFileFormat::FormatType::ORC_FORMAT:
     {
+#ifdef OB_BUILD_ARROW
       if (OB_ISNULL(ptr = ctx_.get_allocator().alloc(sizeof(ObOrcFileWriter)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate data writer", K(ret), K(sizeof(ObOrcFileWriter)));
       } else {
         data_writer = new(ptr) ObOrcFileWriter(access_info_, file_location_);
       }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("orc not supported in this build", K(ret));
+#endif
       break;
     }
     default:
@@ -2737,6 +2770,7 @@ void ObSelectIntoOp::destroy()
   } else if (OB_NOT_NULL(data_writer_)) {
     data_writer_->~ObExternalFileWriter();
   }
+#ifdef OB_BUILD_ARROW
   {
     ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoParquet"));
     parquet_writer_schema_.reset();
@@ -2745,6 +2779,7 @@ void ObSelectIntoOp::destroy()
     ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOrc"));
     orc_schema_.reset();
   }
+#endif
   external_properties_.~ObExternalFileFormat();
   partition_map_.destroy();
   ObOperator::destroy();

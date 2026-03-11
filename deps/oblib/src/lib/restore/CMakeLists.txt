@@ -15,6 +15,7 @@ oblib_add_library(restore OBJECT
   ob_object_storage_base.cpp
 )
 
+if(OB_BUILD_S3)
 oblib_add_library(s3 ob_storage_s3_base.cpp)
 target_link_directories(s3 PUBLIC ${DEP_3RD_DIR}/usr/local/oceanbase/deps/devel/lib64)
 target_link_libraries(s3
@@ -36,5 +37,7 @@ target_link_libraries(s3
   libaws-c-common.a
 )
 target_link_libraries(s3 PUBLIC oblib_base_without_pass)
-
 target_link_libraries(restore PUBLIC oblib_base s3)
+else()
+target_link_libraries(restore PUBLIC oblib_base)
+endif()

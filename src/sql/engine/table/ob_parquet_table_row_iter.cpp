@@ -15,6 +15,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#ifdef OB_BUILD_ARROW
 #include "ob_parquet_table_row_iter.h"
 #include "sql/engine/basic/ob_arrow_basic.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
@@ -1560,3 +1561,4 @@ DEF_TO_STRING(ObParquetIteratorState)
 
 }
 }
+#endif // OB_BUILD_ARROW

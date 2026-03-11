@@ -1555,7 +1555,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[106].default_value_ = "1" ;
+      ObSysVars[106].default_value_ = "0" ;
       ObSysVars[106].info_ = "whether use plan cache in session" ;
       ObSysVars[106].name_ = "ob_enable_plan_cache" ;
       ObSysVars[106].data_type_ = ObIntType ;
@@ -1563,7 +1563,7 @@ static struct VarsInit{
       ObSysVars[106].id_ = SYS_VAR_OB_ENABLE_PLAN_CACHE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PLAN_CACHE)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PLAN_CACHE] = 106 ;
-      ObSysVars[106].base_value_ = "1" ;
+      ObSysVars[106].base_value_ = "0" ;
     ObSysVars[106].alias_ = "OB_SV_ENABLE_PLAN_CACHE" ;
     }();
 

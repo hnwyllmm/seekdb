@@ -20,9 +20,11 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_device_manager.h"
+#ifdef OB_BUILD_ARROW
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
-#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
+#endif
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/config/ob_server_config.h"
@@ -571,10 +573,15 @@ int ObExternalTableAccessService::table_scan(
       }
       break;
     case ObExternalFileFormat::PARQUET_FORMAT:
+#ifdef OB_BUILD_ARROW
       if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parquet not supported in this build", K(ret));
+#endif
       break;
     case ObExternalFileFormat::ODPS_FORMAT:
       if (!GCONF._use_odps_jni_connector) {
@@ -586,10 +593,15 @@ int ObExternalTableAccessService::table_scan(
       }
       break;
     case ObExternalFileFormat::ORC_FORMAT:
+#ifdef OB_BUILD_ARROW
       if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("orc not supported in this build", K(ret));
+#endif
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
