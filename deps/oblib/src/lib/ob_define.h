@@ -415,8 +415,14 @@ const int64_t OB_MAX_DEFINER_LENGTH= OB_MAX_USER_NAME_LENGTH_STORE + OB_MAX_HOST
 const int64_t OB_MAX_SECURITY_TYPE_LENGTH = 7; //definer or invoker
 const int64_t OB_MAX_READ_ONLY_STATE_LENGTH = 16;
 //At present, the log module reads and writes the buffer using OB_MAX_LOG_BUFFER_SIZE, the length of the transaction submitted to the log module is required to be less than the length of the log module can read and write the log, minus the length of the log header, the BLOCK header and the EOF, here is defined a length minus 1024B
+//#ifdef __ANDROID__
+//const int64_t OB_MAX_LOG_ALLOWED_SIZE = 254976L; // 256 * 1024 - 1024B
+//const int64_t OB_MAX_LOG_BUFFER_SIZE = 262144L;  // 256KB
+//#else
 const int64_t OB_MAX_LOG_ALLOWED_SIZE = 1965056L; //OB_MAX_LOG_BUFFER_SIZE - 1024B
 const int64_t OB_MAX_LOG_BUFFER_SIZE = 1966080L;  // 1.875MB
+//#endif
+
 const int64_t OB_MAX_TRIGGER_VCHAR_PARAM_LENGTH = 128;
 const int64_t OB_TRIGGER_MSG_LENGTH = 3 * MAX_IP_ADDR_LENGTH
                                       + OB_TRIGGER_TYPE_LENGTH + 3 * OB_MAX_TRIGGER_VCHAR_PARAM_LENGTH;

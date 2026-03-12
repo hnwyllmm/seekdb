@@ -6,8 +6,14 @@ target_include_directories(objit_base INTERFACE
 
 # GLOB all source files according to its suffix.
 file(GLOB_RECURSE objit_SRC "*.h" "*.cpp" "${CMAKE_CURRENT_SROUCE_DIR}/../include/*.h")
-# Exclude the Android stub -- real LLVM implementations are used instead
-list(FILTER objit_SRC EXCLUDE REGEX ".*stub\\.cpp$")
+
+if(OB_BUILD_LLVM)
+  # Exclude the Android stub -- real LLVM implementations are used instead
+  list(FILTER objit_SRC EXCLUDE REGEX ".*stub\\.cpp$")
+else()
+  # When LLVM is disabled, exclude everything except dummy.cpp and the stub
+  list(FILTER objit_SRC INCLUDE REGEX ".*stub\\.cpp$|.*dummy\\.cpp$|.*\\.h$")
+endif()
 
 add_library(objit_objects OBJECT ${objit_SRC})
 target_link_libraries(objit_objects PRIVATE oblib_base objit_base)

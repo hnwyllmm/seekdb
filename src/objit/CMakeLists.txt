@@ -9,6 +9,7 @@ if(NOT DEP_DIR OR NOT DEVTOOLS_DIR)
   message(FATAL_ERROR "DEP_DIR and DEVTOOLS_DIR must be set")
 endif()
 
+if(OB_BUILD_LLVM)
 if(ANDROID)
   set(LLVM_DIR "${DEP_DIR}/lib/cmake/llvm")
 elseif(APPLE)
@@ -29,6 +30,7 @@ else()
   list(APPEND CMAKE_INCLUDE_PATH "${DEP_DIR}/include")
 endif()
 find_package(LLVM REQUIRED CONFIG)
+endif()
 
 
 include(cmake/libutils.cmake)
@@ -44,13 +46,17 @@ add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
-if( ${ARCHITECTURE} STREQUAL "x86_64" )
-  LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit X86CodeGen X86AsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
+if(OB_BUILD_LLVM)
+  if( ${ARCHITECTURE} STREQUAL "x86_64" )
+    LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit X86CodeGen X86AsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
+  else()
+    LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit AArch64CodeGen AArch64AsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
+  endif()
+  set(CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+  include(${LLVM_CMAKE_DIR}/HandleLLVMOptions.cmake)
 else()
-  LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit AArch64CodeGen AArch64AsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
+  set(llvm_libs "")
 endif()
-set(CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
-include(${LLVM_CMAKE_DIR}/HandleLLVMOptions.cmake)
 
 add_subdirectory(src)
 
