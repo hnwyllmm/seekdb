@@ -2222,7 +2222,7 @@ int ObServer::init_pre_setting()
     ob_set_reserved_memory(reserved_memory);
   }
   if (OB_SUCC(ret)) {
-    const int64_t default_stack_size = 1L << 19; // 512KB
+    const int64_t default_stack_size = 1L << 18; // 256KB
     const int64_t stack_size = std::max(static_cast<int64_t>(default_stack_size), static_cast<int64_t>(GCONF.stack_size));
     LOG_INFO("set stack_size", K(stack_size));
     global_thread_stack_size = stack_size - SIG_STACK_SIZE - ACHUNK_PRESERVE_SIZE;
@@ -2892,9 +2892,10 @@ int ObServer::init_tx_data_cache()
 int ObServer::init_log_kv_cache()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(OB_LOG_KV_CACHE.init(palf::OB_LOG_KV_CACHE_NAME, 1, palf::LOG_CACHE_MEMORY_LIMIT))) {
-    LOG_WARN("init OB_LOG_KV_CACHE failed", KR(ret));
-  }
+  // Disable log kv cache to save memory since it's practically unused in embedded mode
+  // if (OB_FAIL(OB_LOG_KV_CACHE.init(palf::OB_LOG_KV_CACHE_NAME, 1, palf::LOG_CACHE_MEMORY_LIMIT))) {
+  //   LOG_WARN("init OB_LOG_KV_CACHE failed", KR(ret));
+  // }
   return ret;
 }
 

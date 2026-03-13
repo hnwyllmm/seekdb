@@ -369,7 +369,7 @@ DEF_DBL(location_cache_cpu_quota, OB_CLUSTER_PARAMETER, "5", "[0,10]",
         "the number of vCPUs allocated for the requests regarding location "
         "info of the core tables. Range: [0,10] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(workers_per_cpu_quota, OB_CLUSTER_PARAMETER, "10", "[2,20]",
+DEF_INT(workers_per_cpu_quota, OB_CLUSTER_PARAMETER, "2", "[2,20]",
         "the ratio(integer) between the number of system allocated workers vs "
         "the maximum number of threads that can be scheduled concurrently. Range: [2, 20]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -793,7 +793,7 @@ DEF_STR(standby_db_preferred_upstream_log_region, OB_CLUSTER_PARAMETER, "",
        "when the preferred upstream log region can not fetch log because of exception etc.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_log_cache, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(_enable_log_cache, OB_CLUSTER_PARAMETER, "False",
          "specifies whether allow to fill log kv cache. "
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1372,9 +1372,9 @@ DEF_CAP(sql_work_area, OB_CLUSTER_PARAMETER, "1G", "[10M,)",
 DEF_CAP(__easy_memory_limit, OB_CLUSTER_PARAMETER, "4G", "[256M,)",
         "max memory size which can be used by libeasy. The default value is 4G. Range: [256M,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(stack_size, OB_CLUSTER_PARAMETER, "512K", "[512K, 20M]",
+DEF_CAP(stack_size, OB_CLUSTER_PARAMETER, "256K", "[256K, 20M]",
         "the size of routine execution stack"
-        "Range: [512K, 20M]",
+        "Range: [256K, 20M]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_INT(__easy_memory_reserved_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
         "the percentage of easy memory reserved size. The default value is 0. Range: [0,100]",
