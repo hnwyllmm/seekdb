@@ -427,7 +427,11 @@ bool ObKVCacheStore::wash()
 
   //compute the wash size of each tenant
   start_time = ObTimeUtility::current_time();
+#ifdef __ANDROID__
+  is_wash_valid = true;
+#else
   is_wash_valid = compute_tenant_wash_size();
+#endif
   current_time = ObTimeUtility::current_time();
   compute_wash_size_time = current_time - start_time;
   start_time = current_time;
@@ -459,16 +463,33 @@ bool ObKVCacheStore::wash()
             uint64_t tenant_id = mb_handles_[i].inst_->tenant_id_;
             if (OB_SUCC(tenant_wash_map_.get(tenant_id, tenant_wash_info))) {
               if (FULL == status) {
-                if (OB_TMP_FAIL(tmp_washbale_size_info_.add_washable_size(
-                        tenant_id,
-                        mb_handles_[i].mem_block_->get_hold_size()))) {
-                  COMMON_LOG(WARN,
-                             "Fail to add tenant washable size",
-                             K(tmp_ret),
-                             K(tenant_id));
+                bool washed = false;
+#ifdef __ANDROID__
+                if (mb_handles_[i].score_ <= 1e-6) {
+                   wash_mb(&mb_handles_[i]);
+                   washed = true;
+                   if (mb_handles_[i].inst_->need_hold_cache()) {
+                      int64_t cid = mb_handles_[i].inst_->cache_id_;
+                      if (tenant_wash_info->cache_wash_heaps_[cid].heap_size_ > 0) {
+                        tenant_wash_info->cache_wash_heaps_[cid].heap_size_--;
+                      }
+                   } else if (tenant_wash_info->wash_heap_.heap_size_ > 0) {
+                      tenant_wash_info->wash_heap_.heap_size_--;
+                   }
                 }
-                if (OB_FAIL(tenant_wash_info->add(&mb_handles_[i]))) {
-                  COMMON_LOG(WARN, "add failed", K(ret));
+#endif
+                if (!washed) {
+                  if (OB_TMP_FAIL(tmp_washbale_size_info_.add_washable_size(
+                          tenant_id,
+                          mb_handles_[i].mem_block_->get_hold_size()))) {
+                    COMMON_LOG(WARN,
+                              "Fail to add tenant washable size",
+                              K(tmp_ret),
+                              K(tenant_id));
+                  }
+                  if (OB_FAIL(tenant_wash_info->add(&mb_handles_[i]))) {
+                    COMMON_LOG(WARN, "add failed", K(ret));
+                  }
                 }
               }
             } else if (OB_ENTRY_NOT_EXIST == ret) {
