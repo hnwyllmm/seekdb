@@ -163,6 +163,9 @@ static int64_t calc_nway(int64_t cpu, int64_t mem)
 
 int64_t ObMemstoreAllocator::nway_per_group()
 {
+#ifdef __ANDROID__
+  return 1;
+#else
   int ret = OB_SUCCESS;
   uint64_t tenant_id = arena_.get_tenant_id();
   double min_cpu = 0;
@@ -184,6 +187,7 @@ int64_t ObMemstoreAllocator::nway_per_group()
     }
   }
   return OB_SUCCESS == ret? calc_nway((int64_t)max_cpu, min_memory): 0;
+#endif
 }
 
 int ObMemstoreAllocator::set_memstore_threshold()

@@ -496,9 +496,15 @@ DEF_INT(_memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "3. the system will adjust automatically if both memstore_limit_percentage and "
         "_memstore_limit_percentage set to 0(by default).",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#ifdef __ANDROID__
+DEF_INT(freeze_trigger_percentage, OB_CLUSTER_PARAMETER, "10", "(0, 100)",
+        "the threshold of the size of the mem store when freeze will be triggered. Rang:(0,100)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#else
 DEF_INT(freeze_trigger_percentage, OB_CLUSTER_PARAMETER, "20", "(0, 100)",
         "the threshold of the size of the mem store when freeze will be triggered. Rang:(0,100)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#endif
 DEF_INT(writing_throttling_trigger_percentage, OB_CLUSTER_PARAMETER, "60", "(0, 100]",
           "the threshold of the size of the mem store when writing_limit will be triggered. Rang:(0,100]. setting 100 means turn off writing limit",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

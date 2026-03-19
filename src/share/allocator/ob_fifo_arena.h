@@ -151,7 +151,11 @@ public:
 
 public:
   enum {
+#ifdef __ANDROID__
+    MAX_CACHED_GROUP_COUNT = 1,
+#else
     MAX_CACHED_GROUP_COUNT = 16,
+#endif
     MAX_CACHED_PAGE_COUNT = MAX_CACHED_GROUP_COUNT * Handle::MAX_NWAY,
     PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE + sizeof(Page) + sizeof(Ref)
   };
