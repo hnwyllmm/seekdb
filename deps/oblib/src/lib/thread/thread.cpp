@@ -81,7 +81,7 @@ int Thread::start()
   } else if (stack_size_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid stack_size", K(ret), K(stack_size_));
-#ifndef OB_USE_ASAN
+#if !defined(OB_USE_ASAN) && !defined(__APPLE__) && !defined(__ANDROID__)
   } else if (OB_ISNULL(stack_addr_ = g_stack_allocer.alloc(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), stack_size_ + SIG_STACK_SIZE))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc stack memory failed", K(stack_size_));
@@ -104,7 +104,7 @@ int Thread::start()
       // On macOS/Android, pthread_attr_setstack often fails with EINVAL if address/size
       // are not perfectly aligned or if the memory is already managed in a way
       // that pthread doesn't like. Use setstacksize instead and let the system
-      // allocate the stack, while keeping our stack_addr_ for stack_header logic.
+      // allocate the stack.
       pret = pthread_attr_setstacksize(&attr, stack_size_);
       if (pret != 0) {
         // Fallback to default if setstacksize fails
@@ -323,11 +323,9 @@ void Thread::destroy_stack()
   if (stack_addr_ != nullptr) {
     g_stack_allocer.dealloc(stack_addr_);
     stack_addr_ = nullptr;
-    pth_ = 0;
   }
-#else
-  pth_ = 0;
 #endif
+  pth_ = 0;
 }
 
 void* Thread::__th_start(void *arg)
@@ -347,14 +345,17 @@ void* Thread::__th_start(void *arg)
   th->tid_ = gettid();
 
 #ifndef OB_USE_ASAN
-  ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
-  abort_unless(stack_header->check_magic());
+  ObStackHeader *stack_header = nullptr;
+  if (th->stack_addr_ != nullptr) {
+    stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
+    abort_unless(stack_header->check_magic());
+  }
 
   #ifndef OB_USE_ASAN
   /**
     signal handler stack
    */
-  #ifndef __APPLE__
+  #if !defined(__APPLE__) && !defined(__ANDROID__)
   // On macOS, sigaltstack may fail with ENOMEM (errno=12) due to system limitations
   // Skip sigaltstack setup on macOS to avoid warnings
   stack_t nss;
@@ -373,7 +374,9 @@ void* Thread::__th_start(void *arg)
   #endif // __APPLE__
   #endif
 
-  stack_header->pth_ = (uint64_t)pthread_self();
+  if (stack_header != nullptr) {
+    stack_header->pth_ = (uint64_t)pthread_self();
+  }
 #endif
 
   int ret = OB_SUCCESS;
