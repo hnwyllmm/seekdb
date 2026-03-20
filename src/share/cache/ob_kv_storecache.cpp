@@ -123,7 +123,12 @@ int ObKVCacheIterator::init(const int64_t cache_id, ObKVCacheMap * const map)
 //TODO bucket num level map should be system parameter
 const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
     {
+#ifdef __ANDROID__
+      //393241l,      // more than 2G, 3M kvcache meta (android tuned)
+      196613,
+#else
       786433l,      // more than 2G, 6M kvcache meta
+#endif
       1572869l,     // more than 4G, 12M kvcache meta
       3145739l,     // more than 8G, 25M kvcache meta
       6291469l,     // more than 16G, 50M kvcache meta

@@ -157,6 +157,8 @@ int ObTxDataMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
 int ObTxDataMemtableMgr::create_memtable(const CreateMemtableArg &arg)
 {
   int ret = OB_SUCCESS;
+  const int64_t bucket_count = lib::is_mini_mode() ? 
+    ObTxDataHashMap::MIN_BUCKETS_CNT : ObTxDataHashMap::DEFAULT_BUCKETS_CNT;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTxDataMemtableMgr has not initialized", K(ret), K_(is_inited));
@@ -166,7 +168,7 @@ int ObTxDataMemtableMgr::create_memtable(const CreateMemtableArg &arg)
   } else {
     MemMgrWLockGuard lock_guard(lock_);
     if (OB_FAIL(
-            create_memtable_(arg.clog_checkpoint_scn_, arg.schema_version_, ObTxDataHashMap::DEFAULT_BUCKETS_CNT))) {
+            create_memtable_(arg.clog_checkpoint_scn_, arg.schema_version_, bucket_count))) {
       STORAGE_LOG(WARN, "create memtable fail.", KR(ret));
     } else {
       // create memtable success
@@ -240,7 +242,8 @@ int ObTxDataMemtableMgr::freeze_()
   int64_t pre_memtable_tail = memtable_tail_;
   SCN clog_checkpoint_scn = SCN::base_scn();
   int64_t schema_version = 1;
-  int64_t new_buckets_cnt = ObTxDataHashMap::DEFAULT_BUCKETS_CNT;
+  int64_t new_buckets_cnt = lib::is_mini_mode() ? 
+    ObTxDataHashMap::MIN_BUCKETS_CNT : ObTxDataHashMap::DEFAULT_BUCKETS_CNT;
 
   // FIXME : @gengli remove this condition after upper_trans_version is not needed
   if (get_memtable_count_() >= MAX_TX_DATA_MEMTABLE_CNT) {
