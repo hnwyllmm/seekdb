@@ -597,13 +597,7 @@ public:
     return orig_size;
   }
   int64_t unit_memory_size() const { return unit_memory_size_; }
-  bool update_mini_mode(bool mini_mode)
-  {
-    bool orig_mode = mini_mode_;
-    mini_mode_ = mini_mode;
-    return orig_mode;
-  }
-  bool is_mini_mode() const { return mini_mode_; }
+  bool is_mini_mode() const { return lib::is_mini_mode(); }
   void set_prepare_unit_gc()
   {
     // only set marked_prepare_gc_ts_ once
@@ -779,7 +773,6 @@ private:
   ObCgroupCtrl *cgroups_;
   bool enable_tenant_ctx_check_;
   int64_t thread_count_;
-  bool mini_mode_;
 
   using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
   using ThreadList = common::ObDList<ThreadListNode>;

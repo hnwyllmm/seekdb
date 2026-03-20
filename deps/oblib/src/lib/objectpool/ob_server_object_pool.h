@@ -171,7 +171,7 @@ public:
   }
 
   /**
-   * Brutally allocate 16 available objects for each entry at Pool construction time
+   * Pre-allocate a fixed number of available objects for each arena at pool construction time.
    * Memory is directly allocated in one go using ob_malloc based on the total size
    * All objects are placed into their respective entries
    * Since it is a global singleton, this work is completed at program startup
@@ -188,10 +188,11 @@ public:
   {
     int ret = OB_SUCCESS;
     const bool is_mini = is_mini_mode_;
-    arena_num_ = min(64/*upper_bound*/, max(4/*lower_bound*/, static_cast<int32_t>(cpu_count_) * 2));
+    const int cpu_factor = is_mini ? 1 : 2;
+    arena_num_ = min(64/*upper_bound*/, max(4/*lower_bound*/, static_cast<int32_t>(cpu_count_) * cpu_factor));
     //If the assignment logic of buf_ below is not reached, buf_ will not be initialized
     buf_ = NULL;
-    cnt_per_arena_ = is_mini ? 8 : 64;
+    cnt_per_arena_ = is_mini ? 4 : 64;
     int64_t s = (sizeof(T) + sizeof(Meta)); // Each cached object header has a Meta field to store necessary information and linked list pointers
     item_size_ = upper_align(s, CACHE_ALIGN_SIZE); // Align according to the cache line to ensure that there will be no false sharing between objects
     ObMemAttr attr(tenant_id_, LABEL);

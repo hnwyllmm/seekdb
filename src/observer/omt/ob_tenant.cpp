@@ -764,8 +764,6 @@ int ObTenant::init(const ObTenantMeta &meta)
     set_unit_memory_size(memory_size);
     const int64_t data_disk_size = tenant_meta_.unit_.config_.data_disk_size();
     const int64_t actual_data_disk_size = tenant_meta_.unit_.actual_data_disk_size_;
-    constexpr static int64_t MINI_MEM_UPPER = 1L<<30; // 1G
-    update_mini_mode(memory_size <= MINI_MEM_UPPER);
 
     if (!is_virtual_tenant_id(id_)) {
       if (OB_FAIL(create_tenant_module())) {
