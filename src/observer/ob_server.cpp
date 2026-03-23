@@ -26,7 +26,9 @@
 #include "observer/ob_rpc_extra_payload.h"
 #include "observer/ob_server_options.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#ifndef SEEKDB_EMBEDDED
 #include "observer/table/ob_table_rpc_processor.h"
+#endif
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/object_storage/ob_device_connectivity.h"
 #include "share/ob_bg_thread_monitor.h"
@@ -305,8 +307,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init retry ctrl failed", KR(ret));
     } else if (OB_FAIL(ObMdsEventBuffer::init())) {
       LOG_WARN("init MDS event buffer failed", KR(ret));
+#ifndef SEEKDB_EMBEDDED
     } else if (OB_FAIL(ObTableApiProcessorBase::init_session())) {
       LOG_ERROR("init static session failed", KR(ret));
+#endif
     } else if (OB_FAIL(init_loaddata_global_stat())) {
       LOG_ERROR("init global load data stat map failed", KR(ret));
     } else if (OB_FAIL(init_pre_setting())) {

@@ -18,6 +18,11 @@ ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
 ob_define(BUILD_CDC_ONLY OFF)
 ob_define(BUILD_EMBED_MODE OFF)
+set(_seekdb_embedded_default OFF)
+if(BUILD_EMBED_MODE OR OB_ANDROID)
+  set(_seekdb_embedded_default ON)
+endif()
+ob_define(SEEKDB_EMBEDDED ${_seekdb_embedded_default})
 ob_define(OB_USE_CLANG ON)
 ob_define(OB_ERRSIM OFF)
 ob_define(BUILD_NUMBER 1)
@@ -170,6 +175,10 @@ endif()
 
 if(BUILD_EMBED_MODE)
   add_definitions(-DOB_BUILD_EMBED_MODE)
+endif()
+
+if(SEEKDB_EMBEDDED)
+  add_definitions(-DSEEKDB_EMBEDDED)
 endif()
 
 # Find objcopy - on macOS it may be installed via Homebrew or available as llvm-objcopy
