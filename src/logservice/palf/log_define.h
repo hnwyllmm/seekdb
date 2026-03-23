@@ -72,13 +72,13 @@ const int64_t MIN_DISK_SIZE_PER_PALF_INSTANCE = 512 * 1024 * 1024ul;
 constexpr offset_t MAX_LOG_HEADER_SIZE = 4 * 1024;
 constexpr offset_t MAX_INFO_BLOCK_SIZE = 4 * 1024;
 constexpr offset_t MAX_META_ENTRY_SIZE = 4 * 1024;
-//#ifdef __ANDROID__
-//constexpr offset_t MAX_LOG_BODY_SIZE = 256 * 1024;                                     // 256KB for Android
-//constexpr int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 19;                          // 512KB for Android
-//#else
+#ifdef __ANDROID__
+constexpr offset_t MAX_LOG_BODY_SIZE = 512 * 1024;                                     // 512KB for Android
+constexpr int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 20;                          // 512KB for Android
+#else
 constexpr offset_t MAX_LOG_BODY_SIZE = 3 * 1024 * 1024 + 512 * 1024;                 // The max size of one log body is 3.5MB.
-//constexpr int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 23;                           // leader's group buffer size is 8MB
-//#endif
+constexpr int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 23;                           // leader's group buffer size is 8MB
+#endif
 
 constexpr offset_t MAX_NORMAL_LOG_BODY_SIZE = 2 * 1024 * 1024 + 16 * 1024;
 const int64_t PALF_PHY_BLOCK_SIZE = 1 << 26;                                        // 64MB
@@ -106,7 +106,7 @@ typedef common::ObFixedArray<LogWriteBuf *, ObIAllocator> LogWriteBufArray;
 // ==================== block and log end ===========================
 
 // ====================== Consensus begin ===========================
-constexpr int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 23;                           // leader's group buffer size is 8MB
+// constexpr int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 23;                           // leader's group buffer size is 8MB
 // follower's group buffer size is as same as leader's.
 constexpr int64_t FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE = LEADER_DEFAULT_GROUP_BUFFER_SIZE + 0L;
 const int64_t PALF_STAT_PRINT_INTERVAL_US = 1 * 1000 * 1000L;
