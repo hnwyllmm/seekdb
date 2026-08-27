@@ -18,7 +18,7 @@
 #define OCEANBASE_SQL_OB_EXPR_ARRAY_CONCAT
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#include "lib/udt/ob_array_type.h"
+#include "common/udt/ob_array_type.h"
 
 
 namespace oceanbase
@@ -39,7 +39,6 @@ public:
                                 common::ObExprTypeCtx& type_ctx) const override;
   static int eval_array_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_array_concat_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
-  static int eval_array_concat_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,

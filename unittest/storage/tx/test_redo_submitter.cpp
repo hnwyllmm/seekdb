@@ -18,6 +18,9 @@
 #define private public
 #define protected public
 #include "storage/tx/ob_tx_redo_submitter.h"
+#undef protected
+#undef private
+
 #define USING_LOG_PREFIX TRANS
 
 
@@ -69,11 +72,8 @@ class ObTestRedoSubmitter : public ::testing::Test
 public:
   virtual void SetUp() override
   {
-    oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
-    ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
     ObAddr ip_port(ObAddr::VER::IPV4, "119.119.0.1",2023);
     ObCurTraceId::init(ip_port);
-    GCONF._ob_trans_rpc_timeout = 500;
     ObClockGenerator::init();
     const testing::TestInfo* const test_info =
       testing::UnitTest::GetInstance()->current_test_info();
@@ -82,11 +82,7 @@ public:
 
     // prepare for test
     tx_ctx.exec_info_.state_ = ObTxState::INIT;
-    tx_ctx.exec_info_.scheduler_ = common::ObAddr(common::ObAddr::VER::IPV4, "127.0.0.1", 8888);
     tx_ctx.exec_info_.next_log_entry_no_ = 0;
-    tx_ctx.cluster_version_ = DATA_CURRENT_VERSION;
-    ObLSID ls_id(1001); ObTransID tx_id(777);
-    EXPECT_EQ(OB_SUCCESS,tx_ctx.init_log_cbs_(ls_id, tx_id));
     mock_ptr = &mdo_;
   }
   virtual void TearDown() override
@@ -95,11 +91,11 @@ public:
       testing::UnitTest::GetInstance()->current_test_info();
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> tearDown test : %s", test_name);
+    tx_ctx.reset_log_cbs_();
     ObClockGenerator::destroy();
-    ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
   }
   MockImpl mdo_;
-  ObPartTransCtx tx_ctx;
+  ObTxCtx tx_ctx;
   ObMemtableCtx mt_ctx;
 };
 
@@ -112,18 +108,18 @@ int succ_submit_redo_log_out(ObTxLogBlock & b,
 {
   submitted_scn.convert_for_tx(123123123);
   if (log_cb) {
-    ((ObPartTransCtx*)(log_cb->get_group_ptr()->get_tx_ctx()))->return_log_cb_(log_cb);
+    log_cb->get_tx_ctx()->return_log_cb_(log_cb);
     log_cb = NULL;
   }
   return OB_SUCCESS;
 }
 
-bool ObPartTransCtx::is_parallel_logging() const
+bool ObTxCtx::is_parallel_logging() const
 {
   return mock_ptr->is_parallel_logging();
 }
 
-int ObPartTransCtx::submit_redo_log_out(ObTxLogBlock &log_block,
+int ObTxCtx::submit_redo_log_out(ObTxLogBlock &log_block,
                                         ObTxLogCb *&log_cb,
                                         memtable::ObRedoLogSubmitHelper &helper,
                                         const int64_t replay_hint,
@@ -539,7 +535,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_switch_leader_or_on_commit_serial_logging)
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
     ObTxLogBlock log_block;
     ObTransID tx_id(101);
-    log_block.get_header().init(1, DATA_CURRENT_VERSION, 101, tx_id, ObAddr());
+    log_block.get_header().init(101, tx_id);
     log_block.init_for_fill();
     memtable::ObRedoLogSubmitHelper helper;
     EXPECT_EQ(OB_BLOCK_FROZEN, submitter.fill(log_block, helper));
@@ -584,7 +580,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_switch_leader_or_on_commit_parallel_loggin
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
     ObTxLogBlock log_block;
     ObTransID tx_id(101);
-    log_block.get_header().init(1, DATA_CURRENT_VERSION, 101, tx_id, ObAddr());
+    log_block.get_header().init(101, tx_id);
     log_block.init_for_fill();
     memtable::ObRedoLogSubmitHelper helper;
     EXPECT_EQ(OB_SUCCESS, submitter.fill(log_block, helper));
@@ -627,7 +623,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_switch_leader_or_on_commit_parallel_loggin
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
     ObTxLogBlock log_block;
     ObTransID tx_id(101);
-    log_block.get_header().init(1, DATA_CURRENT_VERSION, 101, tx_id, ObAddr());
+    log_block.get_header().init(101, tx_id);
     log_block.init_for_fill();
     memtable::ObRedoLogSubmitHelper helper;
     EXPECT_EQ(OB_BLOCK_FROZEN, submitter.fill(log_block, helper));
@@ -663,7 +659,7 @@ TEST_F(ObTestRedoSubmitter, submit_ROW_SIZE_TOO_LARGE)
       ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
       ObTxLogBlock log_block;
       ObTransID tx_id(101);
-      log_block.get_header().init(1, DATA_CURRENT_VERSION, 101, tx_id, ObAddr());
+      log_block.get_header().init(101, tx_id);
       log_block.init_for_fill();
       memtable::ObRedoLogSubmitHelper helper;
       EXPECT_EQ(OB_ERR_TOO_BIG_ROWSIZE, submitter.fill(log_block, helper));
@@ -676,13 +672,4 @@ TEST_F(ObTestRedoSubmitter, submit_ROW_SIZE_TOO_LARGE)
 } // transaction
 } // oceanbase
 
-int main(int argc, char **argv)
-{
-  const char *log_name = "test_redo_submitter.log";
-  system("rm -rf test_redo_submitter.log*");
-  ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name(log_name, true);
-  logger.set_log_level(OB_LOG_LEVEL_DEBUG);
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+using namespace oceanbase;

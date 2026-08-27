@@ -3,7 +3,7 @@
 # description: test sparse vector index query
 # connect (conn_user,$OBMYSQL_MS0,root@mysql,,test,$OBMYSQL_PORT);
 # connection conn_user;
-alter system set ob_vector_memory_limit_percentage = 44;
+alter system set vector_memory_limit = 0;
 
 --echo # 单分区查询: 全是增量数据
 --disable_warnings
@@ -33,7 +33,7 @@ select * from t1 order by negative_inner_product(c2, '{}') approx limit 2;
 select * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') limit 2;
 select * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 order by negative_inner_product(c2, '{13:1, 14:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 <= 5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{13:1, 14:1}') approx limit 2;
@@ -84,7 +84,7 @@ call dbms_stats.gather_table_stats('test','t1');
 select * from t1 order by negative_inner_product(c2, '{}') approx limit 2;
 select * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 order by negative_inner_product(c2, '{13:1, 14:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{13:1, 14:1}') approx limit 2;
 select * from t1 where c1 <= 5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
@@ -129,7 +129,7 @@ select * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 
 select * from t1 order by negative_inner_product(c2, '{10:1, 11:1}') approx limit 2;
 select * from t1 order by negative_inner_product(c2, '{11:1, 12:1}') approx limit 2;
 select * from t1 order by negative_inner_product(c2, '{12:1, 13:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{10:1, 11:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{11:1, 12:1}') approx limit 2;
@@ -182,8 +182,8 @@ select * from t1 order by negative_inner_product(c2, '{11:1.1, 12:1.2}') approx 
 select * from t1 order by negative_inner_product(c2, '{11:1.1, 12:1.2}') approx limit 4 parameters(drop_ratio_search=0);
 select * from t1 order by negative_inner_product(c2, '{12:1.2, 13:1.3}') approx limit 4;
 select * from t1 order by negative_inner_product(c2, '{12:1.2, 13:1.3}') approx limit 4 parameters(drop_ratio_search=0);
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4 parameters(drop_ratio_search=0);
+select  * from t1 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4;
+select  * from t1 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4 parameters(drop_ratio_search=0);
 select /*+ parallel(8)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4;
 select /*+ parallel(8)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4 parameters(drop_ratio_search=0);
 select /*+ index(t1 idx1)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:0.3, 4:0.4}') approx limit 4;
@@ -247,7 +247,7 @@ select * from t1 order by negative_inner_product(c2, '{13:1, 14:1}') approx limi
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{13:1, 14:1}') approx limit 2;
 select * from t1 where c1 <= 5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ parallel(8)*/ negative_inner_product(c2, '{3:1, 4:1}') from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ index(t1 idx1)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1<=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2 parameters(refine_k=1.0, drop_ratio_search=0);
@@ -289,7 +289,7 @@ select * from t1 order by negative_inner_product(c2, '{13:1, 14:1}') approx limi
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{13:1, 14:1}') approx limit 2;
 select * from t1 where c1 <= 5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ parallel(8)*/ negative_inner_product(c2, '{3:1, 4:1}') from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ index(t1 idx1)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1<=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2 parameters(refine_k=1.0, drop_ratio_search=0);
@@ -332,7 +332,7 @@ select * from t1 where c1 < 3 order by negative_inner_product(c2, '{13:1, 14:1}'
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{10:1, 11:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{12:1, 13:1}') approx limit 2;
 select * from t1 where c1 <= 5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ parallel(8)*/ negative_inner_product(c2, '{3:1, 4:1}') from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ index(t1 idx1)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1<=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2 parameters(refine_k=1.0, drop_ratio_search=0);
@@ -410,15 +410,15 @@ select * from t1 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE l
 
 select * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
+select  * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
-select/*+opt_param('rowsets_enabled', 'false') index(t1 idx1)*/ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
+select/*+ index(t1 idx1) */ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
 select/*+index(t1 idx1)*/ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
-select/*+opt_param('rowsets_enabled', 'false') index(t1 idxv)*/ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
+select/*+ index(t1 idxv) */ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
-select/*+opt_param('rowsets_enabled', 'false') index(t1 idxv)*/ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
+select/*+ index(t1 idxv) */ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
 explain select * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
@@ -428,7 +428,7 @@ explain select/*+index(t1 idx1)*/ * from t1 where c1 < 100 order by negative_inn
 explain select/*+index(t1 idxv)*/ * from t1 where c1 < 100 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
 # filter with partition key
-# p0, p[2-4]
+# p0, p[2-4] 
 select * from t1 where c1 < 10 or c1 > 40 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
 
 select/*+index(t1 idx1)*/  * from t1 where c1 < 10 or c1 > 40 order by negative_inner_product(c3, '{3:1, 4:1}') APPROXIMATE limit 10;
@@ -493,7 +493,7 @@ create index idx2 on t1(c3);
 
 select * from t1 where c2 > 5 and c3 < 6 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
 
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 where c2 > 5 and c3 < 6 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
+select  * from t1 where c2 > 5 and c3 < 6 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
 
 select /*+index(t1 primary) */ * from t1 where c1 < 6 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
 
@@ -521,7 +521,7 @@ explain select * from t1 order by negative_inner_product(v, '{3:1, 4:1}') APPROX
 drop table if exists t1;
 --enable_warnings
 
-create table t1(c1 int, c2 int, c3 int, v sparsevector, primary key(c1), vector index idx3(v) with (lib=vsag, type=sindi, distance=inner_product)) WITH COLUMN GROUP (each column);
+create table t1(c1 int, c2 int, c3 int, v sparsevector, primary key(c1), vector index idx3(v) with (lib=vsag, type=sindi, distance=inner_product));
 
 insert into t1 values(1, 1, 10, '{1:0.1,2:0.2, 3:0.3}');
 insert into t1 values(2, 2, 9, '{3:0.3, 2:0.2, 4:0.4}');
@@ -577,11 +577,11 @@ insert into t2 values(8, 8, 3, '{9:0.9, 8:0.8, 10:1.0}');
 insert into t2 values(9, 9, 2, '{9:0.9, 10:1.0, 11:1.1}');
 insert into t2 values(10, 10, 1, '{11:1.1, 10:1.0, 12:1.2}');
 
-select * from t1 where c2 > 5
+select * from t1 where c2 > 5 
     order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
-
+    
 # order by、group by、gourp by having
-select * from t1 where c2 > 5 GROUP BY c1
+select * from t1 where c2 > 5 GROUP BY c1 
     order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
 
 select * from t1 where c2 > 5 GROUP BY c1 having c1 < 8
@@ -592,16 +592,16 @@ select *, CASE
     WHEN c1 < 6 THEN 'first halp'
     ELSE 'second half'
   END AS pri_category
-  from t1 where c2 > 5
+  from t1 where c2 > 5 
     order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 8;
 
 select * from t1 a join t2 b on a.c1=b.c1 order by negative_inner_product(a.v, '{3:1, 4:1}') approximate limit 3;
 
 # 子查询, 运算符, 函数
-select count(*) from
-(select * from t1 where c2 - 1 > 5 order by negative_inner_product(v, '{3:1, 4:1}')
-   APPROXIMATE limit 5) as tmp1,
-(select * from t2 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5)
+select count(*) from 
+(select * from t1 where c2 - 1 > 5 order by negative_inner_product(v, '{3:1, 4:1}') 
+   APPROXIMATE limit 5) as tmp1, 
+(select * from t2 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5) 
 as tmp2 where tmp1.c1=tmp2.c1;
 
 select * from t1 where c2 != 5 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
@@ -617,14 +617,14 @@ select /*+ ENABLE_PARALLEL_DML parallel(256) */ * from t1 where c2 > 5 order by 
 
 # WITH
 WITH query_result AS (
-  select * from t1 where c2 > 5
+  select * from t1 where c2 > 5 
     order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5
 )
 SELECT c1 FROM query_result;
 
 # distinct、列别名、for update
 select DISTINCT c3 from t1 where c2 > 2 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
-select c1, t1.c2 as c9 from t1 where c2 > 2 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
+select c1, t1.c2 as c9 from t1 where c2 > 2 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;    
 --error 1235
 select * from t1 where c2 > 5 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 2 for update;
 select * from t1 order by negative_inner_product(v, '{3:1, 4:1}') APPROXIMATE limit 5;
@@ -717,7 +717,7 @@ select * from t1 where c1 < 3 order by negative_inner_product(c2, '{13:1, 14:1}'
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{10:1, 11:1}') approx limit 2;
 select * from t1 where c1 < 3 order by negative_inner_product(c2, '{12:1, 13:1}') approx limit 2;
 select * from t1 where c1 <= 5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
-select /*+ opt_param('rowsets_enabled', 'false')*/ * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
+select  * from t1 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ parallel(8)*/ negative_inner_product(c2, '{3:1, 4:1}') from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select /*+ index(t1 idx1)*/ * from t1 where c1 <=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2;
 select * from t1 where c1<=5 order by negative_inner_product(c2, '{3:1, 4:1}') approx limit 2 parameters(refine_k=1.0, drop_ratio_search=0);

@@ -34,7 +34,7 @@ void ObHashPartInfrastructureGroup<HashCol, HashRowStore>::reset()
 
 template<typename HashCol, typename HashRowStore>
 int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_one_hp_infras(
-  HashPartInfras *&hp_infras, uint64_t tenant_id, bool enable_sql_dumped, bool unique,
+  HashPartInfras *&hp_infras, bool enable_sql_dumped, bool unique,
   int64_t ways, int64_t batch_size, int64_t est_rows, int64_t width,
   ObSqlMemMgrProcessor *sql_mem_processor, bool need_rewind)
 {
@@ -47,7 +47,6 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_one_hp_infras(
     DLIST_FOREACH_NORET(hp_infras, hp_infras_list_) {
       total_mem_used += hp_infras->get_total_mem_used();
     }
-    SQL_ENG_LOG(TRACE, "calc total mem used", K(total_mem_used));
     return total_mem_used;
   };
   auto slice_cnt_func = [this] () -> int64_t {
@@ -62,7 +61,7 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_one_hp_infras(
     } else {
       hp_infras = new(hp_infras) HashPartInfras();
       hp_infras->set_hp_infras_group_func(total_mem_used_func, slice_cnt_func);
-      if (OB_FAIL(hp_infras->init(tenant_id, enable_sql_dumped, unique, true,
+      if (OB_FAIL(hp_infras->init(enable_sql_dumped, unique, true,
         ways, sql_mem_processor, need_rewind))) {
         SQL_ENG_LOG(WARN, "failed to init hash partition infrastructure", K(ret));
       } else if (OB_FAIL(init_hash_table(hp_infras, est_rows, width))) {
@@ -108,7 +107,6 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::init_hash_table(
       HashPartInfrasMgr::MIN_BUCKET_COUNT, HashPartInfrasMgr::MAX_BUCKET_COUNT))) {
     SQL_ENG_LOG(WARN, "failed to init hash table", K(ret));
   } else {
-    SQL_ENG_LOG(TRACE, "init_hash_table", K(est_bucket_num_), K(est_rows), K(width));
   }
   return ret;
 }
@@ -171,7 +169,7 @@ int ObHashPartInfrastructureGroup<HashCol, HashRowStore>::alloc_hp_infras(
 //////////////////// start ObHashPartInfrastructureMgr //////////////////
 template<typename HashCol, typename HashRowStore>
 int ObHashPartInfrastructureMgr<HashCol, HashRowStore>::init(
-  uint64_t tenant_id, bool enable_sql_dumped, const int64_t est_rows, const int64_t width,
+  bool enable_sql_dumped, const int64_t est_rows, const int64_t width,
   const bool unique, const int64_t ways, ObEvalCtx *eval_ctx,
   ObSqlMemMgrProcessor *sql_mem_processor, ObIOEventObserver *io_event_observer)
 {
@@ -183,7 +181,6 @@ int ObHashPartInfrastructureMgr<HashCol, HashRowStore>::init(
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "unexpected status: is null", K(ret));
   } else {
-    tenant_id_ = tenant_id;
     enable_sql_dumped_ = enable_sql_dumped;
     est_rows_ = est_rows;
     width_ = width;
@@ -222,12 +219,11 @@ int ObHashPartInfrastructureMgr<HashCol, HashRowStore>::init_one_hp_infras(
   } else if (OB_ISNULL(sort_collations) || OB_ISNULL(sort_cmp_funcs) || OB_ISNULL(hash_funcs)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "unexpected status: func is null", K(ret));
-  } else if (OB_FAIL(hp_infras_group_.init_one_hp_infras(hp_infras, tenant_id_, enable_sql_dumped_,
+  } else if (OB_FAIL(hp_infras_group_.init_one_hp_infras(hp_infras, enable_sql_dumped_,
     unique_, ways_, eval_ctx_->max_batch_size_, est_rows_, width_, sql_mem_processor_, need_rewind))) {
     SQL_ENG_LOG(WARN, "failed to create one hash partition infrastructure", K(ret));
   } else if (FALSE_IT(hp_infras->set_io_event_observer(io_event_observer_))) {
   } else if (OB_FAIL(hp_infras->set_funcs(hash_funcs, sort_collations, sort_cmp_funcs, eval_ctx_))) {
-    SQL_ENG_LOG(WARN, "failed to set funcs", K(ret));
   }
   return ret;
 }

@@ -17,10 +17,13 @@
 #define protected public
 #define private public
 #include "ob_truncate_info_helper.h"
-#include "storage/mockcontainer/mock_ob_iterator.h"
+#include "unittest/storage/mockcontainer/mock_ob_iterator.h"
 #include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls.h"
+#undef protected
+#undef private
+
 namespace oceanbase
 {
 namespace storage
@@ -120,17 +123,19 @@ int TruncateInfoHelper::mock_truncate_partition(
 }
 
 int TruncateInfoHelper::get_tablet(
-    const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
+  ObLSService *ls_service = share::server_service<ObLSService>();
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_ISNULL(ls_service)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ls service is null", K(ret));
+  } else if (OB_FAIL(ls_service->get_ls(ls))) {
     COMMON_LOG(WARN, "failed to get ls", K(ret));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+  } else if (OB_ISNULL(ls)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "ls is null", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_tablet_svr()->direct_get_tablet(tablet_id, tablet_handle))) {
@@ -160,7 +165,6 @@ int TruncateInfoHelper::mock_part_key_idxs(
 
 int TruncateInfoHelper::read_distinct_truncate_info_array(
     common::ObArenaAllocator &allocator,
-    const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     const ObVersionRange &read_version_range,
     ObTruncateInfoArray &truncate_info_array)
@@ -169,9 +173,9 @@ int TruncateInfoHelper::read_distinct_truncate_info_array(
   ObTabletHandle tablet_handle;
   ObMdsInfoDistinctMgr distinct_mgr;
   truncate_info_array.reset();
-  if (OB_FAIL(TruncateInfoHelper::get_tablet(ls_id, tablet_id, tablet_handle))) {
-    COMMON_LOG(WARN, "failed to get tablet", KR(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(distinct_mgr.init(allocator, *tablet_handle.get_obj(), nullptr, read_version_range, false/*access*/))) {
+  if (OB_FAIL(TruncateInfoHelper::get_tablet(tablet_id, tablet_handle))) {
+    COMMON_LOG(WARN, "failed to get tablet", KR(ret), K(tablet_id));
+  } else if (OB_FAIL(distinct_mgr.init(allocator, *tablet_handle.get_obj(), read_version_range, false/*access*/))) {
     COMMON_LOG(WARN, "failed to init distinct mgr", KR(ret), K(read_version_range));
   } else if (OB_FAIL(truncate_info_array.init_for_first_creation(allocator))) {
     COMMON_LOG(WARN, "failed to init truncate info array", KR(ret));

@@ -19,7 +19,7 @@
 
 #include "lib/container/ob_se_array.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
-#include "sql/engine/ob_tenant_sql_memory_manager.h"
+#include "sql/engine/ob_sql_memory_manager.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "sql/engine/ob_io_event_observer.h"
 
@@ -61,7 +61,7 @@ public:
   explicit ObPDMLOpBatchRowCache(ObEvalCtx *eval_ctx, ObMonitorNode &op_monitor_info);
   ~ObPDMLOpBatchRowCache();
 public:
-  int init(uint64_t tenant_id, int64_t part_cnt, bool with_barrier, const ObTableModifySpec &spec);
+  int init(int64_t part_cnt, bool with_barrier, const ObTableModifySpec &spec);
   // ObBatchRowCache does not need to support disk persistence, once memory is insufficient, add_row will fail, the caller will
   // Responsible for inserting all cached data into the storage layer and releasing the memory of the cache.
   // @desc part_id indicates the offset of the partition where the row is located in the location structure
@@ -101,7 +101,6 @@ private:
   int64_t cached_rows_num_; // indicates the number of rows currently in the cache
   int64_t cached_rows_size_; // bytes cached. used to control max memory used by batchRowCache
   int64_t cached_in_mem_rows_num_; // indicates the number of in-memory rows currently cached, excluding dumped rows
-  uint64_t tenant_id_;
   bool with_barrier_;
 
   lib::MemoryContext mem_context_;

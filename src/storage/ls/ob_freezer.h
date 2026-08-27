@@ -21,8 +21,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_string_holder.h"
 #include "lib/container/ob_array.h"
-#include "share/ob_ls_id.h"
-#include "storage/tx/wrs/ob_ls_wrs_handler.h"
+#include "storage/ls/ob_ls_wrs_handler.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "logservice/ob_log_handler.h"
 #include "lib/container/ob_array_serialization.h"
@@ -45,6 +44,7 @@ class ObMemtable;
 }
 namespace storage
 {
+class ObITabletMemtable;  // previously hidden behind the ddl_common->block_sstable_struct include chain
 class ObIMemtable;
 class ObLSTxService;
 class ObLSTabletService;
@@ -198,9 +198,8 @@ public:
 public:
   /********************** freeze **********************/
   // freezer interface
-  int logstream_freeze(const int64_t trace_id);
-  int tablet_freeze(const int64_t trace_id,
-                    const ObIArray<ObTabletID> &tablet_ids,
+  int logstream_freeze();
+  int tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
                     const bool need_rewrite_meta,
                     ObIArray<ObTableHandleV2> &frozen_memtable_handles,
                     ObIArray<ObTabletID> &freeze_failed_tablets);
@@ -214,9 +213,9 @@ public:
   bool is_async_freeze_tablets_empty() const { return async_freeze_tablets_.empty(); }
   void record_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);
   void erase_async_freeze_tablet(const AsyncFreezeTabletInfo &async_freeze_tablet_info);
-  void submit_an_async_freeze_task(const int64_t trace_id, const bool is_ls_freeze);
-  void async_ls_freeze_consumer(const int64_t trace_id);
-  void async_tablet_freeze_consumer(const int64_t trace_id);
+  void submit_an_async_freeze_task(const bool is_ls_freeze);
+  void async_ls_freeze_consumer();
+  void async_tablet_freeze_consumer();
   common::hash::ObHashSet<AsyncFreezeTabletInfo> &get_async_freeze_tablets() { return async_freeze_tablets_; }
   /********************** freeze **********************/
 
@@ -227,12 +226,12 @@ public:
   uint32_t get_freeze_clock() { return ATOMIC_LOAD(&freeze_flag_) & (~(1 << 31)); }
 
   /* ls info */
-  share::ObLSID get_ls_id();
   checkpoint::ObDataCheckpoint *get_ls_data_checkpoint();
   ObLSTxService *get_ls_tx_svr();
   ObLSTabletService *get_ls_tablet_svr();
   logservice::ObILogHandler *get_ls_log_handler();
   ObLSWRSHandler *get_ls_wrs_handler();
+  ObLS *get_ls() { return ls_; }
 
   /* freeze_snapshot_version */
   share::SCN get_freeze_snapshot_version() { return freeze_snapshot_version_; }
@@ -251,9 +250,9 @@ public:
   void set_throttle_is_skipping() { throttle_is_skipping_ = true; }
   void unset_throttle_is_skipping() { throttle_is_skipping_ = false; }
   bool throttle_is_skipping() { return throttle_is_skipping_; }
-  void set_tenant_replay_is_pending() { tenant_replay_is_pending_ = true; }
-  void unset_tenant_replay_is_pending() { tenant_replay_is_pending_ = false; }
-  bool tenant_replay_is_pending() const { return tenant_replay_is_pending_; }
+  void set_replay_is_pending() { replay_is_pending_ = true; }
+  void unset_replay_is_pending() { replay_is_pending_ = false; }
+  bool replay_is_pending() const { return replay_is_pending_; }
   // get consequent callbacked log_ts right boundary
   virtual int get_max_consequent_callbacked_scn(share::SCN &max_consequent_callbacked_scn);
   // to set snapshot version when memtables meet ready_for_flush
@@ -288,29 +287,6 @@ private:
     bool need_release_;
     ObFreezer &parent_;
   };
-  class PendTenantReplayHelper {
-  public:
-    PendTenantReplayHelper(ObFreezer &host, ObLS *current_freeze_ls)
-        : host_(host), current_freeze_ls_(current_freeze_ls) {}
-    ~PendTenantReplayHelper() { reset_pend_status_(); }
-    void set_skip_throttle_flag();
-    void check_pend_condition_once();
-  private:
-    bool current_ls_is_leader_();
-    bool remain_memory_is_exhausting_();
-    void pend_tenant_replay_();
-    void restore_tenant_replay_();
-    void reset_pend_status_()
-    {
-      (void)host_.unset_throttle_is_skipping();
-      (void)restore_tenant_replay_();
-    }
-  private:
-    ObFreezer &host_;
-    ObLS *current_freeze_ls_;
-    ObSEArray<ObLSHandle, 16> ls_handle_array_;
-  };
-
 private:
   /* freeze_flag */
   int set_freeze_flag();
@@ -328,22 +304,15 @@ private:
                                const bool is_try,
                                const ObITabletMemtable *freeze_memtable = nullptr /* used for tablet freeze */);
   int wait_data_memtable_freeze_finish_(ObITabletMemtable *tablet_memtable);
-  int wait_direct_load_memtable_freeze_finish_(ObITabletMemtable *tablet_memtable);
-  int set_tablet_freeze_flag_(const int64_t trace_id,
-                              const ObTabletID tablet_id,
+  int set_tablet_freeze_flag_(const ObTabletID tablet_id,
                               const bool need_rewrite_meta,
                               const SCN freeze_snapshot_version,
                               ObIArray<ObTableHandleV2> &frozen_memtable_handles);
   int handle_no_active_memtable_(const ObTabletID &tablet_id,
                                  const ObTablet *tablet,
                                  share::SCN freeze_snapshot_version);
-  int decide_real_snapshot_version_(const ObTabletID &tablet_id,
-                                    const ObTablet *tablet,
-                                    const SCN freeze_snapshot_version,
-                                    SCN &real_snapshot_version);
   void handle_set_tablet_freeze_failed(const bool need_rewrite_meta,
                                        const ObTabletID &tablet_id,
-                                       const ObLSID &ls_id,
                                        const ObTablet *tablet,
                                        const share::SCN freeze_snapshot_version,
                                        int &ret);
@@ -360,8 +329,7 @@ private:
   void set_ls_freeze_begin_();
   void set_ls_freeze_end_() { ATOMIC_DEC(&high_priority_freeze_cnt_); }
   int check_ls_state(); // must be used under the protection of ls_lock
-  int tablet_freeze_(const int64_t trace_id,
-                     const ObIArray<ObTabletID> &tablet_ids,
+  int tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids,
                      const bool need_rewrite_meta,
                      const share::SCN freeze_snapshot_version,
                      ObIArray<ObTableHandleV2> &frozen_memtable_handles,
@@ -398,7 +366,7 @@ private:
   bool is_async_tablet_freeze_task_existing_;
   bool is_async_ls_freeze_task_existing_;
   bool throttle_is_skipping_;
-  bool tenant_replay_is_pending_;
+  bool replay_is_pending_;
   common::hash::ObHashSet<AsyncFreezeTabletInfo> async_freeze_tablets_; 
 };
 

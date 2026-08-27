@@ -15,6 +15,8 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
+#include "observer/omt/ob_server_runtime_controller.h"
+#include "share/rc/ob_server_runtime.h"
 #include "observer/ob_server_utils.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 
@@ -45,13 +47,13 @@ void ObAllDtlIntermResultMonitor::reset()
   owner_len = strlen(store->get_label());   \
   owner = store->get_label();
 
-int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo *> &entry)
+int ObDTLIntermResultMonitorInfoGetter::consume(
+    const ObDTLIntermResultKey &key,
+    const ObDTLIntermResultInfo &info)
 {
   int ret = OB_SUCCESS;
-  const ObDTLIntermResultInfo &info = *entry.second;
-  const ObDTLIntermResultKey &key = entry.first;
-  int64_t tenant_id = info.is_store_valid() ? info.get_tenant_id() : OB_INVALID_ID;
-  if (OB_SYS_TENANT_ID == effective_tenant_id_ || tenant_id == effective_tenant_id_) {
+  
+  {
     int64_t hold_mem = 0;
     int64_t max_hold_mem = 0;
     int64_t dump_size = 0;
@@ -61,11 +63,7 @@ int ObDTLIntermResultMonitorInfoGetter::operator() (common::hash::HashMapPair<Ob
     const char *owner = NULL;
     ObObj *cells = cur_row_.cells_;
     if (info.is_store_valid()) {
-      if (info.is_rich_format()) {
-        GET_CHUNK_STORE_INFO(info.block_store_);
-      } else {
-        GET_CHUNK_STORE_INFO(info.datum_store_);
-      }
+      GET_CHUNK_STORE_INFO(info.datum_store_);
     }
     for (int64_t cell_idx = 0;
         OB_SUCC(ret) && cell_idx < output_column_ids_.count();
@@ -186,7 +184,6 @@ int ObAllDtlIntermResultMonitor::inner_get_next_row(ObNewRow *&row)
   ObObj *cells = cur_row_.cells_;
   if (!start_to_read_) {
     if (OB_FAIL(fill_scanner())) {
-      SERVER_LOG(WARN, "fill scanner failed", K(ret));
     } else {
       start_to_read_ = true;
     }
@@ -215,32 +212,19 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
   } else {
-    uint64_t cur_tenant_id = MTL_ID();
-    if(is_sys_tenant(cur_tenant_id)) {
-      omt::TenantIdList all_tenants;
-      GCTX.omt_->get_tenant_ids(all_tenants);
-      for (int i = 0; i < all_tenants.size(); ++i) {
-        uint64_t tmp_tenant_id = all_tenants[i];
-        if(!is_virtual_tenant_id(tmp_tenant_id)) {
+    
+    {
+      {
+        {
           ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
-                                  cur_row_, tmp_tenant_id);
-          MTL_SWITCH(tmp_tenant_id) {
-            if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
-              SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
+                                  cur_row_);
+          SERVER_MODULE_SCOPE {
+            if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::sql::dtl::ObDTLIntermResultManager>()->generate_monitor_info_rows(monitor_getter))) {
             }
           } else {
-            // During the iteration process, tenants may be deleted,
-            // so we need to ignore the error code of MTL_SWITCH.
+            // The server module set may not be ready during shutdown.
             ret = OB_SUCCESS;
           }
-        }
-      }
-    } else {
-      ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
-                                  cur_row_, cur_tenant_id);
-      MTL_SWITCH(cur_tenant_id) {
-        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->generate_monitor_info_rows(monitor_getter))) {
-          SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
         }
       }
     }
@@ -254,4 +238,3 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
 
 }/* ns observer*/
 }/* ns oceanbase */
-

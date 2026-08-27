@@ -58,10 +58,9 @@ private:
                 K_(valid));
   };
   typedef common::hash::ObHashSet<ObShowResolver::ObCheckTableInfo, common::hash::NoPthreadDefendMode> TableInfoSet;
-  int get_database_info(const uint64_t session_catalog_id,
-                        const ParseNode *database_node,
+  int get_database_info(const ParseNode *database_node,
                         const common::ObString &session_database_name,
-                        uint64_t real_tenant_id,
+                        uint64_t real_id,
                         ObShowResolverContext &show_resv_ctx,
                         uint64_t &show_db_id);
 
@@ -69,22 +68,20 @@ private:
                               const ParseNode *from_database_clause_node,
                               bool is_database_unselected,
                               ObItemType node_type,
-                              uint64_t real_tenant_id,
-                              uint64_t &show_catalog_id,
+                              uint64_t real_id,
                               common::ObString &show_database_name,
                               uint64_t &show_database_id,
                               common::ObString &show_table_name,
                               uint64_t &show_table_id,
                               bool &is_view);
   int resolve_show_from_database(const ParseNode &from_db_node,
-                                 const uint64_t real_tenant_id,
-                                 const uint64_t catalog_id,
+                                 const uint64_t real_id,
                                  uint64_t &show_database_id,
                                  common::ObString &show_database_name);
   int resolve_show_from_routine(const ParseNode *from_routine_node,
                                 bool is_database_unselected,
                                 ObItemType node_type,
-                                uint64_t real_tenant_id,
+                                uint64_t real_id,
                                 ObString &show_database_name,
                                 uint64_t &show_database_id,
                                 ObString &show_routine_name,
@@ -92,7 +89,7 @@ private:
                                 int64_t &proc_type);
   int resolve_show_from_trigger(const ParseNode *from_tg_node,
                                 bool is_database_unselected,
-                                uint64_t real_tenant_id,
+                                uint64_t real_id,
                                 ObString &show_database_name,
                                 uint64_t &show_database_id,
                                 ObString &show_tg_name,
@@ -120,8 +117,7 @@ private:
                                        const common::ObIArray<uint64_t> &enable_role_id_array,
                                        int &ret_code,
                                        bool &has_select_privilege);
-  int check_db_access_for_show_sql(const uint64_t catalog_id,
-                                   const ObShowResolverContext &show_resv_ctx,
+  int check_db_access_for_show_sql(const ObShowResolverContext &show_resv_ctx,
                                    ObSessionPrivInfo &session_priv,
                                    const common::ObIArray<uint64_t> &enable_role_id_array);
 private:
@@ -150,8 +146,6 @@ struct ObShowResolver::ObShowSqlSet
   DECLARE_SHOW_CLAUSE_SET(SHOW_FULL_TABLES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_FULL_TABLES_LIKE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CHARSET);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2);
   DECLARE_SHOW_CLAUSE_SET(SHOW_VARIABLES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_GLOBAL_VARIABLES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_COLUMNS);
@@ -160,16 +154,16 @@ struct ObShowResolver::ObShowSqlSet
   DECLARE_SHOW_CLAUSE_SET(SHOW_EXTENDED_FULL_COLUMNS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_DATABASE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_DATABASE_EXISTS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_TABLEGROUP);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_TABLEGROUP_EXISTS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_INDEXES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_EXTENDED_INDEXES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_COLLATION);
   DECLARE_SHOW_CLAUSE_SET(SHOW_TRACE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_TRACE_JSON);
   DECLARE_SHOW_CLAUSE_SET(SHOW_ENGINES);
+  DECLARE_SHOW_CLAUSE_SET(SHOW_PROFILE);
+  DECLARE_SHOW_CLAUSE_SET(SHOW_ENGINE);
+  DECLARE_SHOW_CLAUSE_SET(SHOW_OPEN_TABLES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME);
   DECLARE_SHOW_CLAUSE_SET(SHOW_GRANTS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_GRANTS_USING_ROLES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_PROCESSLIST);
@@ -186,44 +180,22 @@ struct ObShowResolver::ObShowSqlSet
   DECLARE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_WITH_DEFAULT_VALUE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_UNSYS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_COMPAT);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_SEED);
   DECLARE_SHOW_CLAUSE_SET(SHOW_SESSION_STATUS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_GLOBAL_STATUS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_TENANT);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_TENANT_STATUS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_TENANT);
   DECLARE_SHOW_CLAUSE_SET(SHOW_DATABASES);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CATALOG_DATABASES);
   DECLARE_SHOW_CLAUSE_SET(SHOW_DATABASES_LIKE);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CATALOG_DATABASES_LIKE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_DATABASES_STATUS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_DATABASES_STATUS_LIKE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_TABLE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_VIEW);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_PROCEDURE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_FUNCTION);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_PROCEDURE_CODE);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_FUNCTION_CODE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_RECYCLEBIN);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_PROFILE);
   DECLARE_SHOW_CLAUSE_SET(SHOW_SYS_RECYCLEBIN);
   DECLARE_SHOW_CLAUSE_SET(SHOW_TRIGGERS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_RESTORE_PREVIEW);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_TRIGGER);
   DECLARE_SHOW_CLAUSE_SET(SHOW_TRIGGERS_LIKE);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_SEQUENCES);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE);
-  DECLARE_SHOW_CLAUSE_SET(XA_RECOVER);
-  DECLARE_SHOW_CLAUSE_SET(XA_RECOVER_CONVERT_XID);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_ENGINE);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_OPEN_TABLES);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_OLAP_ASYNC_JOB_STATUS);
   DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_USER);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CATALOGS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_CATALOG);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_LOCATIONS);
-  DECLARE_SHOW_CLAUSE_SET(SHOW_CREATE_LOCATION);
-  DECLARE_SHOW_CLAUSE_SET(LOCATION_UTILS_LIST);
 };// ObShowSqlSet
 
 class ObShowResolver::ObSqlStrGenerator
@@ -249,8 +221,7 @@ class ObShowResolver::ObShowResolverContext
 {
 public:
   ObShowResolverContext()
-    : cur_tenant_id_(common::OB_INVALID_ID),
-      actual_tenant_id_(common::OB_INVALID_ID),
+    : 
       database_name_(),
       ref_table_id_(common::OB_INVALID_ID),
       show_database_name_(),
@@ -269,8 +240,8 @@ public:
   {
   }
   ~ObShowResolverContext() {}
-  uint64_t cur_tenant_id_;
-  uint64_t actual_tenant_id_;
+  
+  
   common::ObString database_name_;
   uint64_t ref_table_id_;
   common::ObString show_database_name_;
@@ -286,8 +257,8 @@ public:
   ParseNode *condition_node_;
   common::ObString column_name_; // used for show tables
   common::ObString like_column_; // used for the show stmt who has like clause
-  TO_STRING_KV(K_(cur_tenant_id),
-               K_(actual_tenant_id),
+  TO_STRING_KV(
+               
                K_(database_name),
                K_(ref_table_id),
                K_(show_database_name),

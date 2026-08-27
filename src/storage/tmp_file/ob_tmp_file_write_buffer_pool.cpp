@@ -38,7 +38,7 @@ ObTmpWriteBufferPool::ObTmpWriteBufferPool()
       first_free_page_id_(ObTmpFileGlobal::INVALID_PAGE_ID),
       wbp_memory_limit_(-1),
       default_wbp_memory_limit_(-1),
-      last_access_tenant_config_ts_(-1),
+      last_access_runtime_config_ts_(-1),
       last_shrink_complete_ts_(ObTimeUtility::current_time()),
       max_used_watermark_after_shrinking_(0),
       meta_page_cnt_(0),
@@ -63,10 +63,8 @@ int ObTmpWriteBufferPool::init()
     LOG_WARN("fail to init wbp, init twice", KR(ret), K(is_inited_));
   } else if (OB_FAIL(allocator_.init(
                      lib::ObMallocAllocator::get_instance(), OB_MALLOC_BIG_BLOCK_SIZE,
-                     ObMemAttr(MTL_ID(), "TmpFileWBPBlk", ObCtxIds::DEFAULT_CTX_ID)))) {
-    LOG_WARN("wbp fail to init fifo allocator", KR(ret));
+                     ObMemAttr("TmpFileWBPBlk", ObCtxIds::DEFAULT_CTX_ID)))) {
   } else if (OB_FAIL(fat_.init())) {
-    LOG_WARN("fail to init fat", KR(ret));
   } else {
     last_shrink_complete_ts_ = ObTimeUtility::current_time();
     is_inited_ = true;
@@ -81,7 +79,7 @@ void ObTmpWriteBufferPool::destroy()
   dirty_page_num_ = 0;
   used_page_num_ = 0;
   first_free_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
-  last_access_tenant_config_ts_ = -1;
+  last_access_runtime_config_ts_ = -1;
   last_shrink_complete_ts_ = -1;
   max_used_watermark_after_shrinking_ = 0;
   data_page_cnt_ = 0;
@@ -133,7 +131,6 @@ int ObTmpWriteBufferPool::inner_alloc_page_(const int64_t fd,
           is_in_shrinking_range = true;
           insert_page_entry_to_free_list_(curr_first_free_page_id, shrink_ctx_.shrink_list_head_);
           ATOMIC_INC(&shrink_ctx_.shrink_list_size_);
-          LOG_DEBUG("skip alloc page id in shrink range", K(curr_first_free_page_id), K(shrink_ctx_));
         }
       }
     } while (OB_SUCC(ret) && (!cas_succeed || is_in_shrinking_range));
@@ -184,7 +181,6 @@ int ObTmpWriteBufferPool::alloc_page_(const int64_t fd,
   while (OB_SUCC(ret) && ObTmpFileGlobal::INVALID_PAGE_ID == new_page_id && current_capacity < memory_limit) {
     if (OB_FAIL(inner_alloc_page_(fd, page_key, new_page_id, new_page_buf))) {
       if (OB_SEARCH_NOT_FOUND != ret) {
-        LOG_DEBUG("wbp fail to inner alloc page", KR(ret), K(fd), K(page_key), K(new_page_id), KP(new_page_buf));
       } else {  // no free pages, try to expand pool size
         ret = OB_SUCCESS;
         memory_limit = get_memory_limit();
@@ -214,13 +210,11 @@ int ObTmpWriteBufferPool::alloc_page(const int64_t fd,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_key));
   } else if (OB_FAIL(alloc_page_(fd, page_key, new_page_id, new_page_buf))) {
-    LOG_DEBUG("wbp fail to alloc page", KR(ret), K(fd), K(page_key));
   } else if (page_key.type_ == PageEntryType::META) {
     ATOMIC_INC(&meta_page_cnt_);
     LOG_INFO("alloc meta page", KR(ret), K(new_page_id), K(fd), K(page_key));
   } else {
     ATOMIC_INC(&data_page_cnt_);
-    LOG_DEBUG("alloc data page", KR(ret), K(new_page_id), K(fd), K(page_key));
   }
   return ret;
 }
@@ -403,7 +397,6 @@ int ObTmpWriteBufferPool::link_page(
     if (prev_page_key.type_ == PageEntryType::META) {
       LOG_INFO("link meta page", KR(ret), K(fd), K(page_id), K(prev_page_id));
     } else {
-      LOG_DEBUG("link data page", KR(ret), K(fd), K(page_id), K(prev_page_id));
     }
   }
   return ret;
@@ -507,7 +500,6 @@ int ObTmpWriteBufferPool::expand_()
     current_capacity = ATOMIC_LOAD(&capacity_);
     if (shrink_ctx_.is_valid()) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_DEBUG("wbp is shrinking, cannot expand now", K(expect_capacity), K(current_capacity), K(memory_limit));
     } else if (current_capacity < expect_capacity) {
       int64_t old_fat_size = fat_.count();
       int64_t cur_expand_capacity = 0;
@@ -522,7 +514,6 @@ int ObTmpWriteBufferPool::expand_()
           if (OB_FAIL(fat_.push_back(ObPageEntry(ObTmpFileGlobal::INVALID_TMP_FILE_FD,
                                                  ObTmpFileGlobal::INVALID_PAGE_ID,
                                                  new_expand_buf + count * ObTmpFileGlobal::ALLOC_PAGE_SIZE)))) {
-            LOG_WARN("wbp fail to push back page into fat", KR(ret), K(count), K(new_page_id));
           } else {
             if (count > 0) {
               fat_[new_page_id].next_page_id_ = new_page_id - 1;
@@ -622,8 +613,6 @@ int ObTmpWriteBufferPool::init_shrink_context(const bool is_auto)
   uint32_t max_allow_alloc_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
 
   if (OB_FAIL(cal_target_shrink_range_(is_auto, lower_page_id, upper_page_id))) {
-    LOG_WARN("fail to calculate target shrinking range", KR(ret), K(is_auto),
-            K(ATOMIC_LOAD(&max_used_watermark_after_shrinking_)));
   } else {
     max_allow_alloc_page_id = cal_max_allow_alloc_page_id_(lower_page_id, upper_page_id);
     if (OB_UNLIKELY(!is_valid_page_id_(lower_page_id) || !is_valid_page_id_(upper_page_id))) {
@@ -636,7 +625,6 @@ int ObTmpWriteBufferPool::init_shrink_context(const bool is_auto)
           K(lower_page_id), K(upper_page_id), K(fat_.size()));
     } else if (OB_FAIL(shrink_ctx_.init(lower_page_id, max_allow_alloc_page_id,
                                         upper_page_id, is_auto))) {
-      LOG_WARN("wbp fail to init shrink context", KR(ret), K(lower_page_id), K(upper_page_id));
     } else {
       LOG_INFO("init shrinking context", KR(ret), K(shrink_ctx_));
     }
@@ -673,7 +661,6 @@ bool ObTmpWriteBufferPool::need_to_shrink(bool &is_auto)
       } else {
         // re-count max watermark for the next period
         b_ret = false;
-        LOG_DEBUG("re-count max watermark for the next period", K(max_used_page_watermark), K(current_capacity), K(memory_limit));
         ATOMIC_STORE(&max_used_watermark_after_shrinking_, 0);
         ATOMIC_STORE(&last_shrink_complete_ts_, ObTimeUtility::current_time());
       }
@@ -775,7 +762,6 @@ int ObTmpWriteBufferPool::begin_shrinking(const bool is_auto)
   switch (shrink_ctx_.wbp_shrink_state_) {
     case WBPShrinkContext::INVALID:
       if (OB_FAIL(init_shrink_context(is_auto))) {
-        LOG_ERROR("fail to init shrink context, could not begin shrink process", KR(ret));
       } else {
         LOG_INFO("wbp begin_shrinking", K(shrink_ctx_));
       }
@@ -884,7 +870,6 @@ int ObTmpWriteBufferPool::release_blocks_in_shrink_range()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("shrink_ctx_ is invalid", K(ret), K(shrink_ctx_));
   } else if (OB_FAIL(remove_invalid_page_in_free_list_())) {
-    LOG_WARN("fail to remove invalid page in free list", KR(ret), K(shrink_ctx_));
   } else {
     common::TCRWLock::WLockGuard guard(lock_);
 
@@ -920,7 +905,6 @@ int ObTmpWriteBufferPool::release_blocks_in_shrink_range()
       }
     }
   }
-  LOG_DEBUG("wbp shrink fat_ release blocks finish", KR(ret), K(capacity_), K(shrink_ctx_));
   return ret;
 }
 
@@ -1017,8 +1001,6 @@ int64_t ObTmpWriteBufferPool::get_not_allow_alloc_percent_(const int64_t target_
   if (cannot_evict_num <= target_wbp_size * MAX_DATA_PAGE_USAGE_RATIO) {
     not_allow_alloc_percent = 100;
   }
-  LOG_DEBUG("get_not_allow_alloc_percent", K(target_wbp_size), K(cannot_evict_percent),
-      K(not_allow_alloc_percent), K(ADDITIONAL_FREE_PAGE_PERCENT));
   return not_allow_alloc_percent;
 }
 
@@ -1028,36 +1010,29 @@ uint32_t ObTmpWriteBufferPool::cal_max_allow_alloc_page_id_(int64_t lower_bound,
   int64_t not_allow_alloc_percent = get_not_allow_alloc_percent_(lower_bound + 1);
   int64_t max_allow_alloc_page_id =
       MAX3(0, lower_bound - 1 , upper_bound - old_fat_size * not_allow_alloc_percent / 100);
-  LOG_DEBUG("cal_max_allow_alloc_page_id", K(lower_bound), K(old_fat_size),
-      K(max_allow_alloc_page_id), K(upper_bound), K(not_allow_alloc_percent));
   return max_allow_alloc_page_id;
 }
 
 int64_t ObTmpWriteBufferPool::get_memory_limit()
 {
   int64_t memory_limit = 0;
-  int64_t last_access_ts = ATOMIC_LOAD(&last_access_tenant_config_ts_);
+  int64_t last_access_ts = ATOMIC_LOAD(&last_access_runtime_config_ts_);
   int64_t default_wbp_memory_limit = ATOMIC_LOAD(&default_wbp_memory_limit_);
   if (default_wbp_memory_limit > 0) {
     memory_limit = (default_wbp_memory_limit + WBP_BLOCK_SIZE - 1) / WBP_BLOCK_SIZE * WBP_BLOCK_SIZE; // upper_align
   } else if (last_access_ts > 0 && common::ObClockGenerator::getClock() - last_access_ts < 10000000) { // 10s
     memory_limit = ATOMIC_LOAD(&wbp_memory_limit_);
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (!tenant_config.is_valid()) {
-      static const int64_t DEFAULT_MEMORY_LIMIT = 64 * WBP_BLOCK_SIZE; // 126.5MB
-      memory_limit = wbp_memory_limit_ <= 0 ? DEFAULT_MEMORY_LIMIT : wbp_memory_limit_;
-      LOG_INFO("failed to get tenant config", K(MTL_ID()), K(memory_limit), K(wbp_memory_limit_));
-    } else if (0 == tenant_config->_temporary_file_io_area_size) {
+    if (0 == GCONF._temporary_file_io_area_size) {
       memory_limit = WBP_BLOCK_SIZE;
     } else {
-      int64_t config_memory_limit =
-        lib::get_tenant_memory_limit(MTL_ID()) * tenant_config->_temporary_file_io_area_size / 100;
-      memory_limit = config_memory_limit;
+      int64_t config_memory_budget =
+        lib::get_memory_budget() / 50 * GCONF._temporary_file_io_area_size;
+      memory_limit = config_memory_budget;
     }
     memory_limit = ((memory_limit + WBP_BLOCK_SIZE - 1) / WBP_BLOCK_SIZE) * WBP_BLOCK_SIZE;
     ATOMIC_STORE(&wbp_memory_limit_, memory_limit);
-    ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());
+    ATOMIC_STORE(&last_access_runtime_config_ts_, common::ObClockGenerator::getClock());
   }
   return memory_limit;
 }
@@ -1087,9 +1062,6 @@ int64_t ObTmpWriteBufferPool::get_swap_size()
 
   return swap_size;
 }
-
-
-
 
 bool ObTmpWriteBufferPool::is_cached(
      const int64_t fd,
@@ -1180,7 +1152,6 @@ int ObTmpWriteBufferPool::notify_dirty(
   } else if (FALSE_IT(is_already_dirty = (ObPageEntry::State::DIRTY == fat_[page_id].state_))) {
   } else if (FALSE_IT(is_write_back = (ObPageEntry::State::WRITE_BACK == fat_[page_id].state_))) {
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::WRITE))) {
-    LOG_WARN("fail to switch state to DIRTY", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
   } else {
     if (!is_already_dirty) {
       ATOMIC_INC(&dirty_page_num_);
@@ -1229,7 +1200,6 @@ int ObTmpWriteBufferPool::notify_load(
     }
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(entry));
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::LOAD))) {
-    LOG_WARN("fail to switch state from INITED to LOADING", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
   }
   return ret;
 }
@@ -1254,7 +1224,6 @@ int ObTmpWriteBufferPool::notify_load_succ(const int64_t fd, const uint32_t page
     }
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(entry));
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::LOAD_SUCC))) {
-    LOG_WARN("fail to switch state from LOADING to CACHED", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
   }
   return ret;
 }
@@ -1281,7 +1250,6 @@ int ObTmpWriteBufferPool::notify_load_fail(
     }
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(entry));
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::LOAD_FAIL))) {
-    LOG_WARN("fail to switch state from LOADING to INITED", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
   }
   return ret;
 }
@@ -1310,7 +1278,6 @@ int ObTmpWriteBufferPool::notify_write_back(
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(entry));
   } else if (FALSE_IT(is_dirty = (ObPageEntry::State::DIRTY == fat_[page_id].state_))) {
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::WRITE_BACK))) {
-    LOG_WARN("fail to switch state from DIRTY to WRITE_BACK", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
   } else if (is_dirty) {
     ATOMIC_DEC(&dirty_page_num_);
     if (PageEntryType::DATA == fat_[page_id].page_key_.type_) {
@@ -1350,7 +1317,6 @@ int ObTmpWriteBufferPool::notify_write_back_succ(
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(entry));
   } else if (FALSE_IT(is_write_back = (ObPageEntry::State::WRITE_BACK == fat_[page_id].state_))) {
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::WRITE_BACK_SUCC))) {
-    LOG_WARN("fail to switch state from WRITE_BACK to CACHED", KR(ret), K(fd), K(page_id), K(fat_[page_id]));
   } else if (is_write_back) {
     if (PageEntryType::DATA == fat_[page_id].page_key_.type_) {
       ATOMIC_DEC(&write_back_data_cnt_);
@@ -1381,7 +1347,6 @@ int ObTmpWriteBufferPool::notify_write_back_fail(int64_t fd, uint32_t page_id,
     LOG_WARN("invalid argument", KR(ret), K(fd), K(page_id), K(page_key), K(fat_[page_id]));
   } else if (FALSE_IT(is_write_back = (ObPageEntry::State::WRITE_BACK == fat_[page_id].state_))) {
   } else if (OB_FAIL(fat_[page_id].switch_state(ObPageEntry::Ops::WRITE_BACK_FAILED))) {
-    LOG_WARN("fail to switch state from WRITE_BACK to DIRTY", K(fd), K(page_id), K(fat_[page_id]));
   } else if (is_write_back) {
     ATOMIC_INC(&dirty_page_num_);
     if (PageEntryType::DATA == fat_[page_id].page_key_.type_) {
@@ -1397,7 +1362,7 @@ int ObTmpWriteBufferPool::notify_write_back_fail(int64_t fd, uint32_t page_id,
   return ret;
 }
 
-// return write buffer pool maximum page number, which is determined by tenant memory and config
+// Return the maximum page count derived from runtime memory and configuration.
 int64_t ObTmpWriteBufferPool::get_max_page_num()
 {
   int64_t mem_limit = get_memory_limit();
@@ -1467,13 +1432,7 @@ int64_t ObTmpWriteBufferPool::get_free_data_page_num()
 
   int64_t total_free_page_cnt = max_page_num - data_page_cnt - meta_page_cnt;
   int64_t data_free_page_cnt = get_max_data_page_num() - data_page_cnt;
-  if (!GCTX.is_shared_storage_mode()) {
-    free_data_page_num = MIN(total_free_page_cnt, data_free_page_cnt);
-  #ifdef OB_BUILD_SHARED_STORAGE
-  } else {
-    free_data_page_num = MAX(max_page_num, fat_.size()) - data_page_cnt;
-  #endif
-  }
+  free_data_page_num = MIN(total_free_page_cnt, data_free_page_cnt);
   return free_data_page_num;
 }
 
@@ -1484,22 +1443,16 @@ bool ObTmpWriteBufferPool::has_free_page_(PageEntryType type)
   int ret = OB_SUCCESS;
   bool b_ret = true;
   if (PageEntryType::DATA == type) {
-    if(!GCTX.is_shared_storage_mode()) {
-      if (shrink_ctx_.is_valid()) {
-        b_ret = get_data_page_num() < fat_.size() * MAX_DATA_PAGE_USAGE_RATIO - shrink_ctx_.get_not_alloc_page_num();
-      } else {
-        if (fat_.size() >= get_max_page_num()) {
-          // shrinking may not be invoked immediately when memory limit changes,
-          // use current fat_ size to prevent no data pages can be allocated
-          b_ret = get_data_page_num() < fat_.size() * MAX_DATA_PAGE_USAGE_RATIO;
-        } else {
-          b_ret = get_data_page_num() < get_max_data_page_num();
-        }
-      }
-    #ifdef OB_BUILD_SHARED_STORAGE
+    if (shrink_ctx_.is_valid()) {
+      b_ret = get_data_page_num() < fat_.size() * MAX_DATA_PAGE_USAGE_RATIO - shrink_ctx_.get_not_alloc_page_num();
     } else {
-      b_ret = true;
-    #endif
+      if (fat_.size() >= get_max_page_num()) {
+        // shrinking may not be invoked immediately when memory limit changes,
+        // use current fat_ size to prevent no data pages can be allocated
+        b_ret = get_data_page_num() < fat_.size() * MAX_DATA_PAGE_USAGE_RATIO;
+      } else {
+        b_ret = get_data_page_num() < get_max_data_page_num();
+      }
     }
   } else if (PageEntryType::META == type) {
     b_ret = true; // no limit for meta page

@@ -172,7 +172,7 @@ enum ObCommandOption {
   COMMAND_OPTION_INITIALIZE = 1000,
   COMMAND_OPTION_VARIABLE,
   COMMAND_OPTION_NODAEMON,
-  COMMAND_OPTION_DEVNAME,
+  COMMAND_OPTION_EMBEDDED,
   COMMAND_OPTION_BASE_DIR,
   COMMAND_OPTION_DATA_DIR,
   COMMAND_OPTION_REDO_DIR,
@@ -193,13 +193,13 @@ static struct option long_options[] = {
   {"port",       required_argument, 0, 'P'},
   {"nodaemon",   no_argument,       0, COMMAND_OPTION_NODAEMON},
   {"use-ipv6",   no_argument,       0, '6'},
-  {"devname",    required_argument, 0, COMMAND_OPTION_DEVNAME},
   {"base-dir",   required_argument, 0, COMMAND_OPTION_BASE_DIR},
   {"data-dir",   required_argument, 0, COMMAND_OPTION_DATA_DIR},
   {"redo-dir",   required_argument, 0, COMMAND_OPTION_REDO_DIR},
   {"log-level",  required_argument, 0, COMMAND_OPTION_LOG_LEVEL},
   {"parameter",  required_argument, 0, COMMAND_OPTION_PARAMETER},
   {"role", required_argument, 0, COMMAND_OPTION_ROLE},
+  {"embedded",   no_argument,       0, COMMAND_OPTION_EMBEDDED},
 #ifdef _WIN32
   {"install-service", no_argument, 0, COMMAND_OPTION_INSTALL_SERVICE},
   {"remove-service",  no_argument, 0, COMMAND_OPTION_REMOVE_SERVICE},
@@ -321,10 +321,6 @@ int ObCommandLineParser::handle_option(int option, const char* value, ObServerOp
       opts.use_ipv6_ = true;
       break;
     }
-    case COMMAND_OPTION_DEVNAME: { // devname
-      MPRINT("devname is deprecated, igored."); // TODO wangyunlai.wyl remove me before 2025-12-01
-      break;
-    }
     case COMMAND_OPTION_BASE_DIR: { // base-dir
       opts.base_dir_.assign(value);
       break;
@@ -358,9 +354,17 @@ int ObCommandLineParser::handle_option(int option, const char* value, ObServerOp
       if (nullptr == value) {
         ret = OB_INVALID_ARGUMENT;
         MPRINT("Invalid argument, the value should not be empty of 'role'");
+      } else if (0 != ObString(value).case_compare("PRIMARY")
+          && 0 != ObString(value).case_compare("STANDBY")) {
+        ret = OB_NOT_SUPPORTED;
+        MPRINT("Unsupported role '%s': supported roles are PRIMARY and STANDBY", value);
       } else {
         opts.role_.assign(value);
       }
+      break;
+    }
+    case COMMAND_OPTION_EMBEDDED: { // embedded
+      opts.embedded_ = true;
       break;
     }
 #ifdef _WIN32
@@ -510,6 +514,7 @@ void ObCommandLineParser::print_help() const
   MPRINT("  --variable <key=value>          system variables, format: key=value. Note: This takes effect only during the initial startup. Can be specified multiple times.");
   MPRINT("  --parameter <key=value>         system parameters, format: key=value. Can be specified multiple times.");
   MPRINT("  --role <role>                   server role: PRIMARY (default) or STANDBY");
+  MPRINT("  --embedded                      run seekdb in embedded mode (default: off)");
   MPRINT("  --version, -V                   show version message and exit");
   MPRINT("  --help, -h                      show this message and exit");
 #ifdef _WIN32
@@ -530,18 +535,13 @@ void ObCommandLineParser::print_help() const
 
 void ObCommandLineParser::print_version()
 {
-#ifndef ENABLE_SANITY
-  const char *extra_flags = "";
-#else
-  const char *extra_flags = "|Sanity";
-#endif
   ObSqlString exe_name;
   (void) get_executable_name(exe_name);
   MPRINT("%s (%s %s %s)\n", exe_name.ptr(), OB_OCEANBASE_NAME, OB_SEEKDB_NAME, PACKAGE_VERSION);
   MPRINT("REVISION: %s", build_version());
   MPRINT("BUILD_BRANCH: %s", build_branch());
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
-  MPRINT("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
+  MPRINT("BUILD_FLAGS: %s", build_flags());
   MPRINT("BUILD_INFO: %s\n", build_info());
   MPRINT("%s", COPYRIGHT);
   MPRINT();

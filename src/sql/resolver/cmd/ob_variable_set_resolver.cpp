@@ -44,13 +44,11 @@ int ObVariableSetResolver::resolve_set_names(const ParseNode &parse_tree)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt not created in resolver", K(ret));
   } else if (OB_FAIL(set_names_resolver.resolve(parse_tree))) {
-    LOG_WARN("fail to resolve", K(ret));
   } else {
     ObVariableSetStmt *variable_set_stmt = static_cast<ObVariableSetStmt*>(stmt_);
     ObVariableSetStmt::VariableSetNode var_node;
     var_node.set_names_stmt_ = static_cast<ObSetNamesStmt *>(set_names_resolver.get_basic_stmt());
     if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
-      LOG_WARN("Add set entry failed", K(ret));
     }
   }
   return ret;
@@ -60,7 +58,6 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObVariableSetStmt *variable_set_stmt = NULL;
-  bool check_var_name_length = false;
   if (OB_UNLIKELY(T_VARIABLE_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_VARIABLE_SET", K(ret), K(parse_tree.type_));
@@ -72,12 +69,8 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(variable_set_stmt = create_stmt<ObVariableSetStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create variable set stmt failed", K(ret));
-  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::VAR_NAME_LENGTH,
-                                                         check_var_name_length))) {
-    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = variable_set_stmt;
-    variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
     ParseNode *set_node = NULL;
     ObVariableSetStmt::VariableSetNode var_node;
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree.num_child_; ++i) {
@@ -86,7 +79,6 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
         LOG_ERROR("set node is NULL", K(ret));
       } else if (T_SET_NAMES == set_node->type_ || T_SET_CHARSET == set_node->type_) {
         if (OB_FAIL(resolve_set_names(*set_node))) {
-          LOG_WARN("fail to resolve set names", K(ret));
         }
       } else if (OB_UNLIKELY(T_VAR_VAL != set_node->type_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -119,7 +111,7 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
           if (T_IDENT == var->type_) {
             var_node.is_system_variable_ = true; // PL's set statement is resolved in the PL resolver, so it won't reach here, thus anything reaching here must be the default writing of a system variable
             var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
-          } else if (T_OBJ_ACCESS_REF == var->type_) { //Oracle mode
+          } else if (T_OBJ_ACCESS_REF == var->type_) { // qualified variable reference
             const ParseNode *name_node = NULL;
             if (OB_ISNULL(name_node = var->children_[0])) {
               ret = OB_ERR_UNEXPECTED;
@@ -138,7 +130,6 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(ob_write_string(*allocator_, var_name, var_node.variable_name_))) {
-              LOG_WARN("Can not malloc space for variable name", K(ret));
             } else {
               ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, var_node.variable_name_);
             }
@@ -162,7 +153,7 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
               } else {
                 MEMCPY(&value_node, set_node->children_[1], sizeof(ParseNode));
               }
-            } else if (T_OBJ_ACCESS_REF == set_node->children_[1]->type_) { //Oracle mode
+            } else if (T_OBJ_ACCESS_REF == set_node->children_[1]->type_) { // qualified variable value
               if (OB_ISNULL(set_node->children_[1]->children_[0]) || OB_UNLIKELY(set_node->children_[1]->children_[1] != NULL)) {
                 ret = OB_ERR_UNKNOWN_SET_OPTION;
                 LOG_WARN("unknown SET option", K(ret), K(set_node->children_[1]->children_[0]->type_));
@@ -186,34 +177,18 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
               MEMCPY(&value_node, set_node->children_[1], sizeof(ParseNode));
             }
             if (OB_SUCC(ret)) {
-              if (0 == var_node.variable_name_.case_compare("_enable_mysql_pl_priv_check")) {
-                if (0 == ObString(value_node.str_len_, value_node.str_value_).case_compare("on") ||
-                    0 == ObString(value_node.str_len_, value_node.str_value_).case_compare("1")) {
-                  //do nothing
-                } else {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "turn _enable_mysql_pl_priv_check without on");
-                }
-              }
-            }
-            if (OB_SUCC(ret)) {
               if (OB_FAIL(resolve_value_expr(value_node, var_node.value_expr_))) {
-                LOG_WARN("failed to resolve value expr", K(ret));
               }
             }
           } else {
-            if (lib::is_mysql_mode() && check_var_name_length) {
-              if (OB_FAIL(ObResolverUtils::check_user_variable_length(var_node.variable_name_.ptr(),
-                                                                      var_node.variable_name_.length()))) {
-                LOG_WARN("check user variable length fail", K(ret));
-              }
+            if (OB_FAIL(ObResolverUtils::check_user_variable_length(var_node.variable_name_.ptr(),
+                                                                    var_node.variable_name_.length()))) {
             }
             if (OB_SUCC(ret)) {
               // use WARN_ON_FAIL cast_mode if set user_variable
               const stmt::StmtType session_ori_stmt_type = session_info_->get_stmt_type();
               session_info_->set_stmt_type(stmt::T_SELECT);
               if (OB_FAIL(resolve_value_expr(*set_node->children_[1], var_node.value_expr_))) {
-                LOG_WARN("failed to resolve value expr", K(ret));
               }
               session_info_->set_stmt_type(session_ori_stmt_type);
             }
@@ -229,7 +204,6 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
                   LOG_WARN("Variable value type is not supported", K(ret), K(set_node->children_[1]->type_));
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable value type");
             } else if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
-              LOG_WARN("Add set entry failed", K(ret));
             }
           }
         }
@@ -258,9 +232,7 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
     ret = OB_NOT_INIT;
     LOG_WARN("resolve status is invalid", K_(params_.expr_factory), K_(params_.session_info));
   } else if (OB_FAIL(params_.session_info_->get_collation_connection(collation_connection))) {
-    LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_FAIL(params_.session_info_->get_character_set_connection(character_set_connection))) {
-    LOG_WARN("fail to get character_set_connection", K(ret));
   } else {
     ObExprResolveContext ctx(*params_.expr_factory_, params_.session_info_->get_timezone_info(),
                              OB_NAME_CASE_INVALID);
@@ -274,11 +246,9 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
     ctx.query_ctx_ = params_.query_ctx_;
     ObRawExprResolverImpl expr_resolver(ctx);
     if (OB_FAIL(params_.session_info_->get_name_case_mode(ctx.case_mode_))) {
-      LOG_WARN("fail to get name case mode", K(ret));
     } else if (OB_FAIL(expr_resolver.resolve(&val_node, value_expr, columns, sys_vars,
                                              sub_query_info, aggr_exprs, win_exprs,
                                              udf_info, op_exprs, user_var_exprs, inlist_infos, match_exprs))) {
-      LOG_WARN("resolve expr failed", K(ret));
     } else if (udf_info.count() > 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("UDFInfo should not found be here!!!", K(ret));
@@ -294,21 +264,15 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(call_expr->get_expr()->formalize(params_.session_info_))) {
-        LOG_WARN("failed to formalize call expr", K(ret));
       }
     } else if (value_expr->has_flag(CNT_SUB_QUERY)) {
-      if (is_mysql_mode()) {
-        if (OB_FAIL(resolve_subquery_info(sub_query_info, value_expr))) {
-          LOG_WARN("failed to resolve subquery info", K(ret));
-        }
+      if (OB_FAIL(resolve_subquery_info(sub_query_info, value_expr))) {
       }
-      LOG_TRACE("set user variable with subquery", K(sub_query_info.count()), K(is_mysql_mode()));
+      LOG_TRACE("set user variable with subquery", K(sub_query_info.count()));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
-      LOG_WARN("resolve columns for const expr failed", K(ret));
     } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
-      LOG_WARN("failed to formalize value expr", K(ret));
     } else {
       params_.prepare_param_count_ += ctx.prepare_param_count_; //prepare param count
     }
@@ -337,7 +301,6 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(subquery_resolver.resolve_child_stmt(*(info.sub_query_)))) {
-      LOG_WARN("resolve select subquery failed", K(ret));
     } else if (OB_ISNULL(sub_stmt = subquery_resolver.get_child_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -356,7 +319,6 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
         } else {
           const ObRawExprResType &column_type = target_expr->get_result_type();
           if (OB_FAIL(info.ref_expr_->add_column_type(column_type))) {
-            LOG_WARN("add column type to subquery ref expr failed", K(ret));
           }
         }
       }
@@ -374,7 +336,7 @@ ObAlterSessionSetResolver::~ObAlterSessionSetResolver()
 {
 }
 
-// for oracle mode grammer: alter session set sys_var = val
+// Resolve ALTER SESSION SET sys_var = val.
 int ObAlterSessionSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -391,7 +353,6 @@ int ObAlterSessionSetResolver::resolve(const ParseNode &parse_tree)
   } else {
     // start resolve
     stmt_ = variable_set_stmt;
-    variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
     ParseNode *set_clause_node = NULL;
     ParseNode *set_param_node = NULL;
     ObVariableSetStmt::VariableSetNode var_node;
@@ -430,7 +391,6 @@ int ObAlterSessionSetResolver::resolve(const ParseNode &parse_tree)
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(ob_write_string(*allocator_, var_name, var_node.variable_name_))) {
-                LOG_WARN("Can not malloc space for variable name", K(ret));
               } else {
                 ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, var_node.variable_name_);
               }
@@ -444,7 +404,6 @@ int ObAlterSessionSetResolver::resolve(const ParseNode &parse_tree)
                 ParseNode value_node;
                 MEMCPY(&value_node, set_param_node->children_[1], sizeof(ParseNode));
                 if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
-                  LOG_WARN("resolve variable value failed", K(ret));
                 }
               }
             }

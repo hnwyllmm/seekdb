@@ -16,8 +16,8 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/json_type/ob_json_parse.h"
-#include "lib/json_type/ob_json_schema.h"
+#include "common/json_type/ob_json_parse.h"
+#include "common/json_type/ob_json_schema.h"
 #undef private
 
 using namespace std;
@@ -41,7 +41,7 @@ public:
   static void TearDownTestCase()
   {}
 
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestJsonSchema);
 };
@@ -1676,14 +1676,3 @@ TEST_F(TestJsonSchema, test_regex_match)
 
 } // namespace common
 } // namespace oceanbase
-
-int main(int argc, char** argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  /*
-  system("rm -f test_json_schema.log");
-  OB_LOGGER.set_file_name("test_json_schema.log");
-  OB_LOGGER.set_log_level("INFO");
-  */
-  return RUN_ALL_TESTS();
-}

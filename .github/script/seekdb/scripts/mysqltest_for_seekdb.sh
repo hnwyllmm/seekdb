@@ -39,26 +39,16 @@ function prepare_config {
     then
         [[ -f $HOME/seekdb/tools/deploy/enable_mini_mode ]] && MINI_SIZE=$(cat $HOME/seekdb/tools/deploy/enable_mini_mode)
         [[ $MINI_SIZE =~ ^[0-9]+G ]] || MINI_SIZE="8G"
-        MINI_CONFIG_ITEM="ObCfg.init_config['memory_limit']='$MINI_SIZE'"
+        MINI_CONFIG_ITEM="ObCfg.init_config['memory_budget']='$MINI_SIZE'"
     fi
 
 
     cd $HOME/seekdb/tools/deploy
-    if [ "$WITH_PROXY" ] && [ "$WITH_PROXY" != "0" ]
+    if [[ "$CLUSTER_SPEC" == '2x1' ]] || [[ "$SLAVE" == "1" ]]
     then
-        if [ "$CLUSTER_SPEC" == '2x1' ]
-        then
-            SPEC="[$HOST,proxy@$HOST]@zone1 [$HOST]@zone2"
-        else
-            SPEC="[$HOST,proxy@$HOST]@zone1"
-        fi
+        SPEC="[$HOST]@zone1 [$HOST]@zone2"
     else
-        if [[ "$CLUSTER_SPEC" == '2x1' ]] || [[ "$SLAVE" == "1" ]]
-        then
-            SPEC="[$HOST]@zone1 [$HOST]@zone2"
-        else
-            SPEC="[$HOST]@zone1"
-        fi
+        SPEC="[$HOST]@zone1"
     fi
     # farm中由于机器变小了，需要设置下
     CPU_COUNT_CONFIG="ObCfg.init_config['cpu_count']='24'"
@@ -69,7 +59,6 @@ port_gen = itertools.count(5000 + $SLOT_ID * 100)
 $USER = OBI(
     server_spec='$SPEC',
     is_local=True,
-    proxy_cfg_key='$USER_\${local_ip}_proxy_$SLOT_ID',
     cfg_key='$USER_\${local_ip}_rslist_$SLOT_ID')
 $MINI_CONFIG_ITEM
 $CPU_COUNT_CONFIG
@@ -99,11 +88,6 @@ function prepare_bin {
 
 function prepare_obs {
     cd $HOME
-    if [ "$WITH_PROXY" ] && [ "$WITH_RPOXY" != "0" ]
-    then
-       mkdir -p $USER.proxy0/bin &&
-           ln -st $USER.proxy0/bin $DOWNLOAD_DIR/obproxy || return 1
-    fi
 
     OBS_CNT=2
     for ((i=0; i<$OBS_CNT; i++))
@@ -125,14 +109,11 @@ function run_mysqltest {
     [[ "$SLB" != "" ]] && slb="slb=$SLB,$EXECID"
     cd $HOME/seekdb/tools/deploy
     mkfifo test.fifo
-    if [ "$WITH_PROXY" ] && [ "$WITH_PROXY" != "0" ]
+    if [[ "$SLAVE" == "1" ]]
     then
-        cat test.fifo | tee result.out & ./hap.py $USER.proxy0.mysqltest collect_all slices=$SLICES slice_idx=$SLICE_IDX $slb `echo $ARGV`  1> test.fifo 2>&1
-    elif [[ "$SLAVE" == "1" ]]
-    then
-        cat test.fifo | tee result.out & ./hap.py $USER.obs1.mysqltest collect_all slices=$SLICES slice_idx=$SLICE_IDX $slb `echo $ARGV`  1> test.fifo 2>&1
+        cat test.fifo | tee result.out & ./hap.py $USER.obs1.mysqltest collect_all slices=$SLICES slice_idx=$SLICE_IDX $slb `echo $ARGV`  1> test.fifo 2>&1        
     else
-        cat test.fifo | tee result.out & ./hap.py $USER.mysqltest collect_all slices=$SLICES slice_idx=$SLICE_IDX $slb `echo $ARGV`  1> test.fifo 2>&1
+        cat test.fifo | tee result.out & ./hap.py $USER.mysqltest collect_all slices=$SLICES slice_idx=$SLICE_IDX $slb `echo $ARGV`  1> test.fifo 2>&1 
     fi
 
     # check if there is error
@@ -160,12 +141,7 @@ export -f run_mysqltest
 function obd_prepare_obd {
     if [[ -f $HOME/seekdb/deps/init/dep_create.sh ]]
     then
-        if [[ "$IS_CE" == "1" ]]
-        then
-          cd $HOME/seekdb && ./build.sh init --ce || return 3
-        else
-          cd $HOME/seekdb && ./build.sh init || return 3
-        fi
+        cd $HOME/seekdb && ./build.sh init || return 3
     else
         if grep 'dep_create.sh' $HOME/seekdb/build.sh
         then
@@ -174,7 +150,7 @@ function obd_prepare_obd {
             cd $HOME/seekdb && ./build.sh init || return 3
         fi
     fi
-
+    
     $obd devmode enable
     $obd env set OBD_DEPLOY_BASE_DIR $HOME/seekdb/tools/deploy
     $obd --version
@@ -224,7 +200,7 @@ function obd_prepare_global {
 }
 
 function obd_prepare_config {
-
+    
     MINI_SIZE="10G"
     if [[ "$MINI" == "1" ]] || ([[ "$MINI" == "-1" ]] && [[ -f $HOME/seekdb/tools/deploy/enable_mini_mode ]])
     then
@@ -286,7 +262,6 @@ EOF
     extra_conf="""$MYSQLRTEST_ARGS
     $CGROUP_CONFIG
 """
-    conf=${conf//'{{%% PROXY_CONF %%}}'/"$extra_conf"}
     conf=${conf//'{{%% DEPLOY_PATH %%}}'/"$HOME/seekdb/tools/deploy"}
     conf=${conf//'{{%% COMPONENT %%}}'/$COMPONENT}
     conf=${conf//'{{%% SERVERS %%}}'/$SERVERS}
@@ -300,18 +275,6 @@ EOF
       conf=$(echo "$conf" | sed 's/oceanbase:/oceanbase\-ce:/g' | sed 's/\- oceanbase$/- oceanbase-ce/g')
     fi
     echo "$conf" > $HOME/seekdb/tools/deploy/config.yaml
-
-    if [[ $WITH_SHARED_STORAGE == "1" ]]
-    then
-        # shared_storage 需要在global修改相关的mode
-        share_storage_workdir="$(date +%s)-$(uuidgen)"
-        first_global_line_count=`sed -n '/global:/=' $HOME/seekdb/tools/deploy/config.yaml | head -n 1`
-        set +x
-        sed -i "${first_global_line_count}a\    mode: 'shared_storage'\n\
-    shared_storage: \"oss://oss-436751-0701-all-test/$FARM2_RUN_USER/$share_storage_workdir?host=oss-cn-hangzhou.aliyuncs.com&access_id=${SENSITIVE_TEST_OSS_ID_FOR_OBJECT_STORAGE_FOR_TOTAL}&access_key=${SENSITIVE_TEST_OSS_KEY_FOR_OBJECT_STORAGE_FOR_TOTAL}&max_iops=0&max_bandwidth=0B&scope=region\""  $HOME/seekdb/tools/deploy/config.yaml
-        sed -i "s/datafile_size: '20G'/datafile_size: '200G'/g" $HOME/seekdb/tools/deploy/config.yaml
-        set -x
-    fi
 
     if [[ $SHARED_STORAGE_MODE == "1" ]]
     then
@@ -327,10 +290,7 @@ EOF
     shared_storage: \"s3://farm-test/mysqltest/$share_storage_workdir/clog_and_data?host=http://$MINIO_IP:9000&access_id=minioadmin&access_key=minioadmin&s3_region=us-east-1&max_iops=10000&max_bandwidth=1GB&scope=region\""  $HOME/seekdb/tools/deploy/config.yaml
     fi
 
-    if [[ ! $WITH_SHARED_STORAGE == "1" ]]
-    then
-        cat $HOME/seekdb/tools/deploy/config.yaml
-    fi
+    cat $HOME/seekdb/tools/deploy/config.yaml
 }
 
 function obd_prepare_bin {
@@ -356,7 +316,7 @@ function obd_prepare_bin {
     [[ -x $HOME/seekdb/tools/deploy/obd.sh ]] && ./obd.sh prepare
     cp $DEP_PATH/u01/obclient/bin/obclient ./obclient && chmod 777 obclient
     cp $DEP_PATH/u01/obclient/bin/mysqltest ./mysqltest && chmod 777 mysqltest
-
+    
     if [ "$WITH_DEPS" ] && [ "$WITH_DEPS" != "0" ]
     then
         cd $HOME/seekdb/tools/deploy && [[ -f copy.sh ]] && sh copy.sh
@@ -371,7 +331,7 @@ function obd_prepare_bin {
 
     mkdir -p $HOME/seekdb/tools/deploy/admin
     if [[ -d $HOME/seekdb/src/share/inner_table/sys_package ]]
-    then
+    then 
         cp $HOME/seekdb/src/share/inner_table/sys_package/*.sql $HOME/seekdb/tools/deploy/admin/
     fi
 
@@ -436,8 +396,8 @@ function obd_run_mysqltest {
     else
         SCHE_ARGS="--slices=$SLICES --slice-idx=$SLICE_IDX "
     fi
-
-
+    
+    
     if [[ "$MINI" == "1" && -f core-test.init_mini.sql ]]
     then
         INIT_FLIES="--init-sql-files=core-test.init_mini.sql,init_user.sql|root@mysql|test"
@@ -456,10 +416,6 @@ function obd_run_mysqltest {
     else
     SERVER_ARGS=""
     fi
-    if [ "$WITH_PROXY" ] && [ "$WITH_PROXY" != "0" ]
-    then
-    CLUSTER_MODE="proxy"
-    fi
     reboot_retries=2
     if [[ "$WITH_MYSQLTEST_CONFIG_YAML" == "1" ]]
     then
@@ -470,7 +426,7 @@ function obd_run_mysqltest {
     if [[  -f $HOME/seekdb/tools/deploy/obd/.fast-reboot ]]
     then
         EXTRA_ARGS="${EXTRA_ARGS}--fast-reboot "
-    fi
+    fi 
 
     if [[ "$IS_CE" == "1" ]]
     then
@@ -478,11 +434,11 @@ function obd_run_mysqltest {
     fi
 
     EXTRA_ARGS_WITHOUT_CASE=$EXTRA_ARGS
-
+    
     if [[ "$ARGV" != "" ]]
     then
         for arg in $ARGV
-        do
+        do  
             [[ "${arg%%=*}" == "testset" ]] && arg="${arg/testset=/test-set=}"
             [[ "${arg%%=*}" == "reboot-timeout" ]] && has_reboot_timeout=1
             [[ "${arg%%=*}" == "reboot-retries" ]] && reboot_retries=${arg#*=}
@@ -503,10 +459,6 @@ function obd_run_mysqltest {
     if [[ "$disable_collect" != "1" ]]
     then
         COLLECT_ARG="--collect-all"
-        if [[ "$WITH_MYSQLTEST_CONFIG_YAML" == "0" ]] && [ "$WITH_PROXY" ] && [ "$WITH_PROXY" != "0" ] && [[ -f "$HOME/seekdb/tools/deploy/obd/.collect_proxy_log" ]]
-        then
-            COLLECT_ARG="$COLLECT_ARG --collect-components=$COMPONENT,obproxy"
-        fi
     fi
     obd_init_cluster
     if [[ "$init_seccess" != "1" ]]
@@ -516,9 +468,8 @@ function obd_run_mysqltest {
         mkdir -p $HOME/collected_log/_test_init/
         [[ -d "$DATA_PATH/observer1/log" ]] && mkdir -p $HOME/collected_log/_test_init/observer1 && mv $DATA_PATH/observer1/log/* $HOME/collected_log/_test_init/observer1
         [[ -d "$DATA_PATH/observer2/log" ]] && mkdir -p $HOME/collected_log/_test_init/observer2 && mv $DATA_PATH/observer2/log/* $HOME/collected_log/_test_init/observer2
-        [[ -d "$DATA_PATH/obproxy/log" ]] && mkdir -p $HOME/collected_log/_test_init/obproxy && mv $DATA_PATH/obproxy/log/* $HOME/collected_log/_test_init/obproxy
         exit 1
-    fi
+    fi 
     if [[ "$SPECIAL_RUN" == "1" ]]
     then
         ret=255
@@ -591,12 +542,7 @@ function obd_run_mysqltest {
 
             if [[ -f $HOME/seekdb/deps/init/dep_create.sh ]]
             then
-                if [[ "$IS_CE" == "1" ]]
-                then
-                    cd $HOME/seekdb && ./build.sh init --ce || ret=3
-                else
-                    cd $HOME/seekdb && ./build.sh init || ret=3
-                fi
+                cd $HOME/seekdb && ./build.sh init || ret=3
             else
                 if grep 'dep_create.sh' $HOME/seekdb/build.sh
                 then
@@ -639,37 +585,17 @@ function obd_run_mysqltest {
             [[ $test_suite_ret = 0 && $tag_ret = 0 ]] && current_ret=0 || current=1
             [[ $ret = 0 && $current_ret = 0 ]] && ret=0 || ret=1
         done
-
+    
         if [[ $JOBNAME == 'mysqltest_opensource' ]]
         then
             submarker="_opensource"
         else
             submarker=""
-        fi
+        fi 
 
         mv compare.out $HOME/mysqltest${submarker}_compare_output.$SLICE_IDX
         echo "finish!"
         return $ret
-    elif [[ $WITH_SHARED_STORAGE == "1" ]]
-    then
-        # 把sensitive_test目录下的测试集合移动到tools/deploy/mysql_test
-        # 并且创建一个新的目录用来表示单独的测试
-        if [[ ! -d $HOME/seekdb/sensitive_test/mysql_test ]]
-        then
-            return 0
-        fi
-        need_mv_dirs=`ls -1 $HOME/seekdb/sensitive_test/mysql_test/test_suite|xargs`
-        run_suites=""
-        for need_mv_dir in $need_mv_dirs
-        do
-            new_dir=$HOME/seekdb/tools/deploy/mysql_test/test_suite/shared_storage__${need_mv_dir}
-            run_suites="${run_suites}shared_storage__${need_mv_dir},"
-            mkdir -p $new_dir
-            cp -r $HOME/seekdb/sensitive_test/mysql_test/test_suite/$need_mv_dir/* $new_dir
-        done
-        run_suites=`echo $run_suites | awk '{print substr($0, 1, length($0)-1)}'`
-        mysqltest_cmd="$obd test mysqltest $ob_name $SERVER_ARGS --mysqltest-bin=./mysqltest --obclient-bin=./obclient $COLLECT_ARG --init-sql-dir=$HOME/seekdb/tools/deploy --log-dir=./var/log $REBOOT_TIMEOUT $VERBOSE_ARG $EXTRA_ARGS_WITHOUT_CASE --suite=$run_suites"
-        $mysqltest_cmd $INIT_FLIES $SCHE_ARGS 2>&1 | tee compare.out && ( exit ${PIPESTATUS[0]})
     else
         if [[ -f $HOME/seekdb/tools/deploy/error_log_filter.json && ( $BRANCH == 'master' || $BRANCH == "4_2_x_release" ) && "$FROM_FARM" == '1' ]]
         then
@@ -700,7 +626,7 @@ function obd_prepare_env {
 }
 
 function obd_collect_log {
-
+    
     echo "collect log"
     cd $HOME/
     mkdir -p collected_log
@@ -709,12 +635,6 @@ function obd_collect_log {
     mkdir -p collected_log/mysqltest_rec_log
     find $DATA_PATH -name 'core[.-]*' | xargs -i cp {} collected_log
     [[ "$OBD_HOME" != "" ]] && mv $OBD_HOME/.obd/log/*  collected_log/obd_log/
-    set +x
-    if [[ $WITH_SHARED_STORAGE == "1" ]]
-    then
-        sed -i  "s/${SENSITIVE_TEST_OSS_KEY_FOR_OBJECT_STORAGE_FOR_TOTAL}//" collected_log/obd_log/obd
-    fi
-    set -x
     mv seekdb/tools/deploy/var/log/* collected_log/mysqltest_log/
     mv seekdb/tools/deploy/var/rec_log/* collected_log/mysqltest_rec_log/
     mv collected_log collected_log_$SLICE_IDX
@@ -722,7 +642,7 @@ function obd_collect_log {
 }
 
 function collect_obd_case_log {
-
+    
     echo "collect obd case log"
     cd $HOME/
     if [[ $JOBNAME == 'mysqltest_opensource' ]]
@@ -747,22 +667,14 @@ function run {
     then
         mv /root/tmp/.ssh/id_rsa /root/.ssh/
     fi
-    if ([[ -f $HOME/seekdb/rpm/oceanbase.deps ]] && [[ "$(grep 'ob-deploy' $HOME/seekdb/rpm/oceanbase.deps )" != "" ]]) ||
+    if ([[ -f $HOME/seekdb/rpm/oceanbase.deps ]] && [[ "$(grep 'ob-deploy' $HOME/seekdb/rpm/oceanbase.deps )" != "" ]]) || 
       ([[ -f $HOME/seekdb/deps/3rd/oceanbase.el7.x86_64.deps ]] && [[ "$(grep 'ob-deploy' $HOME/seekdb/deps/3rd/oceanbase.el7.x86_64.deps )" != "" ]]) ||
       ([[ -f $HOME/seekdb/deps/init/oceanbase.el7.x86_64.deps ]] && [[ "$(grep 'ob-deploy' $HOME/seekdb/deps/init/oceanbase.el7.x86_64.deps )" != "" ]])
     then
-        if [[ $WITH_SHARED_STORAGE == "1" ]]
-        then
-            # 单独判断下是否有对应的case集合
-            if [[ ! -d $HOME/seekdb/sensitive_test/mysql_test ]]
-            then
-                return 0
-            fi
-        fi
         timeout=18000
         [[ "$SPECIAL_RUN" == "1" ]] && timeout=72000
         obd_prepare_env &&
-        timeout $timeout bash -c "obd_run_mysqltest"
+        timeout $timeout bash -c "obd_run_mysqltest" 
         test_ret=$?
         error_log_ret=0
         if [[ -f $HOME/seekdb/tools/deploy/error_log_filter.json && $BRANCH == 'master' ]]
@@ -776,11 +688,11 @@ function run {
         then
             obd_collect_log
         fi
-        return `[[ $test_ret = 0 && $error_log_ret = 0 ]]`
+        return `[[ $test_ret = 0 && $error_log_ret = 0 ]]` 
     else
         prepare_env &&
-        timeout 18000 bash -c "run_mysqltest"
-        test_ret=$?
+        timeout 18000 bash -c "run_mysqltest"   
+        test_ret=$?      
         error_log_ret=0
         if [[ -f $HOME/seekdb/tools/deploy/error_log_filter.json && ( $BRANCH == 'master' || $BRANCH == "4_2_x_release" ) ]]
         then
@@ -793,7 +705,7 @@ function run {
         fi
         return `[[ $test_ret = 0 && $error_log_ret = 0 ]]`
     fi
-
+    
 }
 
 run "$@"

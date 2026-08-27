@@ -39,7 +39,7 @@ fts_table	CREATE TABLE `fts_table` (
   `c5` int(11) NOT NULL AUTO_INCREMENT,
   `c6` int(11) GENERATED ALWAYS AS ((`c1` + 3)) STORED,
   FULLTEXT KEY `f102` (`c2`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384
-) ORGANIZATION INDEX AUTO_INCREMENT = 1 AUTO_INCREMENT_MODE = 'ORDER' DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
 DROP TABLE IF EXISTS fts_table;
 create table fts_table(c1 int, c2 int, c3 varchar(20), primary key(c1),  fulltext index f102(c3));
 alter table fts_table modify c1 int before c3;
@@ -55,7 +55,7 @@ fts_table	CREATE TABLE `fts_table` (
   `c3` char(30) DEFAULT NULL,
   PRIMARY KEY (`c1`),
   FULLTEXT KEY `f102` (`c3`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384
-) ORGANIZATION INDEX AUTO_INCREMENT = 1 AUTO_INCREMENT_MODE = 'ORDER' DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
 DROP TABLE IF EXISTS fts_table;
 create table fts_table(c1 int, c2 varchar(20), primary key(c1), fulltext index f102(c2));
 alter table fts_table change c1 c1 varchar(128);
@@ -68,7 +68,7 @@ fts_table	CREATE TABLE `fts_table` (
   `c3` int(11) NOT NULL,
   PRIMARY KEY (`c3`),
   FULLTEXT KEY `f102` (`c2`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
 drop index f102 on fts_table;
 show create table fts_table;
 Table	Create Table
@@ -76,7 +76,7 @@ fts_table	CREATE TABLE `fts_table` (
   `c2` varchar(20) DEFAULT NULL,
   `c3` int(11) NOT NULL,
   PRIMARY KEY (`c3`)
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
 DROP TABLE IF EXISTS fts_table;
 DROP TABLE IF EXISTS fts_add_pk_1;
 CREATE TABLE fts_add_pk_1 (
@@ -112,7 +112,7 @@ fts_table	CREATE TABLE `fts_table` (
   `c2` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`),
   FULLTEXT KEY `f102` (`c2`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
 alter table fts_table drop primary key, add primary key(c1);
 show create table fts_table;
 Table	Create Table
@@ -121,7 +121,7 @@ fts_table	CREATE TABLE `fts_table` (
   `c2` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`c1`),
   FULLTEXT KEY `f102` (`c2`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
 DROP TABLE IF EXISTS fts_table;
 DROP TABLE IF EXISTS fts_character_set_table_1;
 CREATE TABLE fts_character_set_table_1 (
@@ -131,25 +131,25 @@ title varchar(20),
 content varchar(20),
 /*Indices*/
 FULLTEXT INDEX f101(name, title) WITH PARSER space);
-ALTER TABLE fts_character_set_table_1 convert to character set gbk;
+ALTER TABLE fts_character_set_table_1 convert to character set utf8mb4;
 DROP TABLE IF EXISTS fts_character_set_table_1;
 DROP TABLE IF EXISTS fts_table;
 create table fts_table(c1 int, c2 varchar(20), c3 varchar(10), c4 int, primary key(c1), fulltext index f102(c2)) partition by range(c1) (partition p0 values less than (10), partition p1 values less than (100));
 alter table fts_table modify c1 tinyint;
-alter table fts_table modify c3 varchar(5) charset 'gbk';
+alter table fts_table modify c3 varchar(5) charset 'utf8mb4';
 alter table fts_table modify c3 char(8) , add c5 int, drop column c4;
-alter table fts_table convert to CHARACTER SET 'gbk';
+alter table fts_table convert to CHARACTER SET 'utf8mb4';
 alter table fts_table modify c3 varchar(5) charset 'utf8';
 show create table fts_table;
 Table	Create Table
 fts_table	CREATE TABLE `fts_table` (
   `c1` tinyint(4) NOT NULL,
   `c2` varchar(20) DEFAULT NULL,
-  `c3` varchar(5) CHARACTER SET utf8mb4 DEFAULT NULL,
+  `c3` varchar(5) DEFAULT NULL,
   `c5` int(11) DEFAULT NULL,
   PRIMARY KEY (`c1`),
   FULLTEXT KEY `f102` (`c2`) WITH PARSER space PARSER_PROPERTIES=(min_token_size=3,max_token_size=84) BLOCK_SIZE 16384
-) ORGANIZATION INDEX DEFAULT CHARSET = gbk ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
  partition by range(c1)
 (partition `p0` values less than (10),
 partition `p1` values less than (100))
@@ -159,10 +159,10 @@ Table	Create Table
 fts_table	CREATE TABLE `fts_table` (
   `c1` tinyint(4) NOT NULL,
   `c2` varchar(20) DEFAULT NULL,
-  `c3` varchar(5) CHARACTER SET utf8mb4 DEFAULT NULL,
+  `c3` varchar(5) DEFAULT NULL,
   `c5` int(11) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ORGANIZATION INDEX DEFAULT CHARSET = gbk ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
  partition by range(c1)
 (partition `p0` values less than (10),
 partition `p1` values less than (100))
@@ -172,10 +172,10 @@ Table	Create Table
 fts_table	CREATE TABLE `fts_table` (
   `c1` tinyint(4) NOT NULL,
   `c2` varchar(20) DEFAULT NULL,
-  `c3` varchar(5) CHARACTER SET utf8mb4 DEFAULT NULL,
+  `c3` varchar(5) DEFAULT NULL,
   `c5` int(11) DEFAULT NULL,
   PRIMARY KEY (`c1`)
-) ORGANIZATION INDEX DEFAULT CHARSET = gbk ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = replica_num BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' BLOCK_SIZE = 16384 TABLET_SIZE = 134217728 PCTFREE = 0
  partition by range(c1)
 (partition `p0` values less than (20),
 partition `p1` values less than (200))

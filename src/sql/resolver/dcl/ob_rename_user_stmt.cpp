@@ -19,12 +19,12 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 ObRenameUserStmt::ObRenameUserStmt(ObIAllocator *name_pool)
-    : ObDDLStmt(name_pool, stmt::T_RENAME_USER), tenant_id_(OB_INVALID_ID)
+    : ObDDLStmt(name_pool, stmt::T_RENAME_USER)
 {
 }
 
 ObRenameUserStmt::ObRenameUserStmt()
-    : ObDDLStmt(NULL, stmt::T_RENAME_USER), tenant_id_(OB_INVALID_ID)
+    : ObDDLStmt(NULL, stmt::T_RENAME_USER)
 {
 }
 
@@ -42,13 +42,9 @@ int ObRenameUserStmt::add_rename_info(const common::ObString &from_user,
     ret = OB_ERR_NO_PRIVILEGE;
     SQL_RESV_LOG(WARN, "Can not rename root to other name", K(ret));
   } else if (OB_FAIL(rename_infos_.add_string(from_user))) {
-    SQL_RESV_LOG(WARN, "failed to add string", K(ret));
   } else if (OB_FAIL(rename_infos_.add_string(from_host))) {
-    SQL_RESV_LOG(WARN, "failed to add string", K(ret));
   } else if (OB_FAIL(rename_infos_.add_string(to_user))) {
-    SQL_RESV_LOG(WARN, "failed to add string", K(ret));
   } else if (OB_FAIL(rename_infos_.add_string(to_host))) {
-    SQL_RESV_LOG(WARN, "failed to add string", K(ret));
   }
   return ret;
 }

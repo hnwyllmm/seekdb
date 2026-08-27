@@ -19,10 +19,11 @@
 
 #include "common/log/ob_log_cursor.h"
 #include "lib/atomic/ob_atomic.h"
-#include "observer/omt/ob_tenant_meta.h"
-#include "storage/slog_ckpt/ob_tenant_storage_checkpoint_reader.h"
+#include "storage/meta_store/ob_server_runtime_meta.h"
+#include "storage/slog_ckpt/ob_local_storage_checkpoint_reader.h"
 #include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_log_replayer.h"
+#include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
 
 namespace oceanbase
 {
@@ -30,10 +31,9 @@ namespace storage
 {
 
 struct ObMetaDiskAddr;
-
 class ObRedoModuleReplayParam;
-
 class ObStorageLogger;
+class ObIServerRuntime;
 
 class ObServerCheckpointSlogHandler : public ObIRedoModule
 {
@@ -54,16 +54,16 @@ public:
     ObServerCheckpointSlogHandler *handler_;
   };
 
-  typedef common::hash::ObHashMap<uint64_t, omt::ObTenantMeta> TENANT_META_MAP;
-
   ObServerCheckpointSlogHandler();
   ~ObServerCheckpointSlogHandler() = default;
   ObServerCheckpointSlogHandler(const ObServerCheckpointSlogHandler &) = delete;
   ObServerCheckpointSlogHandler &operator=(const ObServerCheckpointSlogHandler &) = delete;
 
-  int init(ObStorageLogger *server_slogger);
+  int init(ObStorageLogger *server_slogger, ObIServerRuntime &server_runtime);
   int start();
-  int start_replay(TENANT_META_MAP &tenant_meta_map);
+  int start_replay();
+  // Fetch the single replayed runtime metadata record.
+  void get_replay_result(omt::ObServerRuntimeMeta &runtime_meta, bool &is_valid) const;
   int do_post_replay_work();
   void stop();
   void wait();
@@ -77,34 +77,41 @@ public:
   int write_checkpoint(bool is_force);
 
 private:
-  virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
+  virtual int parse(
+      const int32_t cmd,
+      const char *buf,
+      const int64_t len,
+      FILE *stream) override;
 
-  int try_write_checkpoint_for_compat();
   int read_checkpoint(const ObServerSuperBlock &super_block);
   int replay_and_apply_server_slog(const common::ObLogCursor &replay_start_point);
-  int replay_server_slog(const common::ObLogCursor &replay_start_point, common::ObLogCursor &replay_finish_point);
+  int replay_server_slog(
+      const common::ObLogCursor &replay_start_point,
+      common::ObLogCursor &replay_finish_point);
 
-  int replay_create_tenant_prepare(const char *buf, const int64_t buf_len);
-  int replay_create_tenant_commit(const char *buf, const int64_t buf_len);
-  int replay_create_tenant_abort(const char *buf, const int64_t buf_len);
+  int replay_create_runtime_prepare(const char *buf, const int64_t buf_len);
+  int replay_create_runtime_commit(const char *buf, const int64_t buf_len);
+  int replay_create_runtime_abort(const char *buf, const int64_t buf_len);
 
-  int replay_delete_tenant_prepare(const char *buf, const int64_t buf_len);
-  int replay_delete_tenant_commit(const char *buf, const int64_t buf_len);
-  int replay_delete_tenant(const char *buf, const int64_t buf_len);
-  int replay_update_tenant_unit(const char *buf, const int64_t buf_len);
-  int replay_update_tenant_super_block(const char *buf, const int64_t buf_len);
+  int replay_update_server_resources(const char *buf, const int64_t buf_len);
+  int replay_update_runtime_super_block(const char *buf, const int64_t buf_len);
 
   int set_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &meta_block_list);
+
+  int get_replay_runtime_meta_(omt::ObServerRuntimeMeta &meta) const;
+  int set_replay_runtime_meta_(const omt::ObServerRuntimeMeta &meta);
 
 private:
   bool is_inited_;
   bool is_writing_checkpoint_;
   ObStorageLogger *server_slogger_;
+  ObIServerRuntime *server_runtime_;
   common::TCRWLock lock_;  // protect block_handle
   ObMetaBlockListHandle server_meta_block_handle_;
   ObWriteCheckpointTask write_ckpt_task_;
   common::ObTimer task_timer_;
-  TENANT_META_MAP *tenant_meta_map_for_replay_; // only used when replay
+  omt::ObServerRuntimeMeta runtime_meta_for_replay_;
+  bool runtime_meta_valid_for_replay_;
 };
 
 }  // end namespace storage

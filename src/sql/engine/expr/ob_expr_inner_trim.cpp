@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprInnerTrim::ObExprInnerTrim(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_INNER_TRIM, N_INNER_TRIM, 3, VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+    : ObStringExprOperator(alloc, T_FUN_INNER_TRIM, N_INNER_TRIM, 3, VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE)
 {
   need_charset_convert_ = false;
 }
@@ -46,7 +46,6 @@ inline int ObExprInnerTrim::calc_result_type3(ObExprResType &type,
   CK(&trim_type + 1 == &trim_pattern);
   CK(&trim_type + 2 == &text);
   OZ(ObExprTrim::deduce_result_type(type, &trim_type, 3, type_ctx));
-  LOG_DEBUG("inner trim", K(type), K(text), K(trim_pattern));
 
   return ret;
 }
@@ -62,10 +61,8 @@ int ObExprInnerTrim::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) 
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprInnerTrim, raw_expr) {
   int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
-  }
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

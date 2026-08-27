@@ -66,13 +66,10 @@ int ObLockUserResolver::resolve(const ParseNode &parse_tree)
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(ERROR, "params_.session_info_ is null", K(ret));
       } else {
-        uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
-        if (OB_INVALID_ID == tenant_id) {
-          ret = OB_ERR_UNEXPECTED;
-          SQL_RESV_LOG(ERROR, "tenant_id invalid", K(ret));
-        } else {
+        
+        {
           bool locked = node->children_[1]->value_ == 1 ? true : false;
-          lock_user_stmt->set_tenant_id(tenant_id);
+          
           lock_user_stmt->set_locked(locked);
           stmt_ = lock_user_stmt;
           ObString user_name;
@@ -102,10 +99,7 @@ int ObLockUserResolver::resolve(const ParseNode &parse_tree)
                                                   session_info_->get_priv_user_id(),
                                                   user_name,
                                                   host_name))) {
-                LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
-                          K(ret), K(params_.session_info_->get_user_name()), K(user_name));
               } else if (OB_FAIL(lock_user_stmt->add_user(user_name, host_name))) {
-                SQL_RESV_LOG(WARN, "Add user error", K(user_name), K(host_name), K(ret));
               }
             }
           }

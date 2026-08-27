@@ -23,13 +23,16 @@
 
 namespace oceanbase
 {
-namespace obrpc
+namespace obcall
 {
-class ObCommonRpcProxy;
 struct ObCreateUserArg;
 struct ObLockUserArg;
 struct ObRenameUserArg;
 struct ObDropUserArg;
+}
+namespace query
+{
+class ObIRootCommandService;
 }
 namespace sql
 {
@@ -54,13 +57,12 @@ public:
 
   static int check_user_valid(share::schema::ObSchemaGetterGuard& schema_guard, 
                               uint64_t priv_set,
-                              int64_t tenant_id,
                               const common::ObString &user_name,
                               const common::ObString &host_name,
                               const common::ObString &opreation_name);
 private:
-  int create_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                  const obrpc::ObCreateUserArg &arg) const;
+  int create_user(const obcall::ObCreateUserArg &arg,
+                  query::ObIRootCommandService &root_commands) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserExecutor);
 };
@@ -83,9 +85,9 @@ public:
   static int build_fail_msg_for_one(const ObString &user, 
                                     const ObString &host, 
                                     common::ObSqlString &msg);
-  static int drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                       const obrpc::ObDropUserArg &arg,
-                       bool if_exists);
+  static int drop_user(const obcall::ObDropUserArg &arg,
+                       bool if_exists,
+                       query::ObIRootCommandService &root_commands);
   int execute(ObExecContext &ctx, ObDropUserStmt &stmt);
 
 private:
@@ -101,22 +103,22 @@ public:
   int execute(ObExecContext &ctx, ObLockUserStmt &stmt);
 
 private:
-  int lock_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                const obrpc::ObLockUserArg &arg);
+  int lock_user(const obcall::ObLockUserArg &arg,
+                query::ObIRootCommandService &root_commands);
   DISALLOW_COPY_AND_ASSIGN(ObLockUserExecutor);
 };
 
-class ObAlterUserProfileStmt;
-class ObAlterUserProfileExecutor
+class ObAlterUserRoleStmt;
+class ObAlterUserRoleExecutor
 {
 private:
-  int set_role_exec(ObExecContext &ctx, ObAlterUserProfileStmt &stmt);  
+  int set_role_exec(ObExecContext &ctx, ObAlterUserRoleStmt &stmt);
 public:
-  ObAlterUserProfileExecutor() {}
-  virtual ~ObAlterUserProfileExecutor() {}
-  int execute(ObExecContext &ctx, ObAlterUserProfileStmt &stmt);
+  ObAlterUserRoleExecutor() {}
+  virtual ~ObAlterUserRoleExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterUserRoleStmt &stmt);
 
-  DISALLOW_COPY_AND_ASSIGN(ObAlterUserProfileExecutor);
+  DISALLOW_COPY_AND_ASSIGN(ObAlterUserRoleExecutor);
 };
 
 class ObRenameUserStmt;
@@ -128,8 +130,8 @@ public:
   int execute(ObExecContext &ctx, ObRenameUserStmt &stmt);
 
 private:
-  int rename_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                  const obrpc::ObRenameUserArg &arg);
+  int rename_user(const obcall::ObRenameUserArg &arg,
+                  query::ObIRootCommandService &root_commands);
   DISALLOW_COPY_AND_ASSIGN(ObRenameUserExecutor);
 };
 

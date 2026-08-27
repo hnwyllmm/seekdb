@@ -18,9 +18,12 @@
 #define protected public
 #define private public
 #include "storage/truncate_info/ob_truncate_info.h"
-#include "storage/ob_truncate_info_helper.h"
+#include "unittest/storage/ob_truncate_info_helper.h"
 #include "storage/compaction/ob_mds_filter_info.h"
 #include "lib/allocator/ob_fifo_allocator.h"
+#undef protected
+#undef private
+
 namespace oceanbase
 {
 using namespace common;
@@ -201,7 +204,7 @@ TEST_F(TestTruncateInfo, test_memleak)
 {
   ObStorageListRowValues src_values;
   ObStorageListRowValues dst_values;
-  lib::ObMemAttr attr(1, "TestListRowVal");
+  lib::ObMemAttr attr("TestListRowVal");
   ObFIFOAllocator tmp_allocator;
   ObFIFOAllocator tmp_allocator2;
   ASSERT_EQ(OB_SUCCESS, tmp_allocator.init(lib::ObMallocAllocator::get_instance(), OB_MALLOC_BIG_BLOCK_SIZE, attr));
@@ -290,7 +293,6 @@ TEST_F(TestTruncateInfo, test_null_list_val)
   ASSERT_TRUE(equal);
   ASSERT_EQ(0, tmp_obj.compare(tmp_obj2));
 
-  THIS_WORKER.set_compatibility_mode(lib::Worker::CompatMode::ORACLE);
   ASSERT_EQ(OB_SUCCESS, truncate_part.compare(truncate_part2, equal));
   ASSERT_TRUE(equal);
   ASSERT_EQ(0, tmp_obj.compare(tmp_obj2));
@@ -300,12 +302,3 @@ TEST_F(TestTruncateInfo, test_null_list_val)
 
 }//end namespace unittest
 }//end namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  system("rm -rf test_truncate_info.log*");
-  OB_LOGGER.set_file_name("test_truncate_info.log");
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

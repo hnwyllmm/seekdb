@@ -22,8 +22,6 @@ create database defaultvalue;
   "name_case_mode":-1,
   "comment":"",
   "read_only":false,
-  "default_tablegroup_id":-1,
-  "default_tablegroup_name":"",
   "in_recyclebin":false,
   "primary_zone_array": [
   ]
@@ -54,7 +52,7 @@ drop table if exists default_t1;
 }
 ***************   Case 5   ***************
 create table if not exists default_t1 (a int, b int primary key);
-{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":true, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"default_t1", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":0, "part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":0}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":1, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":17, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":17, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":null, "capacity":0}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"defaultvalue", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":true, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "table_id":18446744073709551615, "table_name":"default_t1", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":0, "part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":0}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":1, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false}, "max_used_column_id":17, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "compress_func_name":"zstd_1.3.8", "row_store_type":1, "store_format":3, "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":17, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":null, "capacity":0}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"defaultvalue", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
 ***************   Case 6   ***************
 ALTER TABLE default_t1 ADD i1 int;
 {
@@ -82,12 +80,10 @@ ALTER TABLE default_t1 ADD i1 int;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -125,8 +121,7 @@ ALTER TABLE default_t1 ADD i1 int;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -135,7 +130,6 @@ ALTER TABLE default_t1 ADD i1 int;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -156,11 +150,9 @@ ALTER TABLE default_t1 ADD i1 int;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -228,12 +220,10 @@ ALTER TABLE default_t1 ADD i2 int not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -271,8 +261,7 @@ ALTER TABLE default_t1 ADD i2 int not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -281,7 +270,6 @@ ALTER TABLE default_t1 ADD i2 int not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -302,11 +290,9 @@ ALTER TABLE default_t1 ADD i2 int not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -374,12 +360,10 @@ ALTER TABLE default_t1 ADD i3 int not null default 5;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -417,8 +401,7 @@ ALTER TABLE default_t1 ADD i3 int not null default 5;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -427,7 +410,6 @@ ALTER TABLE default_t1 ADD i3 int not null default 5;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -448,11 +430,9 @@ ALTER TABLE default_t1 ADD i3 int not null default 5;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -520,12 +500,10 @@ ALTER TABLE default_t1 ADD f1 float;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -563,8 +541,7 @@ ALTER TABLE default_t1 ADD f1 float;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -573,7 +550,6 @@ ALTER TABLE default_t1 ADD f1 float;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -594,11 +570,9 @@ ALTER TABLE default_t1 ADD f1 float;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -666,12 +640,10 @@ ALTER TABLE default_t1 ADD f2 float not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -709,8 +681,7 @@ ALTER TABLE default_t1 ADD f2 float not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -719,7 +690,6 @@ ALTER TABLE default_t1 ADD f2 float not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -740,11 +710,9 @@ ALTER TABLE default_t1 ADD f2 float not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -812,12 +780,10 @@ ALTER TABLE default_t1 ADD f3 float not null default 5.0;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -855,8 +821,7 @@ ALTER TABLE default_t1 ADD f3 float not null default 5.0;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -865,7 +830,6 @@ ALTER TABLE default_t1 ADD f3 float not null default 5.0;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -886,11 +850,9 @@ ALTER TABLE default_t1 ADD f3 float not null default 5.0;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -958,12 +920,10 @@ ALTER TABLE default_t1 ADD d1 double;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1001,8 +961,7 @@ ALTER TABLE default_t1 ADD d1 double;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1011,7 +970,6 @@ ALTER TABLE default_t1 ADD d1 double;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1032,11 +990,9 @@ ALTER TABLE default_t1 ADD d1 double;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1104,12 +1060,10 @@ ALTER TABLE default_t1 ADD d2 double not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1147,8 +1101,7 @@ ALTER TABLE default_t1 ADD d2 double not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1157,7 +1110,6 @@ ALTER TABLE default_t1 ADD d2 double not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1178,11 +1130,9 @@ ALTER TABLE default_t1 ADD d2 double not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1250,12 +1200,10 @@ ALTER TABLE default_t1 ADD d3 double not null default 5.0000
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1293,8 +1241,7 @@ ALTER TABLE default_t1 ADD d3 double not null default 5.0000
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1303,7 +1250,6 @@ ALTER TABLE default_t1 ADD d3 double not null default 5.0000
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1324,11 +1270,9 @@ ALTER TABLE default_t1 ADD d3 double not null default 5.0000
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1396,12 +1340,10 @@ ALTER TABLE default_t1 ADD v1 varchar(500);
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1439,8 +1381,7 @@ ALTER TABLE default_t1 ADD v1 varchar(500);
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1449,7 +1390,6 @@ ALTER TABLE default_t1 ADD v1 varchar(500);
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1470,11 +1410,9 @@ ALTER TABLE default_t1 ADD v1 varchar(500);
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1542,12 +1480,10 @@ ALTER TABLE default_t1 ADD v2 varchar(500) not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1585,8 +1521,7 @@ ALTER TABLE default_t1 ADD v2 varchar(500) not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1595,7 +1530,6 @@ ALTER TABLE default_t1 ADD v2 varchar(500) not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1616,11 +1550,9 @@ ALTER TABLE default_t1 ADD v2 varchar(500) not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1688,12 +1620,10 @@ ALTER TABLE default_t1 ADD v3 varchar(500) not null default 'xiyu@varchar500';
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1731,8 +1661,7 @@ ALTER TABLE default_t1 ADD v3 varchar(500) not null default 'xiyu@varchar500';
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1741,7 +1670,6 @@ ALTER TABLE default_t1 ADD v3 varchar(500) not null default 'xiyu@varchar500';
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1762,11 +1690,9 @@ ALTER TABLE default_t1 ADD v3 varchar(500) not null default 'xiyu@varchar500';
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1836,12 +1762,10 @@ ALTER TABLE default_t1 ADD ts3 timestamp not null default '2015-7-16';
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -1879,8 +1803,7 @@ ALTER TABLE default_t1 ADD ts3 timestamp not null default '2015-7-16';
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -1889,7 +1812,6 @@ ALTER TABLE default_t1 ADD ts3 timestamp not null default '2015-7-16';
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -1910,11 +1832,9 @@ ALTER TABLE default_t1 ADD ts3 timestamp not null default '2015-7-16';
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -1982,12 +1902,10 @@ ALTER TABLE default_t1 ADD y1 year;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2025,8 +1943,7 @@ ALTER TABLE default_t1 ADD y1 year;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2035,7 +1952,6 @@ ALTER TABLE default_t1 ADD y1 year;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2056,11 +1972,9 @@ ALTER TABLE default_t1 ADD y1 year;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -2128,12 +2042,10 @@ ALTER TABLE default_t1 ADD y2 year not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2171,8 +2083,7 @@ ALTER TABLE default_t1 ADD y2 year not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2181,7 +2092,6 @@ ALTER TABLE default_t1 ADD y2 year not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2202,11 +2112,9 @@ ALTER TABLE default_t1 ADD y2 year not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -2274,12 +2182,10 @@ ALTER TABLE default_t1 ADD y3 year not null default 1983
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2317,8 +2223,7 @@ ALTER TABLE default_t1 ADD y3 year not null default 1983
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2327,7 +2232,6 @@ ALTER TABLE default_t1 ADD y3 year not null default 1983
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2348,11 +2252,9 @@ ALTER TABLE default_t1 ADD y3 year not null default 1983
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -2420,12 +2322,10 @@ ALTER TABLE default_t1 ADD t1 time;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2463,8 +2363,7 @@ ALTER TABLE default_t1 ADD t1 time;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2473,7 +2372,6 @@ ALTER TABLE default_t1 ADD t1 time;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2494,11 +2392,9 @@ ALTER TABLE default_t1 ADD t1 time;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -2566,12 +2462,10 @@ ALTER TABLE default_t1 ADD t2 time not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2609,8 +2503,7 @@ ALTER TABLE default_t1 ADD t2 time not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2619,7 +2512,6 @@ ALTER TABLE default_t1 ADD t2 time not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2640,11 +2532,9 @@ ALTER TABLE default_t1 ADD t2 time not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -2712,12 +2602,10 @@ ALTER TABLE default_t1 ADD t3 time not null default 10;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2755,8 +2643,7 @@ ALTER TABLE default_t1 ADD t3 time not null default 10;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2765,7 +2652,6 @@ ALTER TABLE default_t1 ADD t3 time not null default 10;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2786,11 +2672,9 @@ ALTER TABLE default_t1 ADD t3 time not null default 10;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -2858,12 +2742,10 @@ ALTER TABLE default_t1 ADD d1 date;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -2901,8 +2783,7 @@ ALTER TABLE default_t1 ADD d1 date;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -2911,7 +2792,6 @@ ALTER TABLE default_t1 ADD d1 date;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -2932,11 +2812,9 @@ ALTER TABLE default_t1 ADD d1 date;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3004,12 +2882,10 @@ ALTER TABLE default_t1 ADD d2 date not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3047,8 +2923,7 @@ ALTER TABLE default_t1 ADD d2 date not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3057,7 +2932,6 @@ ALTER TABLE default_t1 ADD d2 date not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3078,11 +2952,9 @@ ALTER TABLE default_t1 ADD d2 date not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3150,12 +3022,10 @@ ALTER TABLE default_t1 ADD d3 date not null default '2015-07-16';
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3193,8 +3063,7 @@ ALTER TABLE default_t1 ADD d3 date not null default '2015-07-16';
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3203,7 +3072,6 @@ ALTER TABLE default_t1 ADD d3 date not null default '2015-07-16';
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3224,11 +3092,9 @@ ALTER TABLE default_t1 ADD d3 date not null default '2015-07-16';
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3296,12 +3162,10 @@ ALTER TABLE default_t1 ADD dt1 datetime;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3339,8 +3203,7 @@ ALTER TABLE default_t1 ADD dt1 datetime;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3349,7 +3212,6 @@ ALTER TABLE default_t1 ADD dt1 datetime;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3370,11 +3232,9 @@ ALTER TABLE default_t1 ADD dt1 datetime;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3442,12 +3302,10 @@ ALTER TABLE default_t1 ADD dt2 datetime not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3485,8 +3343,7 @@ ALTER TABLE default_t1 ADD dt2 datetime not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3495,7 +3352,6 @@ ALTER TABLE default_t1 ADD dt2 datetime not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3516,11 +3372,9 @@ ALTER TABLE default_t1 ADD dt2 datetime not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3588,12 +3442,10 @@ ALTER TABLE default_t1 ADD dt3 datetime not null default '2015-07-16 10:10:30';
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3631,8 +3483,7 @@ ALTER TABLE default_t1 ADD dt3 datetime not null default '2015-07-16 10:10:30';
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3641,7 +3492,6 @@ ALTER TABLE default_t1 ADD dt3 datetime not null default '2015-07-16 10:10:30';
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3662,11 +3512,9 @@ ALTER TABLE default_t1 ADD dt3 datetime not null default '2015-07-16 10:10:30';
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3734,12 +3582,10 @@ ALTER TABLE default_t1 ADD n1 number;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3777,8 +3623,7 @@ ALTER TABLE default_t1 ADD n1 number;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3787,7 +3632,6 @@ ALTER TABLE default_t1 ADD n1 number;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3808,11 +3652,9 @@ ALTER TABLE default_t1 ADD n1 number;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -3880,12 +3722,10 @@ ALTER TABLE default_t1 ADD n2 number not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -3923,8 +3763,7 @@ ALTER TABLE default_t1 ADD n2 number not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -3933,7 +3772,6 @@ ALTER TABLE default_t1 ADD n2 number not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -3954,11 +3792,9 @@ ALTER TABLE default_t1 ADD n2 number not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4026,12 +3862,10 @@ ALTER TABLE default_t1 ADD n3 number not null default 1111;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4069,8 +3903,7 @@ ALTER TABLE default_t1 ADD n3 number not null default 1111;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4079,7 +3912,6 @@ ALTER TABLE default_t1 ADD n3 number not null default 1111;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4100,11 +3932,9 @@ ALTER TABLE default_t1 ADD n3 number not null default 1111;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4172,12 +4002,10 @@ ALTER TABLE default_t1 ADD c1 char;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4215,8 +4043,7 @@ ALTER TABLE default_t1 ADD c1 char;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4225,7 +4052,6 @@ ALTER TABLE default_t1 ADD c1 char;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4246,11 +4072,9 @@ ALTER TABLE default_t1 ADD c1 char;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4318,12 +4142,10 @@ ALTER TABLE default_t1 ADD c2 char not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4361,8 +4183,7 @@ ALTER TABLE default_t1 ADD c2 char not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4371,7 +4192,6 @@ ALTER TABLE default_t1 ADD c2 char not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4392,11 +4212,9 @@ ALTER TABLE default_t1 ADD c2 char not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4464,12 +4282,10 @@ ALTER TABLE default_t1 ADD c3 char not null default 'x';
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4507,8 +4323,7 @@ ALTER TABLE default_t1 ADD c3 char not null default 'x';
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4517,7 +4332,6 @@ ALTER TABLE default_t1 ADD c3 char not null default 'x';
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4538,11 +4352,9 @@ ALTER TABLE default_t1 ADD c3 char not null default 'x';
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4610,12 +4422,10 @@ ALTER TABLE default_t1 ADD b1 binary;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4653,8 +4463,7 @@ ALTER TABLE default_t1 ADD b1 binary;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4663,7 +4472,6 @@ ALTER TABLE default_t1 ADD b1 binary;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4684,11 +4492,9 @@ ALTER TABLE default_t1 ADD b1 binary;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4756,12 +4562,10 @@ ALTER TABLE default_t1 ADD b2 binary not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4799,8 +4603,7 @@ ALTER TABLE default_t1 ADD b2 binary not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4809,7 +4612,6 @@ ALTER TABLE default_t1 ADD b2 binary not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4830,11 +4632,9 @@ ALTER TABLE default_t1 ADD b2 binary not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -4902,12 +4702,10 @@ ALTER TABLE default_t1 ADD b3 binary not null default 'xiyu@binary'
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -4945,8 +4743,7 @@ ALTER TABLE default_t1 ADD b3 binary not null default 'xiyu@binary'
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -4955,7 +4752,6 @@ ALTER TABLE default_t1 ADD b3 binary not null default 'xiyu@binary'
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -4976,11 +4772,9 @@ ALTER TABLE default_t1 ADD b3 binary not null default 'xiyu@binary'
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -5048,12 +4842,10 @@ ALTER TABLE default_t1 ADD vb1 varbinary(1000);
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -5091,8 +4883,7 @@ ALTER TABLE default_t1 ADD vb1 varbinary(1000);
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -5101,7 +4892,6 @@ ALTER TABLE default_t1 ADD vb1 varbinary(1000);
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -5122,11 +4912,9 @@ ALTER TABLE default_t1 ADD vb1 varbinary(1000);
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -5194,12 +4982,10 @@ ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -5237,8 +5023,7 @@ ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -5247,7 +5032,6 @@ ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -5268,11 +5052,9 @@ ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",
@@ -5340,12 +5122,10 @@ ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default 'xiyu@varbinary@
       "origin_table_name":"default_t1",
       "new_database_name":"defaultvalue",
       "origin_database_name":"defaultvalue",
-      "split_partition_name":"",
       "alter_table_schema": {
         "simple_table_schema": {
           "tenant_id":1,
           "database_id":-1,
-          "tablegroup_id":-1,
           "table_id":-1,
           "table_name":"default_t1",
           "replica_num":0,
@@ -5383,8 +5163,7 @@ ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default 'xiyu@varbinary@
           "partition_array":null,
           "subpartition_array":null,
           "index_status":1,
-          "binding":false,
-          "duplicate_scope":0
+          "binding":false
         },
         "max_used_column_id":0,
         "max_used_constraint_id":0,
@@ -5393,7 +5172,6 @@ ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default 'xiyu@varbinary@
         "index_column_num":0,
         "rowkey_split_pos":0,
         "block_size":16384,
-        "is_use_bloomfilter":false,
         "progressive_merge_num":0,
         "tablet_size":-1,
         "pctfree":10,
@@ -5414,11 +5192,9 @@ ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default 'xiyu@varbinary@
         ],
         "region_replica_num_array": [
         ],
-        "tablegroup_name":"",
         "compress_func_name":"",
         "row_store_type":3,
         "store_format":0,
-        "expire_info":"",
         "view_schema": {
           "view_definition":"",
           "check_option":"none",

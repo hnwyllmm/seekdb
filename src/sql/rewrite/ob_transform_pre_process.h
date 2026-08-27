@@ -28,6 +28,8 @@ namespace oceanbase
 namespace sql
 {
 
+class ObInsertStmt;
+
 typedef std::pair<uint64_t, uint64_t> JoinTableIdPair;
 
 struct DistinctObjMeta
@@ -132,19 +134,6 @@ private:
 	 */
 	int eliminate_having(ObDMLStmt *stmt, bool &trans_happened);
 
-	/*
-	 * following functions are used to replace func is serving tenant
-	 */
-	int replace_func_is_serving_tenant(ObDMLStmt *&stmt, bool &trans_happened);
-	int recursive_replace_func_is_serving_tenant(ObDMLStmt &stmt,
-                                               ObRawExpr *&cond_expr,
-                                               bool &trans_happened);
-	int calc_const_raw_expr_and_get_int(const ObStmt &stmt,
-                                      ObRawExpr *const_expr,
-                                      ObExecContext &exec_ctx,
-                                      ObSQLSessionInfo *session,
-                                      ObIAllocator &allocator,
-                                      int64_t &result);
   int transform_special_expr(ObDMLStmt *&stmt, bool &trans_happened);
 	int collect_all_tableitem(ObDMLStmt *stmt,
                             TableItem *table_item,
@@ -263,7 +252,7 @@ private:
   int create_embedded_table_vector_col_ref(ObDMLStmt *stmt, TableItem *table_item, const share::schema::ObTableSchema *data_table_schema,
     ObColumnRefRawExpr *chunk_col_ref, ObColumnRefRawExpr *&vector_col_ref);
   int create_cast_query_vector_expr(ObRawExpr *query_vector, ObRawExpr *vector_col_ref, ObRawExpr *&cast_query_vector);
-  int create_distance_type_const_expr(ObDMLStmt *stmt, const share::schema::ObTableSchema *data_table_schema,
+  int create_distance_type_const_expr(ObDMLStmt *stmt, const share::schema::ObTableSchema *data_table_schema, 
     ObColumnRefRawExpr *chunk_col_ref, ObRawExpr *&dis_type);
 
 
@@ -376,16 +365,6 @@ private:
                                 ObIArray<ObRawExpr*> &query_ref_exprs,
                                 ObIArray<ObRawExpr*> &query_ref_remove_const_exprs);
 
-  int transform_cast_multiset_for_stmt(ObDMLStmt *&stmt, bool &is_happened);
-  int transform_cast_multiset_for_expr(ObDMLStmt &stmt, ObRawExpr *&expr, bool &trans_happened);
-  int add_constructor_to_multiset(ObDMLStmt &stmt,
-                                  ObQueryRefRawExpr *multiset_expr,
-                                  const pl::ObPLDataType &elem_type,
-                                  bool& trans_happened);
-  int add_column_conv_to_multiset(ObQueryRefRawExpr *multiset_expr,
-                                  const pl::ObPLDataType &elem_type,
-                                  bool& trans_happened);
-
   int transform_for_last_insert_id(ObDMLStmt *stmt, bool &trans_happened);
   int expand_for_last_insert_id(ObDMLStmt &stmt, ObIArray<ObRawExpr*> &exprs, bool &is_happended);
   int expand_last_insert_id_for_join(ObDMLStmt &stmt, JoinedTable *join_table, bool &is_happened);
@@ -401,7 +380,6 @@ private:
   int flatten_conditions(ObDMLStmt *stmt, bool &trans_happened);
   int recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
   int do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
-  int expand_materialized_view(ObDMLStmt *stmt, bool &trans_happened);
   int preserve_order_for_pagination(ObDMLStmt *stmt, 
                                     bool &trans_happened);
   int check_stmt_need_preserve_order(ObDMLStmt *stmt, 

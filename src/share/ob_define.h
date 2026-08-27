@@ -18,12 +18,12 @@
 #define OB_DEFINE_H
 
 #include "lib/ob_define.h"
+#include "lib/compress/ob_compress_util.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/profile/ob_trace_id.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_errno.h"
 #include "lib/worker.h"
-#include "share/ob_ls_id.h"
 #include "cmath"
 #ifdef __linux__
 #include <features.h>
@@ -38,189 +38,19 @@ using std::isnan;
 #endif
 
 /****** UTILS FOR PROGRAMMING *****/
-#define CK_1(a1)\
-  CK_0(#a1, a1)
-#define CK_2(a1, a2) \
-  CK_1(a1) else CK_0(#a2, a2)
-#define CK_3(a1, a2, a3) \
-  CK_2(a1, a2) else CK_0(#a3, a3)
-#define CK_4(a1, a2, a3, a4) \
-  CK_3(a1, a2, a3) else CK_0(#a4, a4)
-#define CK_5(a1, a2, a3, a4, a5) \
-  CK_4(a1, a2, a3, a4) else CK_0(#a5, a5)
-#define CK_6(a1, a2, a3, a4, a5, a6) \
-  CK_5(a1, a2, a3, a4, a5) else CK_0(#a6, a6)
-#define CK_7(a1, a2, a3, a4, a5, a6, a7) \
-  CK_6(a1, a2, a3, a4, a5, a6) else CK_0(#a7, a7)
-#define CK_8(a1, a2, a3, a4, a5, a6, a7, a8) \
-  CK_7(a1, a2, a3, a4, a5, a6, a7) else CK_0(#a8, a8)
-#define CK_9(a1, a2, a3, a4, a5, a6, a7, a8, a9) \
-  CK_8(a1, a2, a3, a4, a5, a6, a7, a8) else CK_0(#a9, a9)
-#define CK_10(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) \
-  CK_9(a1, a2, a3, a4, a5, a6, a7, a8, a9) else CK_0(#a10, a10)
-#define CK_11(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) \
-  CK_10(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) else CK_0(#a11, a11)
-#define CK_12(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) \
-  CK_11(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) else CK_0(#a12, a12)
-#define CK_13(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13) \
-  CK_12(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) else CK_0(#a13, a13)
-#define CK_14(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14) \
-  CK_13(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13) else CK_0(#a14, a14)
-#define CK_15(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15) \
-  CK_14(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14) else CK_0(#a15, a15)
-#define CK_16(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16) \
-  CK_15(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15) else CK_0(#a16, a16)
-
-#define CK_0(a, b)                              \
-  if (!(b)) {                                   \
-    if (OB_SUCC(ret)) {                         \
-      ret = OB_ERR_UNEXPECTED;                  \
-    }                                           \
-    LOG_WARN("invalid arguments", a, b);        \
-  }
-
-// Reference document: 
-// Check every argument and stop to print if anyone of them is false
-#define CK(...)                                                         \
-  if (OB_SUCC(ret)) { CONCAT(CK_, ARGS_NUM(__VA_ARGS__))(__VA_ARGS__) }
-
-// Reference document: 
-// execute an instruction
-#define OX(statement)                           \
-  if (OB_SUCC(ret)) {                           \
-    statement;                                  \
-  }
-
-
-/*
-
-  Reference documentation:
-
-  This better be the last macro we ever need to define in the
-  O-series, hence 'Z'.
-
-  OZ( f(a1, a2, a3) );          // print ret in case of failure
-  OZ( f(a1, a2, a3), a3 );      // print ret, a3 in case of failure
-  OZ( f(a1, a2, a3), a2, a3 );  // print ret, a2, a3 in case of failure
-*/
-#define OZ(func, ...) OC_I5(func, OC_I4(__VA_ARGS__))
-
-
-#define OC_I4(...) ret, ##__VA_ARGS__
-#define OC_I3(...) OC_I4(__VA_ARGS__)
-#define OC_I(func) OC_I1(func,
-#define OC_I1(func, a) OC_I2(func, a)
-#define KK(a) K(a)
-#define OC_I2(func, a)                            \
-  if (OB_SUCC(ret)) {                             \
-    if (OB_FAIL(func a)) {                        \
-      LOG_WARN("fail to exec "#func #a,           \
-               LST_DO(KK, (,), OC_I3(EXPAND a))); \
-    }                                             \
-  }
-
-// Should be combined with OC_I2...
-#define OC_I5(func, a)                          \
-  do {                                          \
-    if (OB_SUCC(ret)) {                         \
-      if (OB_FAIL(func)) {                      \
-        LOG_WARN("fail to exec "#func,          \
-                 LST_DO(KK, (,), a));           \
-      }                                         \
-    }                                           \
-  } while(0)
-
-/*
-  Extension of OZ, add a retcode, when the return value is retcode, use log info instead of log warn to reduce unnecessary screen flooding
-  eg:
-  OZX1( f(a1, a2, a3), OB_ERR_NO_PRIVILEGE);          // print ret in case of failure
-  OZX1( f(a1, a2, a3), OB_ERR_NO_PRIVILEGE, a3 );      // print ret, a3 in case of failure
-  OZX1( f(a1, a2, a3), OB_ERR_NO_PRIVILEGE, a2, a3 );  // print ret, a2, a3 in case of failure
-*/
-#define OZX1(func, ret_code, ...) OCX1_I5(func, ret_code, OC_I4(__VA_ARGS__))
-
-// Should be combined with OC_I2...
-#define OCX1_I5(func, ret_code, a)              \
-  do {                                          \
-    if (OB_SUCC(ret)) {                         \
-      if (OB_FAIL(func)) {                      \
-        if (ret == ret_code) {                  \
-          LOG_DEBUG("fail to exec "#func,       \
-                   LST_DO(KK, (,), a));         \
-        } else {                                \
-          LOG_WARN("fail to exec "#func,        \
-                   LST_DO(KK, (,), a));         \
-        }                                       \
-      }                                         \
-    }                                           \
-  } while(0)
-
-/*
-  Extension of OZ, add a retcode, when the return value is retcode, use log info instead of log warn to reduce unnecessary screen flooding
-  OZX2( f(a1, a2, a3), OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY); // print ret in case of failure
-  OZX2( f(a1, a2, a3), OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY, a3 );
-  OZX2( f(a1, a2, a3), OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY, a2, a3 );
-*/
-#define OZX2(func, ret_code1, ret_code2, ...) OCX2_I5(func, ret_code1, ret_code2, OC_I4(__VA_ARGS__))
-
-// Should be combined with OC_I2...
-#define OCX2_I5(func, ret_code1, ret_code2, a)  \
-  do {                                          \
-    if (OB_SUCC(ret)) {                         \
-      if (OB_FAIL(func)) {                      \
-        if (ret == ret_code1                    \
-            || ret == ret_code2) {              \
-          LOG_DEBUG("fail to exec "#func,       \
-                   LST_DO(KK, (,), a));         \
-        } else {                                \
-          LOG_WARN("fail to exec "#func,        \
-                   LST_DO(KK, (,), a));         \
-        }                                       \
-      }                                         \
-    }                                           \
-  } while(0)
-
-#define OV(...) \
-  CONCAT(OV_, ARGS_NUM(__VA_ARGS__))(__VA_ARGS__)
-
-#define OV_0()                         OV_I5(false, common::OB_ERR_UNEXPECTED)
-#define OV_1(condition)                OV_I5(condition, common::OB_ERR_UNEXPECTED)
-#define OV_2(condition, errcode)       OV_I5(condition, errcode)
-#define OV_3(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-#define OV_4(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-#define OV_5(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-#define OV_6(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-#define OV_7(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-#define OV_8(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-#define OV_9(condition, errcode, ...)  OV_I5(condition, errcode, __VA_ARGS__)
-
-#define OV_I4(...) ret, ##__VA_ARGS__
-#define OV_I5(condition, errcode, ...)                \
-  if (common::OB_SUCCESS == (ret)) {                  \
-    if (OB_UNLIKELY(!(condition))) {                  \
-      ret = (errcode);                                \
-      LOG_WARN("fail to check ("#condition")",        \
-               LST_DO(KK, (,), OV_I4(__VA_ARGS__)));  \
-    }                                                 \
-  }
-
-// run the specified function and print out every argument
-// in case of failure (obsoleted)
-#define OC(func) OC_I func )
+#include "lib/ob_check_macros.h"
 
 namespace oceanbase {
 namespace common {
 
 // iternal recyclebin object prefix
 const char *const OB_MYSQL_RECYCLE_PREFIX = "__recycle_$_";
-const char *const OB_ORACLE_RECYCLE_PREFIX = "RECYCLE_$_";
+const char *const OB_RECYCLE_PREFIX = "RECYCLE_$_";
 
 OB_INLINE bool is_valid_log_compressor_type(common::ObCompressorType compressor_type)
 {
    bool b_ret = false;
-   if (common::ObCompressorType::LZ4_COMPRESSOR == compressor_type
-   || common::ObCompressorType::ZSTD_COMPRESSOR == compressor_type
-   || common::ObCompressorType::ZSTD_1_3_8_COMPRESSOR == compressor_type) {
+   if (common::ObCompressorType::ZSTD_1_3_8_COMPRESSOR == compressor_type) {
     b_ret = true;
    }
    return b_ret;
@@ -232,38 +62,18 @@ OB_INLINE bool is_valid_trans_version(const int64_t trans_version)
   return trans_version >= 0;
 }
 
-OB_INLINE bool is_valid_membership_version(const int64_t membership_version)
-{
-  // When the observer does not perform any member changes, membership_version is 0
-  return membership_version >= 0;
-}
-
 OB_INLINE bool is_valid_read_snapshot_version(const int64_t read_snapshot_version)
 {
   // read snapshot version should be greater than 0 and should not be INT64_MAX
   return read_snapshot_version > 0 && INT64_MAX != read_snapshot_version;
 }
 
-inline bool is_need_retry_interval_part_error(int code)
-{
-  bool ret = false;
-  if (OB_ERR_INTERVAL_PARTITION_EXIST == code
-     || OB_ERR_INTERVAL_PARTITION_ERROR == code) {
-    ret = true;
-  }
-  return ret;
-}
-
 inline bool is_schema_error(int err)
 {
   bool ret = false;
   switch(err) {
-    case OB_TENANT_EXIST:
-    case OB_TENANT_NOT_EXIST:
     case OB_ERR_BAD_DATABASE:
     case OB_DATABASE_EXIST:
-    case OB_TABLEGROUP_NOT_EXIST:
-    case OB_TABLEGROUP_EXIST:
     case OB_TABLE_NOT_EXIST:
     case OB_ERR_TABLE_EXIST:
     case OB_ERR_BAD_FIELD_ERROR:
@@ -274,8 +84,6 @@ inline bool is_schema_error(int err)
     case OB_ERR_NO_DB_PRIVILEGE:
     case OB_ERR_NO_TABLE_PRIVILEGE:
     case OB_SCHEMA_ERROR:
-    case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:
-    case OB_ERR_REMOTE_SCHEMA_NOT_FULL:
     case OB_ERR_SP_ALREADY_EXISTS:
     case OB_ERR_SP_DOES_NOT_EXIST:
     case OB_OBJECT_NAME_NOT_EXIST:
@@ -284,35 +92,11 @@ inline bool is_schema_error(int err)
     case OB_SCHEMA_NOT_UPTODATE:
     case OB_ERR_PARALLEL_DDL_CONFLICT:
     case OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR:
-    case OB_ERR_DDL_RESOURCE_NOT_ENOUGH:
+    case OB_DDL_RESOURCE_NOT_ENOUGH:
       ret = true;
       break;
     default:
       break;
-  }
-  return ret;
-}
-
-// this function only used for error logging
-// expr eval error range (-5000, -6000]
-inline bool should_catch_err(int err)
-{
-  bool ret = false;
-  // think that expr_eval err only in (-5000, -6000] should catch
-  if (err > -6000 && err < -5000) {
-    ret = true;
-  } else {
-    switch (err) {
-    case OB_ERR_DIVISOR_IS_ZERO:
-    case OB_INVALID_DATE_VALUE:
-    case OB_INVALID_DATE_FORMAT:
-    case OB_BAD_NULL_ERROR:
-    case OB_ERR_VALUE_LARGER_THAN_ALLOWED:
-      ret = true;
-      break;
-    default:
-      break;
-    }
   }
   return ret;
 }
@@ -372,9 +156,9 @@ inline bool is_server_status_error(int err)
   return ret;
 }
 
-inline bool is_unit_migrate(int err)
+inline bool is_runtime_not_ready(int err)
 {
-  return OB_TENANT_NOT_IN_SERVER == err;
+  return OB_SERVER_RUNTIME_NOT_READY == err;
 }
 
 inline bool is_process_timeout_error(int err)
@@ -458,11 +242,6 @@ inline bool is_has_no_readable_replica_err(int err)
   return OB_NO_READABLE_REPLICA == err;
 }
 
-inline bool is_partition_splitting(const int err)
-{
-  return OB_PARTITION_IS_SPLITTING == err;
-}
-
 inline bool is_id_not_ready_err(const int err)
 {
   return OB_GTS_NOT_READY == err || OB_GTI_NOT_READY == err;
@@ -473,23 +252,9 @@ inline bool is_weak_read_service_ready_err(const int err)
   return OB_TRANS_WEAK_READ_VERSION_NOT_READY == err;
 }
 
-inline bool is_select_dup_follow_replic_err(const int err)
-{
-  return OB_USE_DUP_FOLLOW_AFTER_DML == err;
-}
-
 inline bool is_static_engine_retry(const int err)
 {
   return STATIC_ENG_NOT_IMPLEMENT == err;
-}
-
-inline void set_interval_partition_insert_error(int &ret)
-{
-  ret = OB_NO_PARTITION_FOR_INTERVAL_PART;
-}
-inline bool is_interval_partition_insert_error(const int err)
-{
-  return OB_NO_PARTITION_FOR_INTERVAL_PART == err;
 }
 
 inline bool is_query_killed_return(const int ret)
@@ -513,14 +278,6 @@ static const bool CAN_ELR = false;
 const int64_t OB_WRS_LEVEL_VALUE_LENGTH = 128; // Maximum length of the level_value field of the __all_weak_read_service internal table
 const int64_t OB_WRS_LEVEL_NAME_LENGTH = 128; // Maximum length of the level_name field of the __all_weak_read_service internal table
 
-//Encryption related macros
-const int64_t OB_MAX_ENCRYPTION_NAME_LENGTH = 128;
-const int64_t OB_MAX_ENCRYPTION_KEY_NAME_LENGTH = 256;
-const char *const OB_MYSQL_ENCRYPTION_DEFAULT_MODE = "aes-128";
-const char *const OB_MYSQL_ENCRYPTION_NONE_MODE = "none";
-//--end---Encryption related macros
-const int64_t OB_MAX_ENCRYPTION_MODE_LENGTH = 64;
-
 /**
  * Review found that in the definitions of internal tables and internal views, OB_MAX_TABLE_NAME_LENGTH is used in many places to limit the field length to 128 bytes,
  * but the semantics of the corresponding fields are not table_name.
@@ -535,7 +292,6 @@ const int64_t OB_MAX_ROUTINE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_ROUT
                                                          // it is defined in primary key, and can not change randomly.
 const int64_t OB_MAX_PACKAGE_NAME_LENGTH = 128;
 const int64_t OB_MAX_KVCACHE_NAME_LENGTH = 128;
-const int64_t OB_MAX_SYNONYM_NAME_LENGTH = 128;
 const int64_t OB_MAX_PARAMETERS_NAME_LENGTH = 128;
 const int64_t OB_MAX_RESOURCE_PLAN_NAME_LENGTH = 128;
 // end for const define replace OB_MAX_TABLE_NAME_LENGTH
@@ -543,8 +299,6 @@ const int64_t OB_MAX_RESOURCE_PLAN_NAME_LENGTH = 128;
 ///////////////////////////////////////////////////////
 //          Schema defination                        //
 
-// internal aux-vertical partition table name prefix
-const char *const OB_AUX_VP_PREFIX = "__AUX_VP_";
 
 //          End of Schema defination                 //
 ///////////////////////////////////////////////////////
@@ -587,14 +341,8 @@ enum ObDmlEventType
   DE_DELETING = (1 << 2)
 };
 
-const char *const NORMAL_MODE_STR = "normal";
-const char *const FLASHBACK_MODE_STR = "physical_flashback";
-const char *const ARBITRATION_MODE_STR = "arbitration";
-const char *const FLASHBACK_VERIFY_MODE_STR = "physical_flashback_verify";
 const char *const DISABLED_CLUSTER_MODE_STR = "disabled_cluster";
 const char *const DISABLED_WITH_READONLY_CLUSTER_MODE_STR = "disabled_with_readonly_cluster";
-const char *const SHARED_STORAGE_MODE_STR = "shared_storage";
-
 static const int64_t MODIFY_GC_SNAPSHOT_INTERVAL = 2 * 1000 * 1000; //2s
 
 //reserved table id for information schema

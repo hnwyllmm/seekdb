@@ -16,7 +16,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_to_pinyin.h"
-#include "objit/common/ob_item_type.h"
+#include "sql/parser/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset_string_helper.h"
@@ -119,7 +119,6 @@ int ObExprToPinyin::eval_to_pinyin(const ObExpr &expr, ObEvalCtx &ctx,
   const sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
 
   if (OB_FAIL(expr.args_[0]->eval(ctx, input))) {
-    LOG_WARN("fail to eval", K(ret), KPC(expr.args_[0]));
   } else if (input->is_null()) {
     expr_datum.set_null();
     return ret;
@@ -170,7 +169,6 @@ int ObExprToPinyin::eval_to_pinyin(const ObExpr &expr, ObEvalCtx &ctx,
 int ObExprToPinyin::eval_to_pinyin_batch(
   const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size)
 {
-  LOG_DEBUG("eval to_pinyin in batch mode", K(batch_size));
   int ret = OB_SUCCESS;
   ObDatum *results = expr.locate_batch_datums(ctx);
   const sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
@@ -181,7 +179,6 @@ int ObExprToPinyin::eval_to_pinyin_batch(
   } else {
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
-      LOG_WARN("failed to eval batch result input", K(ret));
     } else {
       ObDatum *datum_array = expr.args_[0]->locate_batch_datums(ctx);
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);

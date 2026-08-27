@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace observer {
 
 ObInfoSchemaCheckConstraintsTable::ObInfoSchemaCheckConstraintsTable()
-    : ObVirtualTableScannerIterator(), tenant_id_(OB_INVALID_ID)
+    : ObVirtualTableScannerIterator()
 {}
 
 ObInfoSchemaCheckConstraintsTable::~ObInfoSchemaCheckConstraintsTable()
@@ -34,26 +34,23 @@ ObInfoSchemaCheckConstraintsTable::~ObInfoSchemaCheckConstraintsTable()
 
 void ObInfoSchemaCheckConstraintsTable::reset()
 {
-  tenant_id_ = OB_INVALID_ID;
   ObVirtualTableScannerIterator::reset();
 }
 
 int ObInfoSchemaCheckConstraintsTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_ISNULL(allocator_) || OB_ISNULL(schema_guard_) || OB_INVALID_ID == tenant_id_)) {
+  if (OB_UNLIKELY(OB_ISNULL(allocator_) || OB_ISNULL(schema_guard_))) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN,
-        "allocator or schema_guard is NULL or tenant_id is invalid!",
+        "allocator or schema_guard is NULL!",
         K(ret),
         K_(schema_guard),
-        K_(allocator),
-        K_(tenant_id));
+        K_(allocator));
   }
   if (OB_SUCC(ret) && !start_to_read_) {
     ObSArray<const ObDatabaseSchema*> database_schemas;
-    if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_, database_schemas))) {
-      SERVER_LOG(WARN, "failed to get database schema of tenant", K(ret), K_(tenant_id));
+    if (OB_FAIL(schema_guard_->get_database_schemas_in_runtime(database_schemas))) {
     } else {
       ObObj *cells = NULL;
       const int64_t col_count = output_column_ids_.count();
@@ -78,7 +75,6 @@ int ObInfoSchemaCheckConstraintsTable::inner_get_next_row(common::ObNewRow *&row
                    ObString(OB_PUBLIC_SCHEMA_NAME) == database_schema->get_database_name_str()) {
           continue;
         } else if (OB_FAIL(add_check_constraints(*database_schema, cells, output_column_ids_.count()))) {
-          SERVER_LOG(WARN, "failed to add table constraint of database schema!", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -109,8 +105,7 @@ int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "schema guard should not be null", K(ret));
   } else if (OB_FAIL(schema_guard_->get_table_schemas_in_database(
-                 tenant_id_, database_schema.get_database_id(), table_schemas))) {
-    SERVER_LOG(WARN, "failed to get table schema in database", K(ret));
+                 database_schema.get_database_id(), table_schemas))) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
       const ObTableSchema *table_schema = table_schemas.at(i);

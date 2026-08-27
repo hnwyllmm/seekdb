@@ -17,12 +17,16 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_CHECKSUM_HELPER_H_
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_CHECKSUM_HELPER_H_
 #include "storage/blocksstable/ob_datum_row.h"
-#include "share/schema/ob_table_param.h"
+#include "storage/access/ob_table_param.h"
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObIVector;
+}
 namespace blocksstable
 {
 class ObMicroBlockChecksumHelper final
@@ -33,7 +37,7 @@ public:
       integer_col_idx_(nullptr),
       integer_col_buf_(nullptr),
       integer_col_cnt_(0),
-      allocator_("CkmHelper"),
+      allocator_("CkmHelper", OB_MALLOC_NORMAL_BLOCK_SIZE),
       micro_block_row_checksum_(0) {}
   ~ObMicroBlockChecksumHelper() { reset(); }
 
@@ -64,20 +68,20 @@ public:
   }
   int cal_rows_checksum(const common::ObArray<ObColDatums *> &all_col_datums,
                         const int64_t row_count);
-  int cal_column_checksum(const common::ObIArray<ObIVector *> &vectors, 
-                          const int64_t start, 
+  int cal_column_checksum(const common::ObIArray<common::ObIVector *> &vectors,
+                          const int64_t start,
                           const int64_t row_count,
                           int64_t *curr_micro_column_checksum);
 
   TO_STRING_KV(KPC_(col_descs), KP_(integer_col_idx), KP_(integer_col_buf),
       K_(integer_col_cnt), K_(micro_block_row_checksum));
 private:
-  int cal_column_checksum_normal(const ObIArray<ObIVector *> &vectors, 
-                                 const int64_t start, 
+  int cal_column_checksum_normal(const ObIArray<common::ObIVector *> &vectors,
+                                 const int64_t start,
                                  const int64_t row_count,
                                  int64_t *curr_micro_column_checksum);
-  int cal_column_checksum_sse42(const ObIArray<ObIVector *> &vectors, 
-                                const int64_t start, 
+  int cal_column_checksum_sse42(const ObIArray<common::ObIVector *> &vectors,
+                                const int64_t start,
                                 const int64_t row_count,
                                 int64_t *curr_micro_column_checksum);
 

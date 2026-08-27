@@ -17,8 +17,6 @@
 #include "storage/tx/ob_trans_factory.h"
 #include "storage/tx/ob_trans_log.h"
 #include "storage/tx/ob_trans_ctx.h"
-#include "storage/tx/ob_tx_log_cb_define.h"
-#include "src/share/location_cache/ob_location_service.h"
 #include <gtest/gtest.h>
 
 namespace oceanbase
@@ -108,8 +106,7 @@ TEST_F(TestObTransFactory, init_reset)
   MutatorBuf *mutator_buf = NULL;
 
   // alloc for ObLSTxCtxMgr object
-  uint64_t tenant_id = 1001;
-  ls_tx_ctx_mgr = ObLSTxCtxMgrFactory::alloc(tenant_id);
+  ls_tx_ctx_mgr = ObLSTxCtxMgrFactory::alloc();
   if (NULL == ls_tx_ctx_mgr) {
     TRANS_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ObLSTxCtxMgr memory alloc error");
   } else {
@@ -168,14 +165,3 @@ TEST_F(TestObTransFactory, init_reset)
 
 using namespace oceanbase;
 using namespace oceanbase::common;
-
-int main(int argc, char **argv)
-{
-  int ret = 1;
-  ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_ob_trans_factory.log", true);
-  logger.set_log_level(OB_LOG_LEVEL_INFO);
-  testing::InitGoogleTest(&argc, argv);
-  ret = RUN_ALL_TESTS();
-  return ret;
-}

@@ -40,8 +40,7 @@ int ObExprAtan2::calc_result_typeN(ObExprResType &type,
                                    common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()
-             && OB_UNLIKELY(NULL == types || type_num <= 0 || type_num > 2)) {
+  if (OB_UNLIKELY(NULL == types || type_num <= 0 || type_num > 2)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("Invalid argument.", K(ret), K(types), K(type_num));
   } else {
@@ -61,7 +60,6 @@ int calc_atan2_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     // only mysql mode
     ObDatum *radian = NULL;
     if (OB_FAIL(expr.args_[0]->eval(ctx, radian))) {
-      LOG_WARN("eval radian arg failed", K(ret), K(expr));
     } else if (radian->is_null()) {
       res_datum.set_null();
     } else if (ObDoubleType == expr.args_[0]->datum_meta_.type_) {
@@ -75,12 +73,10 @@ int calc_atan2_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     ObDatum *y = NULL;
     ObDatum *x = NULL;
     if (OB_FAIL(arg0->eval(ctx, y))) {
-      LOG_WARN("eval arg failed", K(ret), K(expr), KP(y));
     } else if (y->is_null()) {
-      /* arg is already be cast to number type, no need to is_null_oracle */
+      /* arg is already cast to number type, no extra null-type handling needed */
       res_datum.set_null();
     } else if (OB_FAIL(arg1->eval(ctx, x))) {
-      LOG_WARN("eval arg failed", K(ret), K(expr), KP(x));
     } else if (x->is_null()) {
       res_datum.set_null();
     } else if (ObNumberType == arg0->datum_meta_.type_
@@ -94,7 +90,6 @@ int calc_atan2_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
         number::ObNumber res_nmb;
         ObEvalCtx::TempAllocGuard alloc_guard(ctx);
         if (OB_FAIL(y_nmb.atan2(x_nmb, res_nmb, alloc_guard.get_allocator()))) {
-          LOG_WARN("calc atan2 failed", K(ret), K(y_nmb), K(x_nmb), K(expr));
         } else {
           res_datum.set_number(res_nmb);
         }
@@ -115,8 +110,7 @@ int ObExprAtan2::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (lib::is_mysql_mode()
-             && OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid arg cnt of expr", K(ret), K(rt_expr));
   } else {

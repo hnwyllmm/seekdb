@@ -2,7 +2,6 @@ alter system set _enable_add_fulltext_index_to_existing_table = false;
 alter system set _enable_defensive_check = '2';
 alter system set _enable_add_fulltext_index_to_existing_table = true;
 set @@session.recyclebin = off;
-alter system set default_table_store_format = 'compound';
 alter system set _enable_drop_column_instant = true;
 #case 垂直分区表
 create table t_vp_1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int) partition by column (c1, c4);
@@ -233,12 +232,6 @@ create table xingrui_dup_name (c1 varchar(10) NOT NULL , c2 int);
 alter table xingrui_dup_name drop column c1, drop column c1;
 ERROR 42000: Can't DROP 'c1'; check that column/key exists
 drop table xingrui_dup_name;
-ERROR 42000: Incorrect column name 'SYS_UNUSED_column_NAME'
-ERROR 42S21: Duplicate column name 'SYS_UNUSED_column_NAME'
-ERROR 42S22: Unknown column 'SYS_UNUSED_column_NAME'
-ERROR 42000: Incorrect column name 'SYS_UNUSED_column_NAME'
-alter table xingrui_dup_name force;
-drop table xingrui_dup_name;
 #case 索引表
 #普通索引
 drop table xingrui_normal_table;
@@ -318,15 +311,12 @@ drop table xingrui_vector_table;
 create table xingrui_vector_table(col1 int, col2 vector(3));
 alter table xingrui_vector_table drop column col2;
 drop table xingrui_vector_table;
-alter system set ob_vector_memory_limit_percentage = 44;
+alter system set vector_memory_limit = 0;
 create table xingrui_vector_table(c1 int, c2 int, c3 vector(3), c4 vector(3), c5 vector(3), c6 int, primary key(c1));
 create index idx1 on xingrui_vector_table(c2);
 create vector index idx_ivf_flat on xingrui_vector_table(c3) with (distance=l2, type=ivf_flat);
-ERROR 0A000: create ivf index on table with column store is not supported
 create vector index idx_ivf_sq8 on xingrui_vector_table(c4) with (distance=l2, type=ivf_sq8);
-ERROR 0A000: create ivf index on table with column store is not supported
 create vector index idx_ivf_pq on xingrui_vector_table(c5) with (distance=l2, type=ivf_pq, m=1);
-ERROR 0A000: create ivf index on table with column store is not supported
 alter table xingrui_vector_table drop column c1;
 ERROR 0A000: drop rowkey column is not supported
 alter table xingrui_vector_table drop column c6;
@@ -374,24 +364,7 @@ insert into xingrui_json (id) values (4);
 insert into xingrui_json (id) values (5);
 alter table xingrui_json force;
 drop table xingrui_json;
-#case bitmap列
-drop table xingrui_bitmap;
-create table xingrui_bitmap(c1 roaringbitmap, c2 roaringbitmap);
-insert into xingrui_bitmap values(x'0100', x'010100000002'), (null, null);
-insert into xingrui_bitmap values(x'0100', x'010100000002');
-alter table xingrui_bitmap drop column c1;
-insert into xingrui_bitmap values(x'010100000002');
-insert into xingrui_bitmap values(x'010100000002');
-select * from xingrui_bitmap;
-c2
-   
-NULL
-   
-   
-   
-alter table xingrui_bitmap force;
-drop table xingrui_bitmap;
-#case bitmap列
+#case array列
 drop table xingrui_array;
 create table xingrui_array(c1 array(int), c2 array(bigint), c3 array(float), c4 array(double));
 insert into xingrui_array values(array(1, 2, 3, 4, 5),
@@ -406,7 +379,7 @@ alter table xingrui_array force;
 drop table xingrui_array;
 #case vector列
 drop table xingrui_vector;
-alter system set ob_vector_memory_limit_percentage = 44;
+alter system set vector_memory_limit = 0;
 create table xingrui_vector(c1 int, c2 vector(3), c3 vector(5), primary key(c1), vector index idx1(c2) with (distance=L2, type=hnsw, lib=vsag, m=20, ef_construction=200, ef_search=200), vector index idx2(c3) with (distance=L2, type=hnsw, lib=vsag, m=20, ef_construction=200, ef_search=200));
 insert into xingrui_vector values (1, '[0.990622,0.861702,0.114999]', '[0.558301,0.543172,0.335010,0.844568,0.275233]');
 alter table xingrui_vector drop column c2;
@@ -421,14 +394,14 @@ PARTITION BY RANGE(c1) (
 PARTITION p0 VALUES less than(10),
 PARTITION p1 VALUES less than(20),
 PARTITION p2 VALUES less than(MAXVALUE)
-) with column group(all columns);
+);
 insert into xingrui_ivf(c1,c4) values(1,'[1,3,2]');
 insert into xingrui_ivf(c1,c4) values(2,'[2,3,2]');
 insert into xingrui_ivf(c1,c4) values(3,'[3,3,2]');
 alter table xingrui_ivf drop column c4;
 ERROR HY000: Column 'c4' has a generated column dependency
 drop table xingrui_ivf;
-create table xingrui_ivf (id int primary key, wine_type int, wine_data vector(13), iris_type varchar(20), iris_data vector(4), data vector(3)) with column group(all columns);
+create table xingrui_ivf (id int primary key, wine_type int, wine_data vector(13), iris_type varchar(20), iris_data vector(4), data vector(3));
 create vector index idx1 on xingrui_ivf (wine_data) with (distance=l2, type=ivf_sq8, nlist=3, sample_per_nlist=50);
 insert into xingrui_ivf (id, data) values(1, '[1,2,3]');
 alter table xingrui_ivf drop column data;
@@ -436,7 +409,7 @@ alter table xingrui_ivf force;
 drop table xingrui_ivf;
 CREATE TABLE xingrui_ivf (
 c1 int,
-c2 vector(10)) with column group(all columns);
+c2 vector(10));
 create vector index vec_idx1 on xingrui_ivf(c2) with (distance=l2, type=ivf_pq, lib=OB, m=5);
 insert into xingrui_ivf values(1, '[0.748479,0.276979,0.555195,0.145492,0.045639,0.924278,0.696082,0.841479,0.742934,0.953073]');
 alter table xingrui_ivf drop column c2;
@@ -447,7 +420,7 @@ alter table xingrui_ivf force;
 drop table xingrui_ivf_table;
 CREATE TABLE xingrui_ivf_table (c1 int primary key, c2 varchar(30), c3 vector(3) ,c4 vector(3),
 VECTOR INDEX idx1(c4)
-WITH (distance=l2, type=ivf_flat)) with column group(all columns);
+WITH (distance=l2, type=ivf_flat));
 insert into xingrui_ivf_table(c1,c2,c3,c4) values(1,'[1,1,2]','[2,2,3]','[1,3,2]');
 insert into xingrui_ivf_table(c1,c2,c3,c4) values(2,'[2,1,2]','[2,2,2]','[2,3,2]');
 insert into xingrui_ivf_table(c1,c2,c3,c4) values(3,'[3,1,2]','[3,2,2]','[3,3,2]');
@@ -456,12 +429,12 @@ insert into xingrui_ivf_table(c1,c2,c3,c4) values(5,'[5,1,2]','[5,2,3]','[5,5,5]
 alter table xingrui_ivf_table drop column c2;
 alter table xingrui_ivf_table force;
 drop table xingrui_ivf_table;
-CREATE TABLE xingrui_ivf_table (id int, c2 vector(10)) with column group(all columns);
+CREATE TABLE xingrui_ivf_table (id int, c2 vector(10));
 create vector index vec_idx1 on xingrui_ivf_table(c2) with (distance=l2, type=ivf_sq8, lib=OB);
 alter table xingrui_ivf_table drop column id;
 alter table xingrui_ivf_table force;
 drop table xingrui_ivf_table;
-CREATE TABLE xingrui_ivf_table (id int, c2 vector(10)) with column group(all columns);
+CREATE TABLE xingrui_ivf_table (id int, c2 vector(10));
 create vector index vec_idx1 on xingrui_ivf_table(c2) with (distance=l2, type=ivf_pq, lib=OB);
 ERROR 0A000: ivf_pq vector index param m not set is not supported
 create vector index vec_idx1 on xingrui_ivf_table(c2) with (distance=l2, type=ivf_pq, lib=OB, m=128);
@@ -554,8 +527,6 @@ alter table xingrui_invisible_table drop column col1, drop column col2;
 drop table xingrui_invisible_table;
 create table xingrui_invisible_table(col1 int auto_increment, col2 int invisible, col3 int);
 alter table xingrui_invisible_table drop column col3;
-ERROR HY000: table must have at least one column that is not invisible
-ERROR 42000: Incorrect column name 'SYS_UNUSED_column_NAME'
 drop table xingrui_invisible_table;
 create table xingrui_invisible_table(col1 int auto_increment, col2 int invisible);
 alter table xingrui_invisible_table drop column col1;
@@ -660,15 +631,15 @@ drop table xingrui_trigger;
 #case xml
 create table xingrui_xml(col1 xmltype, col2 xmltype);
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'xmltype, col2 xmltype)' at line 1
-alter system set _enable_drop_column_instant = true tenant = all_user;
+alter system set _enable_drop_column_instant = true;
 alter system set debug_sync_timeout = '100000s';
 set ob_global_debug_sync = 'reset';
-set ob_global_debug_sync = 'BEFORE_ALTER_TABLE_IN_TRANS wait_for continue_signal execute 10000';
+set ob_global_debug_sync = 'BEFORE_ALTER_TABLE_IN_TRANS signal ddl_type_decided wait_for continue_signal execute 10000';
 drop table xingrui_normal_table;
 create table xingrui_normal_table(col1 blob, col2 int, col3 blob);
 alter table xingrui_normal_table drop column col3;
-alter system set _enable_drop_column_instant = false tenant = all_user;
+set ob_global_debug_sync = 'now wait_for ddl_type_decided';
+alter system set _enable_drop_column_instant = false;
 set ob_global_debug_sync = 'reset';
 set ob_global_debug_sync = 'now signal continue_signal';
-alter system set default_table_store_format = 'row';
-alter system set _enable_drop_column_instant = true tenant = all_user;
+alter system set _enable_drop_column_instant = true;

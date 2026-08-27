@@ -17,6 +17,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_common_id_utils.h"
+#include "common/ob_timeout_ctx.h"
+#include "share/ob_share_util.h"
+#include "share/rc/ob_server_runtime.h"
 #include "storage/tx/ob_unique_id_service.h" // ObUniqueIDService
 
 namespace oceanbase
@@ -25,7 +28,7 @@ using namespace common;
 using namespace share;
 namespace storage
 {
-int ObCommonIDUtils::gen_unique_id(const uint64_t tenant_id, ObCommonID &id)
+int ObCommonIDUtils::gen_unique_id(ObCommonID &id)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
@@ -34,43 +37,15 @@ int ObCommonIDUtils::gen_unique_id(const uint64_t tenant_id, ObCommonID &id)
 
   id.reset();
 
-  if (OB_UNLIKELY(MTL_ID() != tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invaild tenant id", KR(ret), K(tenant_id), K(MTL_ID()));
-  } else if (OB_FAIL(share::ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT))) {
-    LOG_WARN("set default timeout ctx fail", KR(ret), K(DEFAULT_TIMEOUT));
-  } else if (OB_FAIL(MTL(transaction::ObUniqueIDService*)->gen_unique_id(unique_id,
+  if (OB_FAIL(share::ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT))) {
+  } else if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::transaction::ObUniqueIDService>()->gen_unique_id(unique_id,
       ctx.get_timeout()))) {
-    LOG_WARN("gen_unique_id failed", KR(ret), K(tenant_id), K(ctx));
   } else {
     id = ObCommonID(unique_id);
   }
 
   return ret;
 }
-
-int ObCommonIDUtils::gen_unique_id_by_rpc(const uint64_t tenant_id, ObCommonID &id)
-{
-  int ret = OB_SUCCESS;
-  obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
-  share::ObLocationService *location_service = nullptr;
-  ObAddr leader_addr;
-  if (OB_ISNULL(srv_rpc_proxy = GCTX.srv_rpc_proxy_)
-      || OB_ISNULL(location_service = GCTX.location_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service or location_cache is null", KR(ret), KP(srv_rpc_proxy), KP(location_service));
-  } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id,
-                                                  tenant_id,
-                                                  SYS_LS,
-                                                  false,/*force_renew*/
-                                                  leader_addr))) {
-    LOG_WARN("get leader failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).by(tenant_id).gen_unique_id(tenant_id, id))) {
-    LOG_WARN("fail to send gen unique id rpc", KR(ret), K(tenant_id));
-  }
-  return ret;
-}
-
 
 } // end namespace storage
 } // end namespace oceanbase

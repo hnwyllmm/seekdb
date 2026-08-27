@@ -19,7 +19,7 @@
 
 #include "share/ob_define.h"
 #include "lib/container/ob_se_array.h"
-#include "share/ob_virtual_table_iterator.h"
+#include "observer/virtual_table/ob_virtual_table_iterator.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_i_virtual_table_iterator_factory.h"
 
@@ -41,35 +41,34 @@ class ObTableSchema;
 }
 namespace rootserver
 {
-class ObRootService;
+class ObLocalManagementService;
 }
 namespace observer
 {
 class ObVTIterCreator
 {
 public:
-  ObVTIterCreator(rootserver::ObRootService &root_service, common::ObAddr &addr, common::ObServerConfig *config = NULL)
-    : root_service_(root_service),
+  ObVTIterCreator(rootserver::ObLocalManagementService &local_management_service, common::ObAddr &addr, common::ObServerConfig *config = NULL)
+    : local_management_service_(local_management_service),
       addr_(addr),
       config_(config)
   {}
   virtual ~ObVTIterCreator() {}
-  int get_latest_expected_schema(const uint64_t tenant_id,
-                                 const uint64_t table_id,
+  int get_latest_expected_schema(const uint64_t table_id,
                                  const int64_t table_version,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                  const share::schema::ObTableSchema *&t_schema);
   virtual int create_vt_iter(common::ObVTableScanParam &params,
                              common::ObVirtualTableIterator *&vt_iter);
   virtual int check_can_create_iter(common::ObVTableScanParam &params);
-  rootserver::ObRootService &get_root_service() { return root_service_; }
+  rootserver::ObLocalManagementService &get_local_management_service() { return local_management_service_; }
 
 public:
   int check_is_index(const share::schema::ObTableSchema &table,
       const char *index_name, bool &is_index) const;
 
 private:
-  rootserver::ObRootService &root_service_;
+  rootserver::ObLocalManagementService &local_management_service_;
   common::ObAddr &addr_;
   common::ObServerConfig *config_;
 };
@@ -78,7 +77,7 @@ class ObVirtualTableIteratorFactory : public sql::ObIVirtualTableIteratorFactory
 {
 public:
   explicit ObVirtualTableIteratorFactory(ObVTIterCreator &vt_iter_creator);
-  ObVirtualTableIteratorFactory(rootserver::ObRootService &root_service, common::ObAddr &addr,
+  ObVirtualTableIteratorFactory(rootserver::ObLocalManagementService &local_management_service, common::ObAddr &addr,
                                 common::ObServerConfig *config = NULL);
   virtual ~ObVirtualTableIteratorFactory();
   virtual int create_virtual_table_iterator(common::ObVTableScanParam &params,

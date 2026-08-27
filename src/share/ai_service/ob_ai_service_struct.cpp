@@ -16,8 +16,6 @@
 
 #include "share/ai_service/ob_ai_service_struct.h"
 #include "lib/json/ob_json.h"
-#include "share/rc/ob_tenant_base.h"
-#include "observer/omt/ob_tenant_ai_service.h"
 
 
 #define USING_LOG_PREFIX SHARE
@@ -70,9 +68,29 @@ int ObAiModelEndpointInfo::parse_from_json_base(common::ObArenaAllocator &alloca
   reset();
   name_ = name;
   if (OB_FAIL(merge_delta_endpoint(allocator, params_jbase))) {
-    LOG_WARN("failed to merge delta endpoint", K(ret), K(params_jbase));
   }
   LOG_INFO("parse from json base", K(ret), K(params_jbase), K(params_jbase.json_type()), K(params_jbase.element_count()));
+  return ret;
+}
+
+int ObAiModelEndpointInfo::deep_copy(
+    common::ObIAllocator &allocator,
+    const ObAiModelEndpointInfo &other)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  endpoint_id_ = other.endpoint_id_;
+  if (OB_FAIL(ob_write_string(allocator, other.name_, name_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.scope_, scope_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.ai_model_name_, ai_model_name_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.url_, url_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.access_key_, access_key_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.provider_, provider_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.request_model_name_, request_model_name_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.parameters_, parameters_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.request_transform_fn_, request_transform_fn_))) {
+  } else if (OB_FAIL(ob_write_string(allocator, other.response_transform_fn_, response_transform_fn_))) {
+  }
   return ret;
 }
 
@@ -95,10 +113,6 @@ int ObAiModelEndpointInfo::check_valid() const
     ret = OB_AI_FUNC_PARAM_EMPTY;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("ai_model_name"), "ai_model_name");
     LOG_WARN("ai_model_name is empty", K(ret), K(*this));
-  } else if (!is_valid_ai_model_name(ai_model_name_)) {
-    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
-    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("ai_model_name"), "ai_model_name");
-    LOG_WARN("ai_model_name is invalid", K(ret), K(*this));
   } else if (url_.empty()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("url"), "url");
@@ -143,27 +157,6 @@ bool ObAiModelEndpointInfo::is_valid_provider(const ObString &provider)
   return is_valid;
 }
 
-bool ObAiModelEndpointInfo::is_valid_ai_model_name(const ObString &ai_model_name)
-{
-  bool is_valid = false;
-  int ret = OB_SUCCESS;
-  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  schema::ObSchemaGetterGuard guard;
-  uint64_t tenant_id = MTL_ID();
-  const ObAiModelSchema *ai_model_schema = nullptr;
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service is null", KR(ret));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(guard.get_ai_model_schema(tenant_id, ai_model_name, ai_model_schema))) {
-    LOG_WARN("fail to get ai model schema", KR(ret), K(tenant_id), K(ai_model_name));
-  } else if (OB_NOT_NULL(ai_model_schema)) {
-    is_valid = true;
-  }
-  return is_valid;
-}
-
 int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &allocator, const ObIJsonBase &delta_jbase)
 {
   int ret = OB_SUCCESS;
@@ -172,7 +165,6 @@ int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &alloca
   while (!iter.end() && OB_SUCC(ret)) {
     ObJsonObjPair elem;
     if (OB_FAIL(iter.get_elem(elem))) {
-      LOG_WARN("failed to get elem", K(ret));
     } else {
       EXTRACT_JSON_ELEM_STR("scope", scope_)
       EXTRACT_JSON_ELEM_STR("ai_model_name", ai_model_name_)
@@ -192,7 +184,6 @@ int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &alloca
     if (has_api_key && !access_key_.empty() && OB_FAIL(encrypt_access_key_(allocator, access_key_, access_key_))) {
       LOG_WARN("failed to encrypt access key", K(ret));
     } else if (OB_FAIL(check_valid())) {
-      LOG_WARN("invalid endpoint", K(ret), K(delta_jbase));
     }
   }
 
@@ -204,7 +195,6 @@ int ObAiModelEndpointInfo::encrypt_access_key_(ObIAllocator &allocator, const Ob
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_write_string(allocator, access_key, encrypted_access_key))) {
-    LOG_WARN("failed to encrypt access key", K(ret));
   }
   return ret;
 }
@@ -213,7 +203,6 @@ int ObAiModelEndpointInfo::decrypt_access_key_(ObIAllocator &allocator, const Ob
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_write_string(allocator, encrypted_access_key, unencrypted_access_key))) {
-    LOG_WARN("failed to encrypt access key", K(ret));
   }
   return ret;
 }
@@ -243,7 +232,6 @@ int ObAiModelEndpointInfo::get_unencrypted_access_key(common::ObIAllocator &allo
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(decrypt_access_key_(allocator, access_key_, unencrypted_access_key))) {
-    LOG_WARN("failed to decrypt access key", K(ret));
   }
   return ret;
 }
@@ -258,7 +246,6 @@ int ObAiServiceModelInfo::parse_from_json_base(const ObString &name, const commo
   while (!iter.end() && OB_SUCC(ret)) {
     ObJsonObjPair elem;
     if (OB_FAIL(iter.get_elem(elem))) {
-      LOG_WARN("failed to get elem", K(ret));
     } else {
       EXTRACT_JSON_ELEM_STR("model_name", model_name_)
       EXTRACT_JSON_ELEM_STR_WITH_PROCESS("type", type_str, type_ = EndpointType::str_to_endpoint_type(type_str))
@@ -269,7 +256,6 @@ int ObAiServiceModelInfo::parse_from_json_base(const ObString &name, const commo
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_valid())) {
-      LOG_WARN("invalid model", K(ret), K(params_jbase));
     }
   }
 

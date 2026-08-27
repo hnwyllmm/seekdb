@@ -16,8 +16,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_table_columns.h"
+#include "observer/ob_server_runtime_access.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
-#include "sql/ob_sql_mock_schema_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -92,8 +92,7 @@ ObTableColumns::ObTableColumns()
     : ObVirtualTableScannerIterator(),
       type_str_(),
       column_type_str_(type_str_),
-      column_type_str_len_(OB_MAX_SYS_PARAM_NAME_LENGTH),
-      min_data_version_(OB_INVALID_VERSION)
+      column_type_str_len_(OB_MAX_SYS_PARAM_NAME_LENGTH)
 {
   MEMSET(type_str_, 0, OB_MAX_SYS_PARAM_NAME_LENGTH);
 }
@@ -106,15 +105,10 @@ void ObTableColumns::reset()
 {
   MEMSET(type_str_, 0, OB_MAX_SYS_PARAM_NAME_LENGTH);
   ObVirtualTableScannerIterator::reset();
-  min_data_version_ = OB_INVALID_VERSION;
 }
 
-int ObTableColumns::init(uint64_t tenant_id) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version_))) {
-    LOG_WARN("fail to get min data version", K(ret), K(tenant_id));
-  }
-  return ret;
+int ObTableColumns::init() {
+  return OB_SUCCESS;
 }
 
 int ObTableColumns::inner_get_next_row(ObNewRow *&row)
@@ -130,21 +124,19 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
       const ObTableSchema *table_schema = NULL;
       uint64_t show_table_id = OB_INVALID_ID;
       if (OB_FAIL(calc_show_table_id(show_table_id))) {
-        LOG_WARN("fail to calc show table id", K(ret), K(show_table_id));
       } else if (OB_UNLIKELY(OB_INVALID_ID == show_table_id)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
-      } else if (OB_FAIL(sql_schema_guard_.get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
-       LOG_WARN("fail to get table schema", K(ret), K(effective_tenant_id_));
+      } else if (OB_FAIL(sql_schema_guard_.get_table_schema( show_table_id, table_schema))) {
       } else if (OB_UNLIKELY(NULL == table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("fail to get table schema", K(ret), K(show_table_id));
-      } else if (OB_SYS_TENANT_ID != table_schema->get_tenant_id()
+      } else if (false
           && table_schema->is_vir_table()
           && is_restrict_access_virtual_table(table_schema->get_table_id())) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("fail to get table schema", K(ret), K(show_table_id));
-      } else if (!lib::is_oracle_mode()) {
+      } else {
         ObStmtNeedPrivs stmt_need_privs;
         stmt_need_privs.need_privs_.set_allocator(allocator_);
         ObSessionPrivInfo session_priv;
@@ -153,12 +145,10 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
         const ObDatabaseSchema *db_schema = NULL;
         if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
+          LOG_WARN("Session priv is invalid", 
                     "user_id", session_priv.user_id_, K(ret));
         } else if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
-          LOG_WARN("init failed", K(ret));
-        } else if (OB_FAIL(sql_schema_guard_.get_database_schema(table_schema->get_tenant_id(), table_schema->get_database_id(), db_schema))) {
-          LOG_WARN("get database schema failed", K(ret));
+        } else if (OB_FAIL(sql_schema_guard_.get_database_schema( table_schema->get_database_id(), db_schema))) {
         } else if (OB_ISNULL(db_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("db schema is null", K(ret));
@@ -168,14 +158,12 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
           need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
           need_priv.priv_set_ = OB_PRIV_SELECT;
           if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
-            LOG_WARN("push back failed", K(ret));
           }
           if (OB_SUCC(ret)) {
             need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
             need_priv.priv_set_ = OB_PRIV_SELECT;
             need_priv.db_ = db_schema->get_database_name_str();
             if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
-              LOG_WARN("push back failed", K(ret));
             }
           }
 
@@ -185,7 +173,6 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             need_priv.db_ = db_schema->get_database_name_str();
             need_priv.table_ = table_schema->get_table_name_str();
             if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
-              LOG_WARN("push back failed", K(ret));
             } 
           }
           if (OB_FAIL(ret)) {
@@ -196,7 +183,6 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
               if (OB_FAIL(schema_guard_->check_priv_any_column_priv(
                             session_priv, enable_role_id_array, db_schema->get_database_name_str(),
                             table_schema->get_table_name_str(), pass))) {
-                LOG_WARN("fail to collect privs in roles", K(ret));
               } else if (!pass) {
                 ret = OB_ERR_NO_TABLE_PRIVILEGE;
                 LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
@@ -217,7 +203,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
       if (OB_FAIL(ret)) {
       } else {
         bool throw_error = true;
-        if (table_schema->is_view_table() && !table_schema->is_materialized_view()) {
+        if (table_schema->is_view_table()) {
           ObString view_definition;
           ObSelectStmt *select_stmt = NULL;
           ObSelectStmt *real_stmt = NULL;
@@ -228,10 +214,8 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
                         session_->get_local_collation_connection(),
                         table_schema->get_view_schema(),
                         view_definition))) {
-            LOG_WARN("fail to generate view definition for resolve", K(ret));
           } else if (OB_FAIL(resolve_view_definition(allocator_, session_, schema_guard_,
                        *table_schema, select_stmt, expr_factory, stmt_factory, throw_error))) {
-            LOG_WARN("failed to resolve view definition", K(view_definition), K(ret));
           } else if (OB_UNLIKELY(NULL == select_stmt)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("select_stmt is NULL", K(ret));
@@ -244,9 +228,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             for (int64_t i = 0; OB_SUCC(ret) && i < real_stmt->get_select_item_size(); ++i) {
               if (OB_FAIL(fill_row_cells(*table_schema,
                                          real_stmt, real_stmt->get_select_item(i)))) {
-                LOG_WARN("fail to fill row cells", K(ret));
               } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-                LOG_WARN("fail to add row", K(ret), K(cur_row_));
               } else {/*do nothing*/}
             }
           }
@@ -260,15 +242,10 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
               LOG_WARN("The column is null", K(ret));
             } else if (table_schema->is_heap_organized_table() && col->is_hidden_pk_column_id(col->get_column_id())) {
               // heap organized table should not output hidden pk columns
-            } else if (col->is_invisible_column() && lib::is_oracle_mode()) { // ignore invisible column
-              // mysql 8.0.23 has supported invisivle column, we should not ignore them
-              // for mysql
             } else if (OB_FAIL(fill_row_cells(*table_schema, *col, has_column_priv))) {
-              LOG_WARN("fail to fill row cells", K(ret), K(col));
-            } else if (lib::is_mysql_mode() && is_column_level && !has_column_priv) {
+            } else if (is_column_level && !has_column_priv) {
               //do not output the column
             } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-              LOG_WARN("fail to add row", K(ret), K(cur_row_));
             } else {/*do nothing*/}
           }
           if (ret != OB_ITER_END) {
@@ -326,13 +303,6 @@ int ObTableColumns::get_type_str(
   int ret = OB_SUCCESS;
   const ObObjMeta &obj_meta = column_schema.get_meta_type();
   ObAccuracy acc = column_schema.get_accuracy();
-  if (lib::is_oracle_mode()
-      && column_schema.get_meta_type().is_number()
-      && acc.get_precision() == PRECISION_UNKNOWN_YET
-      && acc.get_scale() >= OB_MIN_NUMBER_SCALE) {
-      //compatible with oracle, just show differently
-    acc.set_precision(38);
-  }
   const common::ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
   const uint64_t sub_type = static_cast<uint64_t>(column_schema.get_geo_type());
   int64_t pos = 0;
@@ -396,11 +366,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
   int64_t pos = 0;
   ObSessionPrivInfo session_priv;
   const ObDatabaseSchema *db_schema = NULL;
-  bool is_oracle_mode = false;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
-  if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
-  } else if (OB_ISNULL(cur_row_.cells_) || OB_ISNULL(allocator_)|| OB_ISNULL(session_) ||
+  if (OB_ISNULL(cur_row_.cells_) || OB_ISNULL(allocator_)|| OB_ISNULL(session_) ||
       OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data member is not init", K(ret), K(cur_row_.cells_), K(allocator_), K(session_));
@@ -416,29 +382,25 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
     LOG_ERROR("fail to allocate memory", K(ret));
   } else {
     if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
-      LOG_WARN("fail to get session priv info", K(ret));
     } else if (OB_UNLIKELY(!session_priv.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
+      LOG_WARN("Session priv is invalid", 
                 "user_id", session_priv.user_id_, K(ret));
-    } else if (OB_FAIL(sql_schema_guard_.get_database_schema(tenant_id, table_schema.get_database_id(), db_schema))) {
-      LOG_WARN("failed to get database_schema", K(ret),
-         K(tenant_id), K(table_schema.get_database_id()));
+    } else if (OB_FAIL(sql_schema_guard_.get_database_schema( table_schema.get_database_id(), db_schema))) {
     } else if (OB_UNLIKELY(NULL == db_schema)) {
       ret = OB_ERR_BAD_DATABASE;
       LOG_WARN("db_schema is null", K(ret),
-        K(session_->get_effective_tenant_id()), K(table_schema.get_database_id()));
+        K(table_schema.get_database_id()));
     }
   }
   const common::ObIArray<uint64_t> &enable_role_id_array = session_->get_enable_role_array();
-  if (OB_SUCC(ret) && !is_oracle_mode) {
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(schema_guard_->collect_all_priv_for_column(session_priv,
                                                            enable_role_id_array,
                                                            db_schema->get_database_name_str(),
                                                            table_schema.get_table_name_str(),
                                                            column_schema.get_column_name_str(),
                                                            col_priv_set))) {
-      LOG_WARN("get column priv failed", K(ret));
     } else {
       has_column_priv = (col_priv_set != OB_PRIV_SET_EMPTY);
     }
@@ -459,16 +421,13 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
       }
     case TYPE: {
       ObString type_val;
-      const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
+      const ObLengthSemantics default_length_semantics = session_->get_default_length_semantics();
       if (OB_FAIL(get_type_str(column_schema,
                                default_length_semantics,
                                type_val))) {
           LOG_WARN("fail to get data type str",K(ret), K(column_schema.get_data_type()));
           break;
         } else {
-          if (is_oracle_mode) {
-            ObCharset::caseup(ObCollationType::CS_TYPE_UTF8MB4_BIN, type_val);
-          }
           cur_row_.cells_[cell_idx].set_varchar(type_val);
           cur_row_.cells_[cell_idx].set_collation_type(
               ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -482,18 +441,13 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           cur_row_.cells_[cell_idx].set_varchar(
               ObCharset::collation_name(column_schema.get_collation_type()));
         } else {
-          if (lib::is_oracle_mode()) {
-            cur_row_.cells_[cell_idx].set_varchar("NULL");
-          } else {
-            cur_row_.cells_[cell_idx].set_null();//in mysql mode should not be filled with string "NULL";
-          }
+          cur_row_.cells_[cell_idx].set_null();//in mysql mode should not be filled with string "NULL";
         }
         cur_row_.cells_[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
     case NULLABLE: {
-        LOG_DEBUG("desc t nullable", K(column_schema));
         const char *ptr = column_schema.is_not_null_validate_column()
                           || !column_schema.is_nullable() ? "NO" : "YES";
         ObString nullable_val = ObString::make_string(ptr);
@@ -509,7 +463,6 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         //cells[cell_idx].set_int(index + 1); /* rowkey id is rowkey index plus 1 */
         KeyType key_type = KEY_TYPE_MAX;
         if (OB_FAIL(get_key_type(table_schema, column_schema, key_type))) {
-          LOG_WARN("get key type fail", K(ret));
         } else {
           switch(key_type) {
           case KEY_TYPE_PRIMARY:
@@ -545,7 +498,6 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         if (IS_DEFAULT_NOW_OBJ(def_obj)) {
           const int16_t scale = column_schema.get_data_scale();
           if (OB_FAIL(databuff_printf(buf, buf_len, pos, N_UPPERCASE_CUR_TIMESTAMP))) {
-            LOG_WARN("fail to print default_datetime_func_name", K(ret));
           } else if (scale != 0 && OB_FAIL(databuff_printf(buf, buf_len, pos, "(%d)", scale))) {
             LOG_WARN("fail to print scale", K(ret), K(scale));
           } else {
@@ -556,29 +508,16 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           cur_row_.cells_[cell_idx].set_varchar(def_obj.get_string());
           cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
         } else if (def_obj.is_null()) {
-          if (lib::is_oracle_mode()) {
-            cur_row_.cells_[cell_idx].set_varchar("NULL");// Note: default value is NULL when displayed as a string
-          } else {
-            cur_row_.cells_[cell_idx].set_null();//in mysql mode, should not be filled with string "NULL";
-          }
+          cur_row_.cells_[cell_idx].set_null();//in mysql mode, should not be filled with string "NULL";
           cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
         } else if (def_obj.is_bit()) {
           if (OB_FAIL(def_obj.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
-            LOG_WARN("fail to print varchar literal", K(ret), K(def_obj), K(buf_len), K(pos), K(buf));
           } else {
             cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
             cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
           }
         } else if (ob_is_enum_or_set_type(def_obj.get_type())) {
           if (OB_FAIL(def_obj.print_plain_str_literal(column_schema.get_extended_type_info(), buf, buf_len, pos))) {
-            LOG_WARN("fail to print plain str literal",  K(column_schema), K(buf), K(buf_len), K(pos), K(ret));
-          } else {
-            cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
-            cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
-          }
-        } else if (ob_is_roaringbitmap(def_obj.get_type())) {
-          if (OB_FAIL(def_obj.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
-            LOG_WARN("fail to print varchar literal", K(ret), K(def_obj), K(buf_len), K(pos), K(buf));
           } else {
             cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
             cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
@@ -595,7 +534,6 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           ObObj buf_obj;
           const ObObj *res_obj_ptr = NULL;
           if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, def_obj, buf_obj, res_obj_ptr))) {
-            LOG_WARN("failed to cast object to ObVarcharType ", K(ret), K(def_obj));
           } else if (OB_UNLIKELY(NULL == res_obj_ptr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("cast result is NULL", K(ret), K(res_obj_ptr));
@@ -622,7 +560,6 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
               ret = OB_ALLOCATE_MEMORY_FAILED;
               SERVER_LOG(WARN, "fail to allocate memory", K(ret));
             } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s(%d)", N_UPDATE_CURRENT_TIMESTAMP, scale))) {
-              SHARE_SCHEMA_LOG(WARN, "fail to print on update current_tiemstamp", K(ret));
             } else {
               extra_val = ObString(static_cast<int32_t>(pos), buf);
             }
@@ -646,30 +583,26 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
               MEMCPY(buf, extra_val.ptr(), extra_val.length());
               pos += extra_val.length();
               if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, " "))) {
-                LOG_WARN("failed to print buf", K(ret));
               }
             }
 
             bool first_skip_idx_attr_printed = false;
             if (OB_SUCC(ret)) {
               if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, "SKIP_INDEX("))) {
-                LOG_WARN("failed to print buf", K(ret));
               }
             }
 
             if (OB_SUCC(ret) && column_schema.get_skip_index_attr().has_min_max()) {
               if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, "MIN_MAX"))) {
-                LOG_WARN("failed to print buf", K(ret));
               } else {
                 first_skip_idx_attr_printed = true;
               }
             }
 
             if (OB_SUCC(ret) && column_schema.get_skip_index_attr().has_sum()) {
-              if (first_skip_idx_attr_printed && OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+              if (first_skip_idx_attr_printed && OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, ", "))) {
                 LOG_WARN("fail to print buf", K(ret));
               } else if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, "SUM"))) {
-                LOG_WARN("failed to print buf", K(ret));
               } else {
                 first_skip_idx_attr_printed = true;
               }
@@ -677,7 +610,6 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
 
             if (OB_SUCC(ret)) {
               if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, ")"))) {
-                LOG_WARN("failed to print buf", K(ret));
               } else {
                 extra_val = ObString(pos, buf);
               }
@@ -685,7 +617,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           }
         }
 
-        if (OB_SUCC(ret) && lib::is_mysql_mode() && column_schema.is_invisible_column()) {
+        if (OB_SUCC(ret) && column_schema.is_invisible_column()) {
           int64_t append_len = sizeof("INVISIBLE");
           int64_t cur_len = extra_val.length();
 
@@ -727,28 +659,13 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         } else if (OB_UNLIKELY(NULL == db_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("database schema is null", K(ret), KP(db_schema));
-        } else if (is_oracle_mode) {
-          ObNeedPriv need_priv(db_schema->get_database_name(), 
-                               table_schema.get_table_name(),
-                               OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
-          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_SELECT, "SELECT,",
-                             buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_INSERT, "INSERT,",
-                             buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_UPDATE, "UPDATE,",
-                             buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_DELETE, "DELETE,",
-                             buf, buf_len, pos));
-          OZ (fill_col_privs(session_priv, enable_role_id_array, need_priv, OB_PRIV_REFERENCES, "REFERENCES,",
-                             buf, buf_len, pos));
-          
         } else {
-          ObNeedPriv need_priv(db_schema->get_database_name(), 
+          ObNeedPriv need_priv(db_schema->get_database_name(),
                       table_schema.get_table_name(),
                       OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
 
           need_priv.priv_set_ = OB_PRIV_SELECT;
-          if (0 != (col_priv_set & OB_PRIV_SELECT) 
+          if (0 != (col_priv_set & OB_PRIV_SELECT)
               || OB_SUCCESS == schema_guard_->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
             ret = databuff_printf(buf, buf_len, pos, "SELECT,");
           }
@@ -815,10 +732,9 @@ int ObTableColumns::fill_row_cells(
 {
   int ret = OB_SUCCESS;
   uint64_t cell_idx = 0;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
+  
   const uint64_t table_id = table_schema.get_table_id();
   ColumnAttributes column_attributes;
-  bool is_oracle_mode = false;
   if (OB_ISNULL(cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data member is not init", K(ret), K(cur_row_.cells_));
@@ -829,14 +745,10 @@ int ObTableColumns::fill_row_cells(
         K(ret),
         K(cur_row_.count_),
         K(output_column_ids_.count()));
-  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
-             tenant_id, table_id, is_oracle_mode))) {
-    LOG_WARN("fail to check oracle mode", KR(ret), K(table_id));
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret));
-  } else if (OB_FAIL(deduce_column_attributes(is_oracle_mode,
-                                              table_schema,
+  } else if (OB_FAIL(deduce_column_attributes(table_schema,
                                               select_stmt,
                                               select_item,
                                               schema_guard_,
@@ -846,8 +758,6 @@ int ObTableColumns::fill_row_cells(
                                               column_attributes,
                                               false,
                                               *allocator_))) {
-    LOG_WARN("failed to deduce column attributes",
-             K(select_item), K(ret));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < output_column_ids_.count(); ++j) {
       uint64_t col_id = output_column_ids_.at(j);
@@ -863,9 +773,6 @@ int ObTableColumns::fill_row_cells(
           break;
         }
       case TYPE: {
-          if (is_oracle_mode) {
-            ObCharset::caseup(ObCollationType::CS_TYPE_UTF8MB4_BIN, column_attributes.type_);
-          }
           cur_row_.cells_[cell_idx].set_varchar(column_attributes.type_);
           cur_row_.cells_[cell_idx].set_collation_type(
               ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -943,7 +850,6 @@ const ObRawExpr *ObTableColumns::skip_inner_added_expr(const ObRawExpr *expr)
 }
 
 int ObTableColumns::deduce_column_attributes(
-    const bool is_oracle_mode,
     const ObTableSchema &table_schema,
     const ObSelectStmt *select_stmt,
     const SelectItem &select_item,
@@ -988,10 +894,8 @@ int ObTableColumns::deduce_column_attributes(
     }
     if (OB_FAIL(ret)) {
     } else if (ObRawExpr::EXPR_COLUMN_REF == expr->get_expr_class()) {
-      if (OB_FAIL(set_col_attrs_according_binary_expr(session->get_effective_tenant_id(),
-                                                      select_stmt, expr, schema_guard,
+      if (OB_FAIL(set_col_attrs_according_binary_expr(select_stmt, expr, schema_guard,
                                                       nullable, has_default, is_string_lob))) {
-        LOG_WARN("fail to get null and default for binary expr", K(ret));
       }
     } else if (expr->is_json_expr()
                || (T_FUN_SYS_CAST == expr->get_expr_type() && ob_is_json(expr->get_result_type().get_type()))
@@ -1008,10 +912,8 @@ int ObTableColumns::deduce_column_attributes(
         } else {
           switch (t_expr->get_expr_class()) {
           case ObRawExpr::EXPR_COLUMN_REF:
-            if (OB_FAIL(set_col_attrs_according_binary_expr(session->get_effective_tenant_id(),
-                                                            select_stmt, t_expr, schema_guard,
+            if (OB_FAIL(set_col_attrs_according_binary_expr(select_stmt, t_expr, schema_guard,
                                                             nullable, has_default, is_string_lob))) {
-              LOG_WARN("fail to get null and default for binary expr", K(ret));
             }
             break;
           default:
@@ -1026,16 +928,11 @@ int ObTableColumns::deduce_column_attributes(
     //TODO(yts): should get types_info from expr, wait for yyy
     const ObRawExprResType &result_type = select_item.expr_->get_result_type();
     ObLength char_len = result_type.get_length();
-    const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
+    const ObLengthSemantics default_length_semantics = session->get_default_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
     uint64_t sub_type = static_cast<uint64_t>(ObGeoType::GEOTYPEMAX);
     ObArray<ObString> extend_type_info;
 
-    if (is_oracle_mode
-        && ((result_type.is_varchar_or_char()
-             && precision_or_length_semantics == default_length_semantics))) {
-      precision_or_length_semantics = LS_DEFAULT;
-    }
     if (ob_is_geometry(result_type.get_type())) {
       if (select_item.expr_->is_column_ref_expr()) {
         const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(select_item.expr_);
@@ -1055,7 +952,6 @@ int ObTableColumns::deduce_column_attributes(
       if (OB_FAIL(ObRawExprUtils::extract_extended_type_info(select_item.expr_,
                                                              session,
                                                              extend_type_info))) {
-        LOG_WARN("failed to extract extended type info", K(ret));
       }
     }
     if (OB_SUCC(ret) && !skip_type_str) {
@@ -1071,85 +967,74 @@ int ObTableColumns::deduce_column_attributes(
                                   extend_type_info,
                                   sub_type,
                                   is_string_lob))) {
-        LOG_WARN("fail to get data type str", K(ret));
       } else {
-        LOG_DEBUG("succ to ob_sql_type_str", K(ret), K(result_type), K(select_stmt), KPC(select_item.expr_), K(precision_or_length_semantics));
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (!is_oracle_mode) {
-      ObSessionPrivInfo session_priv;
-      const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
-      session->get_session_priv_info(session_priv);
-      const ObSimpleDatabaseSchema *db_schema = NULL;
-      const ObColumnPriv *column_priv = NULL;
-      if (OB_UNLIKELY(!session_priv.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
-                  "user_id", session_priv.user_id_, K(ret));
-      } else if (table_schema.get_database_id() == OB_INVALID_ID) {
-        ret = OB_ERR_BAD_DATABASE;
-        LOG_WARN("db name not found", K(ret));
-      } else if (OB_FAIL(schema_guard->get_database_schema(table_schema.get_tenant_id(), 
-                                                           table_schema.get_database_id(), 
-                                                           db_schema))) {
-        LOG_WARN("get database schema failed", K(ret));
-      } else if (OB_ISNULL(db_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("db schema is null", K(ret));
-      } else if (OB_FAIL(schema_guard->get_column_priv(ObColumnPrivSortKey(session_priv.tenant_id_, 
-                                                                           session_priv.user_id_, 
-                                                                           db_schema->get_database_name_str(), 
-                                                                           table_schema.get_table_name_str(), 
-                                                                           select_item.alias_name_), 
-                                                     column_priv))) {
-        LOG_WARN("get column priv failed", K(ret));
-      } else {
-        ObNeedPriv need_priv(db_schema->get_database_name(), 
-                    table_schema.get_table_name(),
-                    OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
-        ObPrivSet col_priv_set = 0;
-        if (column_priv != NULL) {
-          col_priv_set = column_priv->get_priv_set();
+    ObSessionPrivInfo session_priv;
+    const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
+    session->get_session_priv_info(session_priv);
+    const ObSimpleDatabaseSchema *db_schema = NULL;
+    const ObColumnPriv *column_priv = NULL;
+    if (OB_UNLIKELY(!session_priv.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Session priv is invalid",
+               "user_id", session_priv.user_id_, K(ret));
+    } else if (table_schema.get_database_id() == OB_INVALID_ID) {
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_WARN("db name not found", K(ret));
+    } else if (OB_FAIL(schema_guard->get_database_schema(
+                                                         table_schema.get_database_id(),
+                                                         db_schema))) {
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("db schema is null", K(ret));
+    } else if (OB_FAIL(schema_guard->get_column_priv(ObColumnPrivSortKey(session_priv.user_id_,
+                                                                         db_schema->get_database_name_str(),
+                                                                         table_schema.get_table_name_str(),
+                                                                         select_item.alias_name_),
+                                                   column_priv))) {
+    } else {
+      ObNeedPriv need_priv(db_schema->get_database_name(),
+                          table_schema.get_table_name(),
+                          OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
+      ObPrivSet col_priv_set = 0;
+      if (column_priv != NULL) {
+        col_priv_set = column_priv->get_priv_set();
+      }
+      if (0 != (col_priv_set & OB_PRIV_SELECT)
+          || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
+        if (OB_FAIL(priv.append("SELECT,"))) {
         }
-        if (0 != (col_priv_set & OB_PRIV_SELECT)
+      }
+      need_priv.priv_set_ = OB_PRIV_INSERT;
+      if (OB_SUCC(ret)) {
+        if (0 != (col_priv_set & OB_PRIV_INSERT)
             || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
-          if (OB_FAIL(priv.append("SELECT,"))) {
-            LOG_WARN("append failed", K(ret));
+          if (OB_FAIL(priv.append("INSERT,"))) {
           }
         }
-        need_priv.priv_set_ = OB_PRIV_INSERT;
-        if (OB_SUCC(ret)) {
-          if (0 != (col_priv_set & OB_PRIV_INSERT)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
-            if (OB_FAIL(priv.append("INSERT,"))) {
-              LOG_WARN("append failed", K(ret));
-            }
+      }
+      need_priv.priv_set_ = OB_PRIV_UPDATE;
+      if (OB_SUCC(ret)) {
+        if (0 != (col_priv_set & OB_PRIV_UPDATE)
+            || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
+          if (OB_FAIL(priv.append("UPDATE,"))) {
           }
         }
-        need_priv.priv_set_ = OB_PRIV_UPDATE;
-        if (OB_SUCC(ret)) {
-          if (0 != (col_priv_set & OB_PRIV_UPDATE)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
-            if (OB_FAIL(priv.append("UPDATE,"))) {
-              LOG_WARN("append failed", K(ret));
-            }
+      }
+      need_priv.priv_set_ = OB_PRIV_REFERENCES;
+      if (OB_SUCC(ret)) {
+        if (0 != (col_priv_set & OB_PRIV_REFERENCES)
+            || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
+          if (OB_FAIL(priv.append("REFERENCES,"))) {
           }
         }
-        need_priv.priv_set_ = OB_PRIV_REFERENCES;
-        if (OB_SUCC(ret)) {
-          if (0 != (col_priv_set & OB_PRIV_REFERENCES)
-              || OB_SUCCESS == schema_guard->check_single_table_priv(session_priv, enable_role_id_array, need_priv)) {
-            if (OB_FAIL(priv.append("REFERENCES,"))) {
-              LOG_WARN("append failed", K(ret));
-            }
-          }
-        }
-        if (OB_SUCC(ret) && !priv.empty()) {
-          priv.set_length(priv.length() - 1);
-        }
+      }
+      if (OB_SUCC(ret) && !priv.empty()) {
+        priv.set_length(priv.length() - 1);
       }
     }
   }
@@ -1179,9 +1064,7 @@ int ObTableColumns::deduce_column_attributes(
   return ret;
 }
 
-int ObTableColumns::set_col_attrs_according_binary_expr(
-    const uint64_t tenant_id,
-    const ObSelectStmt *select_stmt,
+int ObTableColumns::set_col_attrs_according_binary_expr(const ObSelectStmt *select_stmt,
     const ObRawExpr *expr,
     share::schema::ObSchemaGetterGuard *schema_guard,
     bool &nullable,
@@ -1205,17 +1088,15 @@ int ObTableColumns::set_col_attrs_according_binary_expr(
     if (OB_UNLIKELY(NULL == (tbl_item = select_stmt->get_table_item_by_id(bexpr->get_table_id())))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is NULL", K(ret), K(tbl_item));
-    } else if (OB_INVALID_ID == tbl_item->ref_id_ || tbl_item->is_link_table()) {
+    } else if (OB_INVALID_ID == tbl_item->ref_id_) {
       // do nothing
-    } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, tbl_item->ref_id_, table_schema))
+    } else if (OB_FAIL(schema_guard->get_table_schema( tbl_item->ref_id_, table_schema))
         || NULL == table_schema) {
       // reset return code to success: view_2.test
       ret = OB_SUCCESS;
-      LOG_WARN("fail to get table schema", K(ret), K(tenant_id), "table_id", tbl_item->ref_id_);
+      LOG_WARN("fail to get table schema", K(ret), "table_id", tbl_item->ref_id_);
     } else if (table_schema->is_table()) {
-      if (OB_FAIL(sql::ObSQLMockSchemaUtils::try_mock_partid(table_schema, table_schema))) {
-        LOG_WARN("failed to try mock rowid column", K(ret));
-      } else if (OB_UNLIKELY(NULL == (column_schema =
+      if (OB_UNLIKELY(NULL == (column_schema =
             table_schema->get_column_schema(bexpr->get_column_id())))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN(" column schema is NULL", K(ret), K(column_schema));
@@ -1245,13 +1126,8 @@ int ObTableColumns::resolve_view_definition(
     ObStmtFactory &stmt_factory,
     bool throw_error) {
   int ret = OB_SUCCESS;
-  /*
-    The previous logic here was to switch tenants before resolving the view definition, however, the resolver layer already has a set of tenant switching logic, having both coexist is difficult to maintain and prone to issues,
-    Now we are modifying it, constructing a select * from view statement, transferring the tenant switching logic to the resolver
-  */
-  bool is_oracle_mode = false;
   const ObDatabaseSchema *db_schema = NULL;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
+  
   if (OB_UNLIKELY(!table_schema.is_view_table()
                   || NULL == allocator
                   || NULL == session
@@ -1259,23 +1135,19 @@ int ObTableColumns::resolve_view_definition(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter or data member", K(ret), K(table_schema.is_view_table()),
         K(allocator), K(session), K(schema_guard));
-  } else if (OB_FAIL(schema_guard->get_database_schema(tenant_id,
+  } else if (OB_FAIL(schema_guard->get_database_schema(
                                                        table_schema.get_database_id(),
                                                        db_schema))) {
-    LOG_WARN("failed to get database_schema", K(ret), K(tenant_id),
-        K(session->get_effective_tenant_id()), K(table_schema.get_database_id()));
   } else if (OB_UNLIKELY(NULL == db_schema)) {
     ret = OB_ERR_BAD_DATABASE;
-    LOG_WARN("db_schema is null", K(ret), K(tenant_id),
-        K(session->get_effective_tenant_id()), K(table_schema.get_database_id()));
-  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
+    LOG_WARN("db_schema is null", K(ret),
+        K(table_schema.get_database_id()));
   } else {
     // construct sql
     const ObString &db_name = db_schema->get_database_name_str();
     const ObString &table_name = table_schema.get_table_name_str();
 #if defined(__ANDROID__)
-    if (lib::is_mysql_mode()) {
+    {
       ObString view_definition;
       ParseResult view_parse_result;
       ObParser view_parser(*allocator, session->get_sql_mode(), session->get_charsets4parser());
@@ -1304,20 +1176,16 @@ int ObTableColumns::resolve_view_definition(
     } else {
 #endif
     ObSqlString select_sql;
-    if (OB_FAIL(select_sql.append_fmt(is_oracle_mode
-                                        ? "select * from \"%.*s\".\"%.*s\""
-                                        : "select * from `%.*s`.`%.*s`",
+    if (OB_FAIL(select_sql.append_fmt("select * from `%.*s`.`%.*s`",
                                       db_name.length(),
                                       db_name.ptr(),
                                       table_name.length(),
                                       table_name.ptr()))) {
-      LOG_WARN("fail to append select sql", K(ret));
     } else {
       ParseResult parse_result;
       ObParser parser(*allocator, session->get_sql_mode(),
                       session->get_charsets4parser());
       if (OB_FAIL(parser.parse(select_sql.string(), parse_result))) {
-        LOG_WARN("parse view definition failed", K(select_sql), K(ret));
       } else {
         ObSchemaChecker schema_checker;
         ObResolverParams resolver_ctx;
@@ -1327,7 +1195,12 @@ int ObTableColumns::resolve_view_definition(
         resolver_ctx.expr_factory_ = &expr_factory;
         resolver_ctx.stmt_factory_ = &stmt_factory;
         resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
-        if (OB_ISNULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx())) {
+        ObSql *sql_engine = get_observer_sql_engine();
+        if (OB_ISNULL(sql_engine)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("SQL engine is null", K(ret));
+        } else if (FALSE_IT(sql_engine->bind_resolver_runtime_services(resolver_ctx))) {
+        } else if (OB_ISNULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create query context failed", K(ret));
         } else {
@@ -1341,7 +1214,6 @@ int ObTableColumns::resolve_view_definition(
             session_id = OB_INVALID_ID;
           }
           if (OB_FAIL(resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_, session_id))) {
-            LOG_WARN("init schema checker failed", K(ret));
           }
         }
         if (OB_SUCC(ret)) {
@@ -1385,12 +1257,17 @@ int ObTableColumns::resolve_view_definition(
           }
         }
         int tmp_ret = OB_SUCCESS;
-        bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
+        bool reset_column_infos = false;
         if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
           LOG_WARN("failed to resolve view", K(ret));
-        } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
+        } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret)) {
           // do nothing
-        } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
+        } else if (OB_ISNULL(sql_engine)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("SQL engine is null", K(tmp_ret));
+        } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(
+            table_schema, select_stmt, reset_column_infos, *allocator, *session,
+            sql_engine->get_dep_info_queue()))) {
           LOG_WARN("failed to add recompile view task", K(tmp_ret));
           if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
             tmp_ret = OB_SUCCESS; //ignore
@@ -1440,13 +1317,11 @@ int ObTableColumns::is_unique_key(const ObTableSchema &table_schema,
     LOG_WARN("data member or parameter is NULL", K(ret), K(schema_guard_));
   } else if (OB_FAIL(table_schema.get_simple_index_infos(
                      simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
       const ObTableSchema *index_schema = NULL;
-      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+      if (OB_FAIL(schema_guard_->get_table_schema(
                          simple_index_infos.at(i).table_id_, index_schema))) {
-        LOG_WARN("fail to get table schema", K(ret));
       } else if (OB_UNLIKELY(NULL == index_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
@@ -1454,7 +1329,6 @@ int ObTableColumns::is_unique_key(const ObTableSchema &table_schema,
         const ObIndexInfo &index_info = index_schema->get_index_info();
         uint64_t column_id = OB_INVALID_ID;
         if (OB_FAIL(index_info.get_column_id(0, column_id))) {
-          LOG_WARN("get index column id fail", K(ret));
         } else if (column_schema.get_column_id() == column_id) {
           tmp_unique = true;
         } else {/*do nothing*/}
@@ -1479,7 +1353,6 @@ int ObTableColumns::is_multiple_key(const ObTableSchema &table_schema,
     LOG_WARN("data member or parameter is NULL", K(ret), K(schema_guard_));
   } else if (OB_FAIL(table_schema.get_simple_index_infos(
                      simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
   } else {
     // 3 situations will make a column display as MUL
     // 1.first column of non-unique index
@@ -1487,9 +1360,8 @@ int ObTableColumns::is_multiple_key(const ObTableSchema &table_schema,
     // 3.spatial_index
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
       const ObTableSchema *index_schema =  NULL;
-      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+      if (OB_FAIL(schema_guard_->get_table_schema(
                  simple_index_infos.at(i).table_id_, index_schema))) {
-        SERVER_LOG(WARN, "fail to get table schema", K(ret));
       } else if (OB_UNLIKELY(NULL == index_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
@@ -1498,7 +1370,6 @@ int ObTableColumns::is_multiple_key(const ObTableSchema &table_schema,
         const ObIndexInfo &index_info = index_schema->get_index_info();
         uint64_t column_id = OB_INVALID_ID;
         if (OB_FAIL(index_info.get_column_id(0, column_id))) {
-          LOG_WARN("get index column id fail", K(ret));
         } else if (column_schema.get_column_id() == column_id) {
           tmp_mul = true;
         } else {/*do nothing*/}
@@ -1523,15 +1394,12 @@ int ObTableColumns::get_key_type(const ObTableSchema &table_schema,
   bool is_uni = false;
   bool is_mul = false;
   if (OB_FAIL(is_primary_key(table_schema, column_schema, is_pri))) {
-    LOG_WARN("judge primary key fail", K(ret));
   } else if (is_pri) {
     tmp_key_type = KEY_TYPE_PRIMARY;
   } else if (OB_FAIL(is_unique_key(table_schema, column_schema, is_uni))){
-    LOG_WARN("judge primary key fail", K(ret));
   } else if (is_uni) {
     tmp_key_type = KEY_TYPE_UNIQUE;
   } else if (OB_FAIL(is_multiple_key(table_schema, column_schema, is_mul))){
-    LOG_WARN("judge multiple key fail", K(ret));
   } else if (is_mul) {
     tmp_key_type = KEY_TYPE_MULTIPLE;
   } else {

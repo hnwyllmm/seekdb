@@ -17,6 +17,7 @@
 #ifndef OCEANBASE_SCHEMA_COLUMN_SCHEMA_H_
 #define OCEANBASE_SCHEMA_COLUMN_SCHEMA_H_
 #include "share/ob_define.h"
+#include "share/session/ob_local_session_var.h"
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
@@ -66,7 +67,7 @@ bool operator!=(const ObColumnSchemaV2 &r) const;
 int assign(const ObColumnSchemaV2 &src_schema);
 
 //set methods
-  inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
+  
   inline void set_table_id(const uint64_t id) { table_id_ = id; }
   inline void set_column_id(const uint64_t id) { column_id_ = id; }
   inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
@@ -145,7 +146,6 @@ int assign(const ObColumnSchemaV2 &src_schema);
   int add_type_info(const common::ObString &type_info);
   inline void set_prev_column_id(const uint64_t id) { prev_column_id_ = id; }
   inline void set_next_column_id(const uint64_t id) { next_column_id_ = id; }
-  inline void set_sequence_id(uint64_t sequence_id) { sequence_id_ = sequence_id; }
   inline void set_encoding_type(const int64_t type) { encoding_type_ = type; }
   int add_cascaded_column_id(uint64_t column_id);
   int del_cascaded_column_id(const uint64_t column_id);
@@ -160,7 +160,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void set_skip_index_attr(const uint64_t attr_val) { skip_index_attr_.set_column_attr(attr_val); }
   inline void set_is_string_lob() { add_column_flag(STRING_LOB_COLUMN_FLAG); }
   //get methods
-  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  
   inline uint64_t get_table_id() const { return table_id_; }
   inline uint64_t get_column_id() const { return column_id_; }
   inline uint64_t& get_column_id() { return column_id_; }
@@ -186,9 +186,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline uint32_t get_srid() const { return srs_info_.srid_; }
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
   inline const ObSkipIndexColumnAttr &get_skip_index_attr() const { return skip_index_attr_; }
-  // Be careful with this interface, is_nullable_ is set only in Mysql mode and
-  // for primary key and identity column in Oracle mode.
-	// is_nullable() is usually used in Mysql mode, also used when schema interacts with inner table.
+  // Be careful with this interface, is_nullable_ is usually used in MySQL mode
+  // and when schema interacts with inner table.
   // Following function is_not_null_for_read and is_not_null_for_write is more practical.
 	// More info: 
   inline bool is_nullable() const { return is_nullable_; }
@@ -198,7 +197,6 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_string_type() const { return meta_type_.is_string_type(); }
   inline bool is_json() const { return meta_type_.is_json(); }
   inline bool is_geometry() const { return meta_type_.is_geometry(); }
-  inline bool is_roaringbitmap() const { return meta_type_.is_roaringbitmap(); }
   inline bool is_decimal_int() const { return meta_type_.is_decimal_int(); }
   inline bool is_string_lob() const { return column_flags_ & STRING_LOB_COLUMN_FLAG; }
   inline bool is_key_forbid_lob() const { return ob_is_text_tc(meta_type_.get_type()) && !is_string_lob(); }
@@ -218,14 +216,13 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline common::ObIArray<common::ObString> &get_extended_type_info() { return extended_type_info_; }
   inline uint64_t get_prev_column_id() const { return prev_column_id_; }
   inline uint64_t get_next_column_id() const { return next_column_id_; }
-  inline uint64_t get_sequence_id() const { return sequence_id_; }
   inline int64_t get_encoding_type() const { return encoding_type_; }
 
   inline int64_t get_cte_generate_column_projector_offset() const { return get_column_id() - common::OB_APP_MIN_COLUMN_ID;}
-  // true: primary key/hidden primary key(pk_increment/cluster_id/parition_id)/partitioned key of no-pk tables
+  // true: primary key/hidden primary key (pk_increment/partition_id)/partition key of no-PK tables
   inline bool is_rowkey_column() const { return rowkey_position_ > 0; }
-  // true: primary key/hidden primary key(pk_increment/cluster_id/parition_id)
-  // false: ordinary column/partitioned key of no-pk tables
+  // true: primary key/hidden primary key (pk_increment/partition_id)
+  // false: ordinary column/partition key of no-PK tables
   inline bool is_original_rowkey_column() const
   {
     return rowkey_position_ > 0 && !is_heap_alter_rowkey_column();
@@ -240,14 +237,9 @@ int assign(const ObColumnSchemaV2 &src_schema);
   { return !(is_virtual_generated_column() && !is_heap_alter_rowkey_column()); }
   inline bool is_virtual_generated_column() const { return column_flags_ & VIRTUAL_GENERATED_COLUMN_FLAG; }
   inline bool is_stored_generated_column() const { return column_flags_ & STORED_GENERATED_COLUMN_FLAG; }
-  inline bool is_always_identity_column() const { return column_flags_ & ALWAYS_IDENTITY_COLUMN_FLAG; }
-  inline bool is_default_identity_column() const { return column_flags_ & DEFAULT_IDENTITY_COLUMN_FLAG; }
-  inline bool is_default_on_null_identity_column() const { return column_flags_ & DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG; }
   inline bool is_cte_generated_column() const { return column_flags_ & CTE_GENERATED_COLUMN_FLAG; }
   inline bool is_default_expr_v2_column() const { return column_flags_ & DEFAULT_EXPR_V2_COLUMN_FLAG; }
   inline bool is_generated_column() const { return (is_virtual_generated_column() || is_stored_generated_column()); }
-  inline bool is_mock_column() const { return column_flags_ & MOCK_COLUMN_FLAG; }
-  inline bool is_identity_column() const { return is_always_identity_column() || is_default_identity_column() || is_default_on_null_identity_column(); }
   inline bool is_generated_column_using_udf() const { return /*is_generated_column() && global index table clean the virtual gen col flag*/ !!(column_flags_ & GENERATED_COLUMN_UDF_EXPR); }
   // to check whether storing column in index table is specified by user.
   inline bool is_user_specified_storing_column() const { return column_flags_ & USER_SPECIFIED_STORING_COLUMN_FLAG; }
@@ -258,12 +250,6 @@ int assign(const ObColumnSchemaV2 &src_schema);
     del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
     del_column_flag(STORED_GENERATED_COLUMN_FLAG);
     del_column_flag(GENERATED_COLUMN_UDF_EXPR);
-  }
-  inline void erase_identity_column_flags()
-  {
-    del_column_flag(ALWAYS_IDENTITY_COLUMN_FLAG);
-    del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
-    del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
   }
   inline void erase_string_lob_flag()
   {
@@ -306,8 +292,6 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_multivalue_generated_array_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG; }
   inline bool is_domain_index_column() const { return is_vec_index_column() || is_fulltext_column() || is_multivalue_generated_column() || is_multivalue_generated_array_column(); }
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
-  inline bool is_primary_vp_column() const { return column_flags_ & PRIMARY_VP_COLUMN_FLAG; }
-  inline bool is_aux_vp_column() const { return column_flags_ & AUX_VP_COLUMN_FLAG; }
   inline bool is_invisible_column() const { return column_flags_ & INVISIBLE_COLUMN_FLAG; }
   inline bool has_column_flag(int64_t flag) const { return column_flags_ & flag; }
   inline int64_t get_column_flags() const { return column_flags_; }
@@ -333,8 +317,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void add_column_flag(int64_t flag) { column_flags_ |= flag; }
   inline void del_column_flag(int64_t flag) { column_flags_ &= ~flag; }
   inline void add_or_del_column_flag(int64_t flag, bool is_add);
-  inline bool is_shadow_column() const { return (column_id_ > common::OB_MIN_SHADOW_COLUMN_ID)
-                                                && !is_mlog_special_column(column_id_); }
+  inline bool is_shadow_column() const { return column_id_ > common::OB_MIN_SHADOW_COLUMN_ID; }
   inline bool is_on_update_current_timestamp() const { return on_update_current_timestamp_; }
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
 
@@ -354,7 +337,6 @@ int assign(const ObColumnSchemaV2 &src_schema);
   void reset();
   int get_byte_length(
       int64_t &length,
-      const bool is_oracle_mode,
       const bool for_check_length) const;
 
   int convert_column_id(const hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
@@ -362,25 +344,13 @@ int assign(const ObColumnSchemaV2 &src_schema);
   int serialize_extended_type_info(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_extended_type_info(const char *buf, const int64_t data_len, int64_t &pos);
 
-  int get_vp_table_ids(uint64_t *vp_tid_array, int64_t &vp_cnt) const
-  {
-    int ret = common::OB_SUCCESS;
-    // Column can't be shared by multi vertical-partitioned tables,
-    // so we assume each column has only one vp table at most.
-    vp_cnt = 1;
-    vp_tid_array[0] = table_id_;
-    return ret;
-  }
-
-  int get_each_column_group_name(ObString &cg_name) const;
-  inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
-  inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+  inline share::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const share::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
   int is_same_collection_column(const ObColumnSchemaV2 &other, bool &is_same) const;
   DECLARE_VIRTUAL_TO_STRING;
 private:
   int alloc_column_ref_set();
 private:
-  uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t column_id_;
   int64_t schema_version_;
@@ -414,7 +384,6 @@ private:
   uint64_t prev_column_id_;
   uint64_t next_column_id_;
   int64_t encoding_type_; // for test, no need serialization
-  uint64_t sequence_id_; // for identity column, used for find a sequence schema; store in orig_default_value_
   union {
     struct {
       uint32_t geo_type_ : 5;
@@ -428,7 +397,7 @@ private:
   uint64_t sub_type_;
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
-  sql::ObLocalSessionVar local_session_vars_;
+  share::ObLocalSessionVar local_session_vars_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

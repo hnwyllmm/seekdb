@@ -18,7 +18,6 @@
 #define OCEANBASE_STORAGE_OB_TABLET_POINTER_MAP_H_
 
 #include "lib/allocator/page_arena.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
@@ -74,19 +73,13 @@ public:
       const ObMetaDiskAddr &old_addr,
       const ObMetaDiskAddr &new_addr,
       const bool set_pool /* whether to set pool */,
-      ObITenantMetaObjPool *pool);
+      ObIStorageMetaObjPool *pool);
   template <typename Operator> int for_each_value_store(Operator &op);
   int wash_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard, void *&free_obj);
   int64_t count() const { return ResourceMap::map_.size(); }
   OB_INLINE int64_t max_count() const { return ATOMIC_LOAD(&max_count_); }
 
 private:
-  #ifdef OB_BUILD_SHARED_STORAGE
-  int check_and_get_latest_addr(
-      const ObTabletMapKey &key,
-      ObTabletPointer &meta_pointer,
-      ObMetaDiskAddr &disk_addr) const;
-  #endif
   static int read_from_disk(
       const bool is_full_load,
       const int64_t ls_epoch,
@@ -150,7 +143,6 @@ int ObTabletPointerMap::for_each_value_store(Operator &op)
       } else {
         locked = true;
         if (OB_FAIL(ResourceMap::map_.foreach_refactored(op))) {
-          STORAGE_LOG(WARN, "fail to foreach refactored", K(ret));
         }
       }
     }

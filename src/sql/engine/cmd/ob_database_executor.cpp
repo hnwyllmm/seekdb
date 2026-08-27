@@ -14,16 +14,20 @@
  * limitations under the License.
  */
 #define USING_LOG_PREFIX SQL_ENG
+#include "share/ob_server_struct.h"
 #include "sql/engine/cmd/ob_database_executor.h"
+#include "query/command/ob_root_service_serialization.h"
+#include "query/command/ob_root_command_service.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
+#include "share/ob_ex_rpc.h"
 #include "sql/resolver/ddl/ob_use_database_stmt.h"
 #include "sql/resolver/ddl/ob_alter_database_stmt.h"
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
-#include "sql/resolver/ddl/ob_flashback_stmt.h"
+#include "sql/resolver/ddl/ob_recyclebin_restore_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/resolver/ddl/ob_fork_database_stmt.h"
-#include "observer/ob_server_event_history_table_operator.h"
+#include "share/ob_structured_event_logger.h"
 
 namespace oceanbase
 {
@@ -41,46 +45,29 @@ ObCreateDatabaseExecutor::~ObCreateDatabaseExecutor()
 int ObCreateDatabaseExecutor::execute(ObExecContext &ctx, ObCreateDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx *task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  const obrpc::ObCreateDatabaseArg &create_database_arg = stmt.get_create_database_arg();
-  obrpc::ObCreateDatabaseArg &tmp_arg = const_cast<obrpc::ObCreateDatabaseArg&>(create_database_arg);
+  const obcall::ObCreateDatabaseArg &create_database_arg = stmt.get_create_database_arg();
+  obcall::ObCreateDatabaseArg &tmp_arg = const_cast<obcall::ObCreateDatabaseArg&>(create_database_arg);
   ObString first_stmt;
-  obrpc::UInt64 database_id(0);
+  obcall::UInt64 database_id(0);
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
-    ret = OB_NOT_INIT;
-    SQL_ENG_LOG(WARN, "get task executor context failed");
-  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));
-   } else if (OB_ISNULL(common_rpc_proxy)
-              || OB_ISNULL(ctx.get_physical_plan_ctx())) {
+  } else if (OB_ISNULL(ctx.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "fail to get physical plan ctx", K(ret), K(ctx), K(common_rpc_proxy));
+    SQL_ENG_LOG(WARN, "fail to get physical plan ctx", K(ret), K(ctx));
+  } else if (OB_ISNULL(ctx.get_root_command_service())) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "local_management_service_ not initialized");
   } else {
-    // Why does the create database protocol need to return database_id, it's not being used for now.
-    if (OB_FAIL(common_rpc_proxy->create_database(create_database_arg, database_id))) {
-      SQL_ENG_LOG(WARN, "rpc proxy create table failed", K(ret));
+    // sync_call: direct business call, bypasses entire RPC stack
+    if (OB_FAIL(oceanbase::query::serialize_root_service_call([&]{ return ctx.root_command_service().create_database(create_database_arg, database_id); }))) {
     } else {
       ctx.get_physical_plan_ctx()->set_affected_rows(1);
     }
   }
-  if (OB_NOT_NULL(common_rpc_proxy)) {
-    SERVER_EVENT_ADD("ddl", "create database execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "rpc_dst", common_rpc_proxy->get_server(),
-      "database_info", database_id, 
-      "schema_version", create_database_arg.database_schema_.get_schema_version());
-  }
-  SQL_ENG_LOG(INFO, "finish execute create database.", K(ret), "ddl_event_info", ObDDLEventInfo());
+  SQL_ENG_LOG(INFO, "finish execute create database.", K(ret));
   return ret;
 }
 
@@ -101,29 +88,15 @@ int ObUseDatabaseExecutor::execute(ObExecContext &ctx, ObUseDatabaseStmt &stmt)
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "session is NULL");
   } else {
-    const bool is_oceanbase_db = is_oceanbase_sys_database_id(stmt.get_db_id());
-    if (session->is_tenant_changed() && !is_oceanbase_db) {
-      ret = OB_OP_NOT_ALLOW;
-      SQL_ENG_LOG(WARN, "tenant changed, access non oceanbase database not allowed", K(ret), K(stmt),
-                  "login_tenant_id", session->get_login_tenant_id(),
-                  "effective_tenant_id", session->get_effective_tenant_id());
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant changed, access non oceanbase database");
+    ObCollationType db_coll_type = ObCharset::collation_type(stmt.get_db_collation());
+    if (OB_UNLIKELY(CS_TYPE_INVALID == db_coll_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(ERROR, "invalid collation", K(ret), K(stmt.get_db_name()), K(stmt.get_db_collation()));
+    } else if (OB_FAIL(session->set_default_database(stmt.get_db_name(), db_coll_type))) {
     } else {
-      ObCollationType db_coll_type = ObCharset::collation_type(stmt.get_db_collation());
-      ObObj catalog_id_obj;
-      catalog_id_obj.set_uint64(stmt.get_catalog_id());
-      if (OB_UNLIKELY(CS_TYPE_INVALID == db_coll_type)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(ERROR, "invalid collation", K(ret), K(stmt.get_db_name()), K(stmt.get_db_collation()));
-      } else if (OB_FAIL(session->update_sys_variable(ObSysVarClassType::SYS_VAR__CURRENT_DEFAULT_CATALOG, catalog_id_obj))) {
-        SQL_ENG_LOG(WARN, "set catalog id session variable failed", K(ret));
-      } else if (OB_FAIL(session->set_default_database(stmt.get_db_name(), db_coll_type))) {
-        SQL_ENG_LOG(WARN, "fail to set default database", K(ret), K(stmt.get_db_name()), K(stmt.get_db_collation()), K(db_coll_type));
-      } else {
-        session->set_db_priv_set(stmt.get_db_priv_set());
-        SQL_ENG_LOG(INFO, "use default database", "db", stmt.get_db_name());
-        session->set_database_id(stmt.get_db_id());
-      }
+      session->set_db_priv_set(stmt.get_db_priv_set());
+      SQL_ENG_LOG(INFO, "use default database", "db", stmt.get_db_name());
+      session->set_database_id(stmt.get_db_id());
     }
   }
   return ret;
@@ -141,50 +114,38 @@ ObAlterDatabaseExecutor::~ObAlterDatabaseExecutor()
 int ObAlterDatabaseExecutor::execute(ObExecContext &ctx, ObAlterDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx *task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  const obrpc::ObAlterDatabaseArg &alter_database_arg = stmt.get_alter_database_arg();
-  obrpc::ObAlterDatabaseArg &tmp_arg = const_cast<obrpc::ObAlterDatabaseArg&>(alter_database_arg);
+  ObSqlExecutorCtx *task_exec_ctx = NULL;
+  const obcall::ObAlterDatabaseArg &alter_database_arg = stmt.get_alter_database_arg();
+  obcall::ObAlterDatabaseArg &tmp_arg = const_cast<obcall::ObAlterDatabaseArg&>(alter_database_arg);
   ObString first_stmt;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "session is NULL");
   } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  } else if (OB_ISNULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get task executor context failed");
-  } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
-    ret = OB_NOT_INIT;
-    SQL_ENG_LOG(WARN, "get common rpc proxy failed");
-  } else if (OB_FAIL(common_rpc_proxy->alter_database(alter_database_arg))) {
-    SQL_ENG_LOG(WARN, "rpc proxy alter table failed", K(ret));
-  } else if (! stmt.get_alter_option_set().has_member(obrpc::ObAlterDatabaseArg::COLLATION_TYPE)) {
+  } else if (OB_FAIL(query::serialize_root_service_call([&]{ return ctx.root_command_service().alter_database(alter_database_arg); }))) {
+  } else if (! stmt.get_alter_option_set().has_member(obcall::ObAlterDatabaseArg::COLLATION_TYPE)) {
     // do nothing
   } else if (0 == stmt.get_database_name().compare(session->get_database_name())) {
     const int64_t db_coll = static_cast<int64_t>(stmt.get_collation_type());
     if (OB_FAIL(session->update_sys_variable(share::SYS_VAR_CHARACTER_SET_DATABASE, db_coll))) {
-      SQL_ENG_LOG(WARN, "failed to update sys variable", K(ret));
     } else if (OB_FAIL(session->update_sys_variable(share::SYS_VAR_COLLATION_DATABASE, db_coll))) {
-      SQL_ENG_LOG(WARN, "failed to update sys variable", K(ret));
     }
   }
-  if (OB_NOT_NULL(common_rpc_proxy)) {
-    SERVER_EVENT_ADD("ddl", "alter database execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "rpc_dst", common_rpc_proxy->get_server(),
-      "database_info", alter_database_arg.database_schema_.get_database_id(),
-      "schema_version", alter_database_arg.database_schema_.get_schema_version());
-  }
-    SQL_ENG_LOG(INFO, "finish execute alter database", K(ret), "ddl_event_info", ObDDLEventInfo());
+  SERVER_EVENT_ADD("ddl", "alter database execute finish",
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "rpc_dst", GCTX.self_addr(),
+    "database_info", alter_database_arg.database_schema_.get_database_id(),
+    "schema_version", alter_database_arg.database_schema_.get_schema_version());
+  SQL_ENG_LOG(INFO, "finish execute alter database", K(ret), "ddl_event_info", ObDDLEventInfo(GCTX.self_addr()));
   return ret;
 }
 
@@ -201,35 +162,26 @@ ObDropDatabaseExecutor::~ObDropDatabaseExecutor()
 int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTaskExecutorCtx *task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  const obrpc::ObDropDatabaseArg &drop_database_arg = stmt.get_drop_database_arg();
-  obrpc::ObDropDatabaseArg &tmp_arg = const_cast<obrpc::ObDropDatabaseArg&>(drop_database_arg);
+  ObSqlExecutorCtx *task_exec_ctx = NULL;
+  const obcall::ObDropDatabaseArg &drop_database_arg = stmt.get_drop_database_arg();
+  obcall::ObDropDatabaseArg &tmp_arg = const_cast<obcall::ObDropDatabaseArg&>(drop_database_arg);
   ObString first_stmt;
   uint64_t database_id = 0;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  } else if (OB_ISNULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get task executor context failed");
-  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy) || OB_ISNULL(ctx.get_my_session())) {
+  } else if (OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "fail to get my session", K(ctx), K(common_rpc_proxy));
+    SQL_ENG_LOG(WARN, "fail to get my session", K(ctx));
   } else {
-    obrpc::UInt64 affected_row(0);
-    obrpc::ObDropDatabaseRes drop_database_res;
-    const_cast<obrpc::ObDropDatabaseArg&>(drop_database_arg).compat_mode_ = ORACLE_MODE == ctx.get_my_session()->get_compatibility_mode()
-        ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
-    if (OB_FAIL(common_rpc_proxy->drop_database(drop_database_arg, drop_database_res))) {
-      SQL_ENG_LOG(WARN, "rpc proxy drop table failed",
-                  "timeout", THIS_WORKER.get_timeout_remain(), K(ret));
+    obcall::UInt64 affected_row(0);
+    obcall::ObDropDatabaseRes drop_database_res;
+    if (OB_FAIL(query::serialize_root_service_call([&]{ return ctx.root_command_service().drop_database(drop_database_arg, drop_database_res); }))) {
     } else if (OB_ISNULL(ctx.get_physical_plan_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "fail to get physical plan ctx", K(ret), K(ctx));
@@ -237,7 +189,6 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
       ObString null_string;
       ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
       if (OB_FAIL(ctx.get_my_session()->get_name_case_mode(case_mode))) {
-        SQL_ENG_LOG(WARN, "fail to get name case mode from session", K(ret));
       } else if (ObCharset::case_mode_equal(case_mode,
                                             ctx.get_my_session()->get_database_name(),
                                             drop_database_arg.database_name_)) {
@@ -246,7 +197,6 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
           ret = OB_ERR_UNEXPECTED;
           SQL_ENG_LOG(ERROR, "invalid collation", K(ret), K(stmt.get_server_collation()));
         } else if (OB_FAIL(ctx.get_my_session()->set_default_database(null_string, server_coll_type))) {
-          SQL_ENG_LOG(WARN, "fail to set default database", K(ret), K(stmt.get_server_collation()), K(server_coll_type));
         } else {
           ctx.get_my_session()->set_database_id(OB_INVALID_ID);
         }
@@ -256,130 +206,94 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
       ctx.get_physical_plan_ctx()->set_affected_rows(drop_database_res.affected_row_);
     }
   }
-  if (OB_NOT_NULL(common_rpc_proxy)) {
-    SERVER_EVENT_ADD("ddl", "drop database execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "rpc_dst", common_rpc_proxy->get_server(),
-      "database_info", database_id);
-  }
-  SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), "ddl_event_info", ObDDLEventInfo());
+  SERVER_EVENT_ADD("ddl", "drop database execute finish",
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "rpc_dst", GCTX.self_addr(),
+    "database_info", database_id);
+  SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), "ddl_event_info", ObDDLEventInfo(GCTX.self_addr()));
   return ret;
 }
 
-int ObFlashBackDatabaseExecutor::execute(ObExecContext &ctx, ObFlashBackDatabaseStmt &stmt)
+int ObRecyclebinRestoreDatabaseExecutor::execute(ObExecContext &ctx, ObRecyclebinRestoreDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  const obrpc::ObFlashBackDatabaseArg &flashback_database_arg = stmt.get_flashback_database_arg();
-  obrpc::ObFlashBackDatabaseArg &tmp_arg = const_cast<obrpc::ObFlashBackDatabaseArg&>(flashback_database_arg);
-  ObTaskExecutorCtx *task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obcall::ObRecyclebinRestoreDatabaseArg &restore_database_arg = stmt.get_restore_database_arg();
+  obcall::ObRecyclebinRestoreDatabaseArg &tmp_arg = const_cast<obcall::ObRecyclebinRestoreDatabaseArg&>(restore_database_arg);
+  ObSqlExecutorCtx *task_exec_ctx = NULL;
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  } else if (OB_ISNULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get task executor context failed");
-  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)){
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->flashback_database(flashback_database_arg))) {
-    SQL_ENG_LOG(WARN, "rpc proxy flashback database failed", K(ret));
+  } else if (OB_FAIL(query::serialize_root_service_call([&]{ return ctx.root_command_service().restore_database(restore_database_arg); }))) {
   }
 
-  if (OB_NOT_NULL(common_rpc_proxy)) {
-    SERVER_EVENT_ADD("ddl", "flashback database execute finish",
-      "tenant_id", MTL_ID(),
+  SERVER_EVENT_ADD("ddl", "restore database execute finish",
       "ret", ret,
       "trace_id", *ObCurTraceId::get_trace_id(),
-      "rpc_dst", common_rpc_proxy->get_server(),
-      "origin_db_name", flashback_database_arg.origin_db_name_,
-      "new_db_name", flashback_database_arg.new_db_name_);
-  }
-  SQL_ENG_LOG(INFO, "finish execute flashback database.", K(ret), "ddl_event_info", ObDDLEventInfo());
+      "rpc_dst", GCTX.self_addr(),
+      "origin_db_name", restore_database_arg.origin_db_name_,
+      "new_db_name", restore_database_arg.new_db_name_);
+  SQL_ENG_LOG(INFO, "finish execute restore database.", K(ret), "ddl_event_info", ObDDLEventInfo(GCTX.self_addr()));
   return ret;
 }
 
 int ObPurgeDatabaseExecutor::execute(ObExecContext &ctx, ObPurgeDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  const obrpc::ObPurgeDatabaseArg &purge_database_arg = stmt.get_purge_database_arg();
-  obrpc::ObPurgeDatabaseArg &tmp_arg = const_cast<obrpc::ObPurgeDatabaseArg&>(purge_database_arg);
-  ObTaskExecutorCtx *task_exec_ctx = NULL;
-  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  const obcall::ObPurgeDatabaseArg &purge_database_arg = stmt.get_purge_database_arg();
+  obcall::ObPurgeDatabaseArg &tmp_arg = const_cast<obcall::ObPurgeDatabaseArg&>(purge_database_arg);
+  ObSqlExecutorCtx *task_exec_ctx = NULL;
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
     tmp_arg.ddl_stmt_str_ = first_stmt;
-    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  } else if (OB_ISNULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     SQL_ENG_LOG(WARN, "get task executor context failed");
-  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));
-  } else if (OB_ISNULL(common_rpc_proxy)){
-    ret = OB_ERR_UNEXPECTED;
-    SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));
-  } else if (OB_FAIL(common_rpc_proxy->purge_database(purge_database_arg))) {
-    SQL_ENG_LOG(WARN, "rpc proxy purge database failed", K(ret));
+  } else if (OB_FAIL(query::serialize_root_service_call([&]{ return ctx.root_command_service().purge_database(purge_database_arg); }))) {
   }
 
-  if (OB_NOT_NULL(common_rpc_proxy)) {
-    SERVER_EVENT_ADD("ddl", "purge database execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "rpc_dst", common_rpc_proxy->get_server(),
-      "database_info", purge_database_arg.db_name_);
-  }
-  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo());
+  SERVER_EVENT_ADD("ddl", "purge database execute finish",
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "rpc_dst", GCTX.self_addr(),
+    "database_info", purge_database_arg.db_name_);
+  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo(GCTX.self_addr()));
   return ret;
 }
 
 int ObForkDatabaseExecutor::execute(ObExecContext &ctx, ObForkDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  const obrpc::ObForkDatabaseArg &fork_database_arg = stmt.get_fork_database_arg();
-  obrpc::ObForkDatabaseArg &tmp_arg = const_cast<obrpc::ObForkDatabaseArg&>(fork_database_arg);
+  const obcall::ObForkDatabaseArg &fork_database_arg = stmt.get_fork_database_arg();
+  obcall::ObForkDatabaseArg &tmp_arg = const_cast<obcall::ObForkDatabaseArg&>(fork_database_arg);
   ObString first_stmt;
-  obrpc::ObDDLRes res;
+  obcall::ObDDLRes res;
   ObSQLSessionInfo *my_session = nullptr;
 
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    SQL_ENG_LOG(WARN, "get first statement failed", K(ret));
   } else if (OB_ISNULL(my_session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "session is null", K(ret));
   } else {
     // Fillin ddl params.
     tmp_arg.ddl_stmt_str_ = first_stmt;
-    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
     tmp_arg.session_id_ = my_session->get_sessid_for_table();
 
-    ObTaskExecutorCtx *task_exec_ctx = NULL;
-    obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+    ObSqlExecutorCtx *task_exec_ctx = NULL;
 
-    if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    if (OB_ISNULL(task_exec_ctx = GET_SQL_EXECUTOR_CTX(ctx))) {
       ret = OB_NOT_INIT;
       SQL_ENG_LOG(WARN, "get task executor context failed");
-    } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
-      SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));
-    } else if (OB_ISNULL(common_rpc_proxy)){
-      ret = OB_ERR_UNEXPECTED;
-      SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));
-    } else if (OB_FAIL(common_rpc_proxy->fork_database(fork_database_arg, res))) {
-      SQL_ENG_LOG(WARN, "rpc proxy fork database failed", K(ret), K(res), K(fork_database_arg));
+    } else if (OB_FAIL(query::serialize_root_service_call([&]{ return ctx.root_command_service().fork_database(fork_database_arg, res); }))) {
     } else {
       SQL_ENG_LOG(INFO, "fork database executor finished", K(fork_database_arg), K(res));
     }

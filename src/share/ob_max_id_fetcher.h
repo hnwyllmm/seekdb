@@ -18,6 +18,7 @@
 #define OCEANBASE_SHARE_OB_MAX_ID_FETCHER_H_
 
 #include "share/ob_define.h"
+#include "share/ob_i_max_id_cache.h"
 
 namespace oceanbase
 {
@@ -30,63 +31,30 @@ class ObString;
 namespace share
 {
 // represent the different max_used_xxx_id type in __all_sys_stat table
-enum ObMaxIdType
+enum ObMaxIdType : int
 {
-  OB_MAX_USED_TENANT_ID_TYPE,
-  OB_MAX_USED_UNIT_CONFIG_ID_TYPE,
-  OB_MAX_USED_UNIT_ID_TYPE,
-  OB_MAX_USED_RESOURCE_POOL_ID_TYPE,
-  OB_MAX_USED_SERVER_ID_TYPE,
+  OB_MAX_USED_SERVER_ID_TYPE = 4,
   OB_MAX_USED_DDL_TASK_ID_TYPE,
-  OB_MAX_USED_UNIT_GROUP_ID_TYPE,
-  OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE, /* used for tablet_id */
-  OB_MAX_USED_EXTENDED_ROWID_TABLE_TABLET_ID_TYPE,     /* used for tablet_id */
+  OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE = 7, /* used for tablet_id */
   OB_MAX_USED_LS_ID_TYPE,
   OB_MAX_USED_LS_GROUP_ID_TYPE,
   OB_MAX_USED_SYS_PL_OBJECT_ID_TYPE, /* used for sys package object id */
   OB_MAX_USED_OBJECT_ID_TYPE,        /* used for all kinds of user schema objects */
   OB_MAX_USED_LOCK_OWNER_ID_TYPE,
-  OB_MAX_USED_REWRITE_RULE_VERSION_TYPE,
-  OB_MAX_USED_TTL_TASK_ID_TYPE,
 
-  /* OB_MAX_USED_TABLE_ID_TYPE ~ OB_MAX_USED_RLS_CONTEXT_ID_TYPE ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
+  /* The following legacy object id types map to OB_MAX_USED_OBJECT_ID_TYPE. */
   OB_MAX_USED_TABLE_ID_TYPE,
   OB_MAX_USED_DATABASE_ID_TYPE,
   OB_MAX_USED_USER_ID_TYPE,
-  OB_MAX_USED_TABLEGROUP_ID_TYPE,
-  OB_MAX_USED_SEQUENCE_ID_TYPE,
   OB_MAX_USED_OUTLINE_ID_TYPE,
   OB_MAX_USED_CONSTRAINT_ID_TYPE,
-  OB_MAX_USED_SYNONYM_ID_TYPE,
-  OB_MAX_USED_UDF_ID_TYPE,
+  OB_MAX_USED_RESERVED_ID_TYPE,
   OB_MAX_USED_UDT_ID_TYPE,
   OB_MAX_USED_ROUTINE_ID_TYPE,
   OB_MAX_USED_PACKAGE_ID_TYPE,
-  OB_MAX_USED_KEYSTORE_ID_TYPE,
-  OB_MAX_USED_MASTER_KEY_ID_TYPE,
-  OB_MAX_USED_LABEL_SE_POLICY_ID_TYPE,
-  OB_MAX_USED_LABEL_SE_COMPONENT_ID_TYPE,
-  OB_MAX_USED_LABEL_SE_LABEL_ID_TYPE,
-  OB_MAX_USED_LABEL_SE_USER_LEVEL_ID_TYPE,
-  OB_MAX_USED_TABLESPACE_ID_TYPE,
   OB_MAX_USED_TRIGGER_ID_TYPE,
-  OB_MAX_USED_PROFILE_ID_TYPE,
-  OB_MAX_USED_AUDIT_ID_TYPE,
-  OB_MAX_USED_DBLINK_ID_TYPE,
-  OB_MAX_USED_DIRECTORY_ID_TYPE,
-  OB_MAX_USED_CONTEXT_ID_TYPE,
   OB_MAX_USED_PARTITION_ID_TYPE,
-  OB_MAX_USED_RLS_POLICY_ID_TYPE,
-  OB_MAX_USED_RLS_GROUP_ID_TYPE,
-  OB_MAX_USED_RLS_CONTEXT_ID_TYPE,
   /* the following ObMaxIdType will be persisted. */
-  OB_MAX_USED_SERVICE_NAME_ID_TYPE, /*SERVICE_NAME_ID not use OBJECT_ID*/
-  OB_MAX_USED_STORAGE_ID_TYPE, /* used for storage id of zone storage */
-  OB_MAX_USED_STORAGE_OP_ID_TYPE, /* used for storage op id of zone storage */
-  OB_MAX_USED_CATALOG_ID_TYPE,
-  OB_MAX_USED_CCL_RULE_ID_TYPE,
-  OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE,  // OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted.
-  OB_MAX_USED_LOCATION_ID_TYPE,
   OB_MAX_USED_AI_MODEL_ID_TYPE,
   OB_MAX_USED_AI_MODEL_ENDPOINT_ID_TYPE,
   OB_MAX_ID_TYPE,
@@ -96,39 +64,44 @@ class ObMaxIdFetcher
 {
 public:
   explicit ObMaxIdFetcher(common::ObMySQLProxy &proxy);
+  ObMaxIdFetcher(common::ObMySQLProxy &proxy, ObIMaxIdCache *max_id_cache);
   explicit ObMaxIdFetcher(common::ObMySQLProxy &proxy, const int32_t group_id);
   virtual ~ObMaxIdFetcher();
 
   // For generate new object_ids
-  int fetch_new_max_id(const uint64_t tenant_id, ObMaxIdType id_type,
+  int fetch_new_max_id(ObMaxIdType id_type,
                        uint64_t &max_id, const uint64_t initial = UINT64_MAX,
                        const int64_t size = 1);
   int update_server_max_id(const uint64_t max_server_id, const uint64_t next_max_server_id);
   // For generate new tablet_ids
-  int fetch_new_max_ids(const uint64_t tenant_id, ObMaxIdType id_type,
+  int fetch_new_max_ids(ObMaxIdType id_type,
                         uint64_t &id, uint64_t size);
   // For generate new tablet_ids and object_ids
   // id range (max_id - size, max_id]
-  int batch_fetch_new_max_id_from_inner_table(const uint64_t tenant_id, ObMaxIdType id_type,
+  int batch_fetch_new_max_id_from_inner_table(ObMaxIdType id_type,
       uint64_t &max_id, const uint64_t size);
-  int update_max_id(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+  int update_max_id(common::ObISQLClient &sql_client,
                     ObMaxIdType max_id_type, const uint64_t max_id);
   // return OB_ENTRY_NOT_EXIST for %id_type not exist in __all_sys_table
-  static int fetch_max_id(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+  static int fetch_max_id(common::ObISQLClient &sql_client,
                    ObMaxIdType id_type, uint64_t &max_id);
   static const char *get_max_id_name(const ObMaxIdType max_id_type);
   static const char *get_max_id_info(const ObMaxIdType max_id_type);
   static int str_to_uint(const common::ObString &str, uint64_t &value);
 private:
   // (max_id - size, max_id] is valid
-  static int fetch_max_id_from_cache_(const uint64_t tenant_id, ObMaxIdType id_type,
+  int fetch_max_id_from_cache_(ObMaxIdType id_type,
       uint64_t &max_id, const uint64_t size);
-  int fetch_new_max_id_from_inner_table_(const uint64_t tenant_id, const ObMaxIdType max_id_type,
+  int fetch_new_max_id_from_inner_table_(const ObMaxIdType max_id_type,
       uint64_t &max_id, const uint64_t initial, const uint64_t size);
   static bool valid_max_id_type(const ObMaxIdType max_id_type)
-  { return max_id_type >= 0 && max_id_type < OB_MAX_ID_TYPE; }
+  {
+    return max_id_type >= 0
+        && max_id_type < OB_MAX_ID_TYPE
+        && NULL != max_id_name_info_[max_id_type][0];
+  }
   // insert ignore into __all_sys_stat table
-  int insert_initial_value(common::ObISQLClient &sql_client, uint64_t tenant_id,
+  int insert_initial_value(common::ObISQLClient &sql_client,
       ObMaxIdType max_id_type, const uint64_t initial_value);
 
   static int check_id_valid(const ObMaxIdType &max_id_type, const uint64_t &id);
@@ -141,6 +114,7 @@ private:
 
 private:
   common::ObMySQLProxy &proxy_;
+  ObIMaxIdCache *max_id_cache_;
   static lib::ObMutex mutex_;
   int32_t group_id_;
 

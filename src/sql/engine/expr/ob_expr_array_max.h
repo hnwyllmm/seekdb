@@ -18,7 +18,7 @@
 #define OCEANBASE_SQL_OB_EXPR_ARRAY_EXTREME 
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#include "lib/udt/ob_array_type.h"
+#include "common/udt/ob_array_type.h"
 
 namespace oceanbase
 {
@@ -37,9 +37,6 @@ public:
   static int eval_array_extreme_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                     const ObBitVector &skip, const int64_t batch_size,
                                     bool is_max = true);
-  static int eval_array_extreme_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                     const ObBitVector &skip, const EvalBound &bound,
-                                     bool is_max = true);
   static int calc_extreme(ObIArrayType* src_arr, ObObj &res_obj, bool is_max = true);
 
 private:
@@ -55,8 +52,6 @@ public:
   static int eval_array_max(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_array_max_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                   const ObBitVector &skip, const int64_t batch_size);
-  static int eval_array_max_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                   const ObBitVector &skip, const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
@@ -73,8 +68,6 @@ public:
   static int eval_array_min(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_array_min_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                   const ObBitVector &skip, const int64_t batch_size);
-  static int eval_array_min_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                   const ObBitVector &skip, const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

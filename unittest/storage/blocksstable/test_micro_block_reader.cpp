@@ -22,7 +22,8 @@
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_row_cache.h"
 #include "ob_row_generate.h"
-#include "share/ob_simple_mem_limit_getter.h"
+#undef protected
+#undef private
 
 namespace oceanbase
 {
@@ -30,7 +31,6 @@ using namespace common;
 using namespace blocksstable;
 using namespace storage;
 using namespace share::schema;
-static ObSimpleMemLimitGetter getter;
 
 #define INVALID_ITERATOR ObIMicroBlockReaderInfo::INVALID_ROW_INDEX
 
@@ -62,7 +62,7 @@ public:
     ObTimerService::get_instance().destroy();
   }
 
-protected:
+public:
   ObRowGenerate row_generate_;
   ObArenaAllocator allocator_;
   ObTableReadInfo read_info_;
@@ -70,15 +70,12 @@ protected:
 
 void TestMicroBlockReader::SetUp()
 {
-  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   const int64_t table_id = 3001;
   ObTableSchema table_schema;
   ObColumnSchemaV2 column;
   //init table schema
   table_schema.reset();
   ASSERT_EQ(OB_SUCCESS, table_schema.set_table_name("test_row_reader"));
-  table_schema.set_tenant_id(1);
-  table_schema.set_tablegroup_id(1);
   table_schema.set_database_id(1);
   table_schema.set_table_id(table_id);
   table_schema.set_rowkey_column_num(rowkey_column_count);
@@ -136,8 +133,6 @@ TEST_F(TestMicroBlockReader, test_success)
   ObDatumRow multi_version_row;
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num +2));
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
   ret = writer.init(macro_block_size, rowkey_column_count, column_num + 2);
   ASSERT_EQ(OB_SUCCESS, ret);
   for(int64_t i = 0; i < test_row_num; ++i){
@@ -154,7 +149,7 @@ TEST_F(TestMicroBlockReader, test_success)
   ObArray<ObColDesc> columns;
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
-          allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
+          allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), columns, nullptr/*storage_cols_index*/));
   /*** init reader ***/
   ObMicroBlockReader reader;
   ObMicroBlockData block(buf, size);
@@ -164,7 +159,7 @@ TEST_F(TestMicroBlockReader, test_success)
   const int64_t bucket_num = 1024;
   const int64_t max_cache_size = 1024 * 1024 * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
-  ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
+  ObKVGlobalCache::get_instance().init(bucket_num, max_cache_size, block_size);
   ObRowCache cache;
   ASSERT_EQ(OB_SUCCESS, cache.init("row_cache", 1));
 
@@ -298,7 +293,7 @@ TEST_F(TestMicroBlockReader, test_success)
   ret = reader.get_rowkey(iter, rowkey2);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ObRowCacheValue value;
-  ASSERT_EQ(OB_INVALID_ARGUMENT, reader.get_cached_value(iter, value, MacroBlockId(0, 1, 0, 2)));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, reader.get_cached_value(iter, value, MacroBlockId(0, 1, -1)));
   const ObStoreRow *read_row;
   ASSERT_EQ(OB_INVALID_ARGUMENT, reader.get_row(iter, read_row));
   ASSERT_TRUE(NULL == read_row);
@@ -381,10 +376,3 @@ TEST_F(TestMicroBlockReader, test_percise_compare)
 
 }//end namespace unittest
 }//end namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

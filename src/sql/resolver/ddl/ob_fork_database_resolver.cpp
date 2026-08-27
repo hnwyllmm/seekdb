@@ -27,7 +27,7 @@ namespace oceanbase
 using namespace common;
 using namespace share::schema;
 using namespace share;
-using namespace obrpc;
+using namespace obcall;
 namespace sql
 {
 
@@ -57,13 +57,14 @@ int ObForkDatabaseResolver::resolve(const ParseNode &parse_tree)
     SQL_RESV_LOG(ERROR, "create fork database stmt failed", K(ret));
   } else {
     stmt_ = fork_database_stmt;
-    obrpc::ObForkDatabaseArg &fork_database_arg = fork_database_stmt->get_fork_database_arg();
-    fork_database_arg.tenant_id_ = session_info_->get_effective_tenant_id();
+    obcall::ObForkDatabaseArg &fork_database_arg = fork_database_stmt->get_fork_database_arg();
+    
+    
     fork_database_arg.if_not_exist_ = false;
   }
 
   if (OB_SUCC(ret)) {
-    obrpc::ObForkDatabaseArg &fork_database_arg = fork_database_stmt->get_fork_database_arg();
+    obcall::ObForkDatabaseArg &fork_database_arg = fork_database_stmt->get_fork_database_arg();
     ParseNode *dst_database_node = parse_tree.children_[DST_DATABASE_NODE];
     ParseNode *src_database_node = parse_tree.children_[SRC_DATABASE_NODE];
     ObString dst_database_name;
@@ -87,22 +88,16 @@ int ObForkDatabaseResolver::resolve(const ParseNode &parse_tree)
       // Check and convert database names
       ObNameCaseMode mode = OB_NAME_CASE_INVALID;
       if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
-        SQL_RESV_LOG(WARN, "fail to get name case mode", K(mode), K(ret));
       } else {
         bool perserve_lettercase = (mode != OB_LOWERCASE_AND_INSENSITIVE);
         ObCollationType cs_type = CS_TYPE_INVALID;
         if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
-          SQL_RESV_LOG(WARN, "fail to get collation_connection", K(ret));
         } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
                     cs_type, perserve_lettercase, dst_database_name))) {
-          SQL_RESV_LOG(WARN, "fail to check and convert dst database name", K(dst_database_name), K(ret));
         } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
                     cs_type, perserve_lettercase, src_database_name))) {
-          SQL_RESV_LOG(WARN, "fail to check and convert src database name", K(src_database_name), K(ret));
         } else if (OB_FAIL(deep_copy_str(dst_database_name, fork_database_arg.dst_database_name_))) {
-          SQL_RESV_LOG(WARN, "failed to deep copy dst database name", K(ret));
         } else if (OB_FAIL(deep_copy_str(src_database_name, fork_database_arg.src_database_name_))) {
-          SQL_RESV_LOG(WARN, "failed to deep copy src database name", K(ret));
         }
       }
     }

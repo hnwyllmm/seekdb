@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "observer/virtual_table/ob_all_virtual_dtl_memory.h"
+#include "share/rc/ob_server_runtime.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -24,15 +25,14 @@ using namespace oceanbase::sql::dtl;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
 
-void ObAllVirtualDtlMemoryPoolInfo::set_mem_pool_info(ObTenantDfc *&tenant_dfc, ObDtlChannelMemManager *mgr)
+void ObAllVirtualDtlMemoryPoolInfo::set_mem_pool_info(ObDfc *&dfc_manager, ObDtlChannelMemManager *mgr)
 {
-  tenant_id_ = tenant_dfc->get_tenant_id();
-  channel_total_cnt_ = tenant_dfc->get_channel_cnt();
-  channel_block_cnt_ = tenant_dfc->get_current_total_blocked_cnt();
-  max_parallel_cnt_ = tenant_dfc->get_max_parallel();
-  max_blocked_buffer_size_ = tenant_dfc->get_max_blocked_buffer_size();
-  accumulated_block_cnt_ =tenant_dfc->get_accumulated_blocked_cnt();
-  current_buffer_used_ = tenant_dfc->get_current_buffer_used();
+  channel_total_cnt_ = dfc_manager->get_channel_cnt();
+  channel_block_cnt_ = dfc_manager->get_current_total_blocked_cnt();
+  max_parallel_cnt_ = dfc_manager->get_max_parallel();
+  max_blocked_buffer_size_ = dfc_manager->get_max_blocked_buffer_size();
+  accumulated_block_cnt_ =dfc_manager->get_accumulated_blocked_cnt();
+  current_buffer_used_ = dfc_manager->get_current_buffer_used();
   seqno_ = mgr->get_seqno();
   alloc_cnt_ = mgr->get_alloc_cnt();
   free_cnt_ = mgr->get_free_cnt();
@@ -43,10 +43,9 @@ void ObAllVirtualDtlMemoryPoolInfo::set_mem_pool_info(ObTenantDfc *&tenant_dfc, 
 }
 
 ObAllVirtualDtlMemoryIterator::ObAllVirtualDtlMemoryIterator(ObArenaAllocator *allocator) :
-  cur_tenant_idx_(0),
+  done_(false),
   cur_mem_pool_idx_(0),
   iter_allocator_(allocator),
-  tenant_ids_(),
   mem_pool_infos_()
 {}
 
@@ -57,59 +56,44 @@ ObAllVirtualDtlMemoryIterator::~ObAllVirtualDtlMemoryIterator()
 
 void ObAllVirtualDtlMemoryIterator::reset()
 {
-  cur_tenant_idx_ = 0;
+  
+  done_ = false;
   cur_mem_pool_idx_ = 0;
-  tenant_ids_.reset();
   mem_pool_infos_.reset();
   iter_allocator_->reuse();
 }
 
 void ObAllVirtualDtlMemoryIterator::destroy()
 {
-  tenant_ids_.reset();
   mem_pool_infos_.reset();
   iter_allocator_ = nullptr;
-}
-
-int ObAllVirtualDtlMemoryIterator::get_tenant_ids()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == GCTX.omt_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "GCTX.omt_ shouldn't be NULL",
-        K_(GCTX.omt), K(GCTX), K(ret));
-  } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids_))) {
-    LOG_WARN("failed to get_mtl_tenant_ids", K(ret));
-  }
-  return ret;
 }
 
 int ObAllVirtualDtlMemoryIterator::init()
 {
   int ret = OB_SUCCESS;
   mem_pool_infos_.set_block_allocator(ObWrapperAllocator(iter_allocator_));
-  if (OB_FAIL(get_tenant_ids())) {
-    LOG_WARN("failed to get tenant ids", K(ret));
+  if (OB_ISNULL(::oceanbase::share::server_service<::oceanbase::sql::dtl::ObDfc>())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("DFC manager is not initialized", K(ret));
   }
   return ret;
 }
 
-int ObAllVirtualDtlMemoryIterator::get_tenant_memory_pool_infos(uint64_t tenant_id)
+int ObAllVirtualDtlMemoryIterator::get_memory_pool_infos()
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(tenant_id) {
-    ObTenantDfc *tenant_dfc = MTL(ObTenantDfc*);
-    ObDtlTenantMemManager *mem_mgr = tenant_dfc->get_tenant_mem_manager();
+  SERVER_MODULE_SCOPE {
+    ObDfc *dfc_manager = ::oceanbase::share::server_service<::oceanbase::sql::dtl::ObDfc>();
+    ObDtlMemManager *mem_mgr = dfc_manager->get_mem_manager();
     int64_t cnt = mem_mgr->get_channel_mgr_count();
     for (int64_t i = 0; i < cnt && OB_SUCC(ret); ++i) {
       ObDtlChannelMemManager *chan_mem_mgr = nullptr;
       if (OB_FAIL(mem_mgr->get_channel_mem_manager(i, chan_mem_mgr))) {
-        LOG_WARN("failed to get channel memory manager", K(ret), K(i));
       } else {
         ObAllVirtualDtlMemoryPoolInfo mem_pool_info;
-        mem_pool_info.set_mem_pool_info(tenant_dfc, chan_mem_mgr);
+        mem_pool_info.set_mem_pool_info(dfc_manager, chan_mem_mgr);
         if (OB_FAIL(mem_pool_infos_.push_back(mem_pool_info))) {
-          LOG_WARN("failed to push back memory pool info", K(ret), K(i));
         }
       }
     }
@@ -123,14 +107,10 @@ int ObAllVirtualDtlMemoryIterator::get_next_memory_pools()
   if (0 != mem_pool_infos_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mem pool infos must be empty", K(ret));
-  } else if (cur_tenant_idx_ < tenant_ids_.count()) {
-    do {
-      if (OB_FAIL(get_tenant_memory_pool_infos(tenant_ids_.at(cur_tenant_idx_)))) {
-        LOG_WARN("failed to get dtl memory pool infos", K(ret));
-      } else {
-        ++cur_tenant_idx_;
-      }
-    } while (OB_SUCC(ret) && 0 == mem_pool_infos_.count() && cur_tenant_idx_ < tenant_ids_.count());
+  } else if (!done_) {
+    done_ = true;
+    if (OB_FAIL(get_memory_pool_infos())) {
+    }
   } else {
     ret = OB_ITER_END;
   }
@@ -199,7 +179,6 @@ int ObAllVirtualDtlMemory::inner_open()
   int ret = OB_SUCCESS;
   if (!start_to_read_) {
     if (OB_FAIL(iter_.init())) {
-      LOG_WARN("failed to init iterator", K(ret));
     } else {
       start_to_read_ = true;
       char ipbuf[common::OB_IP_STR_BUFF];
@@ -210,7 +189,6 @@ int ObAllVirtualDtlMemory::inner_open()
       } else {
         ipstr_ = ObString::make_string(ipbuf);
         if (OB_FAIL(ob_write_string(*allocator_, ipstr_, ipstr_))) {
-          SERVER_LOG(WARN, "failed to write string", K(ret));
         }
         port_ = addr.get_port();
       }
@@ -230,7 +208,6 @@ int ObAllVirtualDtlMemory::inner_get_next_row(ObNewRow *&row)
       arena_allocator_.reuse();
     }
   } else if (OB_FAIL(get_row(mem_pool_info, row))) {
-    LOG_WARN("failed to get row from channel info", K(ret));
   }
   return ret;
 }

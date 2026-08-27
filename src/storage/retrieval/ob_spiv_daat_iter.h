@@ -80,7 +80,7 @@ public:
   ObSPIVSortHeap(int64_t limit_size, ObIAllocator &allocator, CompareFunctor cmp)
       : limit_size_(limit_size), allocator_(allocator), cmp_(cmp), heap_(cmp, &allocator_), doc_ids_array_()
   {
-    doc_ids_array_.set_attr(ObMemAttr(MTL_ID(), "ObSPIVSortHeap"));
+    doc_ids_array_.set_attr(ObMemAttr("ObSPIVSortHeap"));
   }
 
   ~ObSPIVSortHeap() = default;
@@ -92,7 +92,7 @@ public:
   const ObDocIdExt &get_doc_id(int64_t idx) const {
     return doc_ids_array_.at(idx);
   }
-
+  
   int push(const ObDocIdExt &doc_id, double score)
   {
     int ret = OB_SUCCESS;
@@ -100,18 +100,14 @@ public:
     item.score_ = score;
     int64_t doc_idx;
     if (OB_FAIL(add_doc_id(doc_id))) {
-      SHARE_LOG(WARN, "failed to add doc id", K(ret));
     } else if (OB_FALSE_IT(doc_idx = doc_ids_count() - 1)) {
     } else if (OB_FALSE_IT(item.doc_idx_ = doc_idx)) {
     } else if (heap_.count() < limit_size_) {
       if (OB_FAIL(heap_.push(item))) {
-        SHARE_LOG(WARN, "failed to push heap", K(ret));
       }
     } else if (cmp_(item, heap_.top())) {
       if (OB_FAIL(heap_.pop())) {
-        SHARE_LOG(WARN, "failed to pop heap", K(ret));
       } else if (OB_FAIL(heap_.push(item))) {
-        SHARE_LOG(WARN, "failed to push heap", K(ret));
       }
     }
 
@@ -143,7 +139,7 @@ public:
         result_docids_(),
         result_docids_curr_iter_(OB_INVALID_INDEX_INT64)
   {
-    result_docids_.set_attr(ObMemAttr(MTL_ID(), "SPIVResultDocid"));
+    result_docids_.set_attr(ObMemAttr("SPIVResultDocid"));
   }
   virtual ~ObSPIVDaaTIter();
   int init(const ObSPIVDaaTParam &param);
@@ -160,9 +156,6 @@ public:
   virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
   virtual int inner_get_next_rows(const int64_t capacity, int64_t &count);
   virtual int process();
-  virtual void set_ls_related_tablet_id(const share::ObLSID &ls_id, const ObDASRelatedTabletID &related_tablet_ids)
-  {}
-
 protected:
   // for pre-filter
   common::hash::ObHashSet<ObDocIdExt> valid_docid_set_;
@@ -203,7 +196,7 @@ class ObSPIVBMWIter final : public ObSRBMWIterImpl
 public:
   ObSPIVBMWIter() : is_pre_filter_(false), is_use_docid_(true), result_docids_(), result_docids_curr_iter_(-1)
   {
-    result_docids_.set_attr(ObMemAttr(MTL_ID(), "SPIVResultDocid"));
+    result_docids_.set_attr(ObMemAttr("SPIVResultDocid"));
   }
   virtual ~ObSPIVBMWIter() { reset(); }
   virtual void reuse(const bool switch_tablet = false) override;

@@ -22,12 +22,29 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace sql {
+// IPv4 / IPv6 textual length limits used by IS_IPV4 / INET_ATON / INET6_ATON etc.
+//
+// Do NOT use the system macros INET_ADDRSTRLEN / INET6_ADDRSTRLEN for these bounds.
+// The macros are platform-dependent and will produce different SQL semantics on
+// different OSes:
+//   - Linux / POSIX <netinet/in.h>:  INET_ADDRSTRLEN == 16,  INET6_ADDRSTRLEN == 46
+//   - Windows / Winsock2 <ws2ipdef.h>: INET_ADDRSTRLEN == 22, INET6_ADDRSTRLEN == 65
+// Concretely, this once caused IS_IPV4("255.255.255.0000") to return 1 on Windows
+// while returning 0 on Linux, and could overflow stack buffers sized to the Linux
+// value when running on Windows.
+//
+// "255.255.255.255"                                       length 15
+// "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"         length 45 (longest IPv6 form)
+static const int OB_IPV4_STR_MIN_LEN = 7;
+static const int OB_IPV4_STR_MAX_LEN = 15;
+static const int OB_IPV6_STR_MIN_LEN = 2;
+static const int OB_IPV6_STR_MAX_LEN = 45;
+
 int ObExprInetCommon::str_to_ipv4(int len, const char *str, bool& is_ip_format_invalid, in_addr* ipv4addr)
 {
   is_ip_format_invalid = false;
   int ret = OB_SUCCESS;
-  //Shortest IPv4 address："x.x.x.x"，length:7
-  if (7 > len || INET_ADDRSTRLEN - 1 < len) {
+  if (OB_IPV4_STR_MIN_LEN > len || OB_IPV4_STR_MAX_LEN < len) {
     is_ip_format_invalid = true;
     LOG_WARN("ip format invalid, too short or too long", K(len));
   } else if (OB_UNLIKELY(OB_UNLIKELY(OB_ISNULL(str) || OB_ISNULL(ipv4addr)))) {
@@ -78,6 +95,14 @@ int ObExprInetCommon::str_to_ipv4(int len, const char *str, bool& is_ip_format_i
     } else if ('.' == c) { // IP number can't end on '.'
       is_ip_format_invalid = true;
       LOG_WARN("ip format invalid, end with '.'");
+    } else if (3 < numcnt) {
+      // Each dotted group must contain 1~3 digits. The in-loop check on '.' only
+      // covers the first three groups; the last group's digit count is only
+      // validated here. Without this check, inputs like '1.2.3.0000' (length 10,
+      // not blocked by the length upper bound) would be accepted on every
+      // platform.
+      is_ip_format_invalid = true;
+      LOG_WARN("ip format invalid, last group has too many digits", K(numcnt));
     } else {
       byte_addr[3] = (unsigned char) byte;
     }
@@ -90,9 +115,8 @@ int ObExprInetCommon::str_to_ipv6(int len, const char *str, bool& is_ip_format_i
 {
   int ret = OB_SUCCESS;
   is_ip_format_invalid = false;
-  //Ipv6 length of mysql support: 2~39
-  //Shortest IPv6 address："::"，length:2
-  if (2 > len || INET6_ADDRSTRLEN - 1 < len) {
+  // Use the platform-independent constants (see comment at the top of this file).
+  if (OB_IPV6_STR_MIN_LEN > len || OB_IPV6_STR_MAX_LEN < len) {
     is_ip_format_invalid = true;
     LOG_WARN("ip format invalid, too short or too long", K(len));
   } else if (OB_UNLIKELY(OB_ISNULL(str) || OB_ISNULL(ipv6addr))) {
@@ -146,7 +170,6 @@ int ObExprInetCommon::str_to_ipv6(int len, const char *str, bool& is_ip_format_i
           is_ip_format_invalid = true;
           LOG_WARN("ip format invalid, no room for ipv4", K(dst_index), K(i));
         } else if (OB_FAIL(str_to_ipv4(len - group_start, str + group_start, is_ip_format_invalid, (in_addr *)(ip_addr + dst_index)))) {
-          LOG_WARN("fail to excute str_to_ipv4", K(ret));
         } else if (is_ip_format_invalid) {
           LOG_WARN("ipv4 format invalid", K(group_start));
         } else {
@@ -378,7 +401,6 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("inet_aton expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     if (text.is_null()) {
@@ -387,7 +409,6 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
       ObString m_text = text.get_string();
       bool is_ip_format_invalid = false;
       if (OB_FAIL(ob_inet_aton(expr_datum, m_text, is_ip_format_invalid))) {
-        LOG_WARN("fail to excute ob_inet_aton", K(ret));
       } else if (is_ip_format_invalid) {
         uint64_t cast_mode = 0;
         ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
@@ -397,7 +418,6 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("session is NULL", K(ret));
         } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-          LOG_WARN("get sql mode failed", K(ret));
         } else {
           ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
                                             session->is_ignore_stmt(),
@@ -420,10 +440,8 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprInetAton, raw_expr) {
   int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
-  }
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   return ret;
 }
 
@@ -473,7 +491,6 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("inet6_ntoa expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     if (text.is_null()) {
@@ -482,7 +499,6 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
       char * buf = NULL;
       CK(expr.res_buf_len_ >= MAX_IP_ADDR_LENGTH);
       if (OB_FAIL(ret)) {
-        LOG_WARN("result buf size greater than MAX_IP_ADDR_LENGTH", K(ret));
       } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, MAX_IP_ADDR_LENGTH))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(MAX_IP_ADDR_LENGTH));
@@ -495,7 +511,6 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
           is_ip_format_invalid = true;
           LOG_WARN("ip format invalid", K(ret), K(text));
         } else if (OB_FAIL(ObExprInetCommon::ip_to_str(num_val, is_ip_format_invalid, ip_str))) {
-          LOG_WARN("fail to excute ip_to_str", K(ret));
         } else if (!is_ip_format_invalid) {
           expr_datum.set_string(ip_str);
         }
@@ -508,7 +523,6 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("session is NULL", K(ret));
           } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-            LOG_WARN("get sql mode failed", K(ret));
           } else {
             ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
                                               session->is_ignore_stmt(),
@@ -530,7 +544,7 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprInet6Ntoa, raw_expr) {
   int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
+  {
     SET_LOCAL_SYSVAR_CAPACITY(2);
     EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
     EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
@@ -567,12 +581,10 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("inet6_ntoa expr eval param value failed", K(ret));
   } else {
     char * buf = NULL;
     CK(expr.res_buf_len_ >= sizeof(in6_addr));
     if (OB_FAIL(ret)) {
-      LOG_WARN("result buf size greater than sizeof(in6_addr)", K(ret));
     } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, sizeof(in6_addr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(sizeof(in6_addr)));
@@ -585,7 +597,6 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
       } else {
         ObString str_result(sizeof(in6_addr), 0, buf);
         if (OB_FAIL(inet6_aton(m_text, is_ip_format_invalid, str_result))) {
-          LOG_WARN("fail to excute inet6_aton", K(ret));
         } else if (is_ip_format_invalid) {
           uint64_t cast_mode = 0;
           ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
@@ -595,7 +606,6 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("session is NULL", K(ret));
           } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-            LOG_WARN("get sql mode failed", K(ret));
           } else {
             ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
                                               session->is_ignore_stmt(),
@@ -624,7 +634,7 @@ int ObExprInet6Aton::inet6_aton(const ObString& ip, bool& is_ip_format_invalid, 
   is_ip_format_invalid = false;
   int ret = OB_SUCCESS;
   char buf[MAX_IP_ADDR_LENGTH];
-  if (INET6_ADDRSTRLEN - 1 < ip.length()) {
+  if (OB_IPV6_STR_MAX_LEN < ip.length()) {
     is_ip_format_invalid = true;
     LOG_WARN("ip format invalid", K(ip));
   } else {
@@ -636,10 +646,8 @@ int ObExprInet6Aton::inet6_aton(const ObString& ip, bool& is_ip_format_invalid, 
       MEMCPY(buf, ip.ptr(), ip.length());
       buf[ip.length()] = '\0';
       if (OB_FAIL(ObExprInetCommon::str_to_ipv4(ip.length(), buf, is_ip_format_invalid, (in_addr *)result_buf))) {
-        LOG_WARN("fail to excute str_to_ipv4", K(ret));
       }else if (is_ip_format_invalid) {
         if (OB_FAIL(ObExprInetCommon::str_to_ipv6(ip.length(), buf, is_ip_format_invalid, (in6_addr *)result_buf))) {
-          LOG_WARN("fail to excute str_to_ipv6", K(ret));
         } else if (is_ip_format_invalid) {
           LOG_WARN("ip format invalid", K(ip));
         } else {
@@ -655,7 +663,7 @@ int ObExprInet6Aton::inet6_aton(const ObString& ip, bool& is_ip_format_invalid, 
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprInet6Aton, raw_expr) {
   int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
+  {
     SET_LOCAL_SYSVAR_CAPACITY(1);
     EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   }
@@ -673,10 +681,15 @@ ObExprIsIpv4::~ObExprIsIpv4()
 template <typename T>
 int ObExprIsIpv4::is_ipv4(T& result, const ObString& text)
 {
-  char buf[16];
+  // buf size = max textual IPv4 length + 1 for the trailing '\0'.
+  // Previously this was sized at 16 (Linux INET_ADDRSTRLEN) while the length
+  // check below used the platform-dependent INET_ADDRSTRLEN macro, which is 22
+  // on Windows. That combination would let a 16~21 char string pass the length
+  // check and then write past the end of `buf` when appending the '\0'.
+  char buf[OB_IPV4_STR_MAX_LEN + 1];
   int ipv4_ret = 1;
   int ret = OB_SUCCESS;
-  if (INET_ADDRSTRLEN - 1 < text.length()) {
+  if (OB_IPV4_STR_MAX_LEN < text.length()) {
     ipv4_ret = 0;
   } else {
     MEMCPY(buf, text.ptr(), text.length());
@@ -685,7 +698,6 @@ int ObExprIsIpv4::is_ipv4(T& result, const ObString& text)
     struct in_addr addr;
     bool is_ip_invalid;
     if (OB_FAIL(ObExprInetCommon::str_to_ipv4(len, buf, is_ip_invalid, &addr))) {
-      LOG_WARN("fail to excute str_to_ipv4");
     } else {
       ipv4_ret = is_ip_invalid ? 0 : 1;
     }
@@ -715,14 +727,12 @@ int ObExprIsIpv4::calc_is_ipv4(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("is_ipv4 expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     ObString m_text = text.get_string();
     if (text.is_null()) {
       expr_datum.set_int(0);
     } else if (OB_FAIL(is_ipv4(expr_datum, m_text))) {
-      LOG_WARN("fail to excute is_ipv4", K(ret));
     } else {
     }
   }
@@ -758,7 +768,6 @@ int ObExprIsIpv4Mapped::calc_is_ipv4_mapped(const ObExpr& expr, ObEvalCtx& ctx, 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("is_ipv4_mapped expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     if (text.is_null()) {
@@ -816,7 +825,6 @@ int ObExprIsIpv4Compat::calc_is_ipv4_compat(const ObExpr& expr, ObEvalCtx& ctx, 
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("is_ipv4_compat expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     if (text.is_null()) {
@@ -874,14 +882,12 @@ int ObExprIsIpv6::calc_is_ipv6(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("is_ipv6 expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
     ObString m_text = text.get_string();
     if (text.is_null()) {
       expr_datum.set_int(0);
     } else if (OB_FAIL(is_ipv6(expr_datum, m_text))) {
-      LOG_WARN("fail to excute is_ipv6", K(ret));
     }
   }
   return ret;
@@ -901,7 +907,6 @@ int ObExprIsIpv6::is_ipv6(T& result, const ObString& text)
     in6_addr addr;
     bool is_ip_invaild;
     if (OB_FAIL(ObExprInetCommon::str_to_ipv6(text.length(), buf, is_ip_invaild, &addr))) {
-      LOG_WARN("fail to excute str_to_ipv6", K(ret));
     } else {
       ipv6_ret = is_ip_invaild ? 0 : 1;
     }

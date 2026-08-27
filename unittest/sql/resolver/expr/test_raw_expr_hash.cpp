@@ -19,7 +19,6 @@
 #include <gtest/gtest.h>
 #define private public
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "observer/ob_server.h"
 #undef private
 #define USING_LOG_PREFIX SQL_OPTIMIZER
 using namespace oceanbase::sql;
@@ -42,17 +41,17 @@ namespace test
     ret;                                                                        \
   })
 
-class TestRawExprToStr: public ::testing::Test
+class TestRawExprHash: public ::testing::Test
 {
 public:
-  TestRawExprToStr() {}
-  virtual ~TestRawExprToStr() {}
+  TestRawExprHash() {}
+  virtual ~TestRawExprHash() {}
   virtual void SetUp() {}
   virtual void TearDown() {}
-private:
+public:
   // disallow copy and assign
-  TestRawExprToStr(const TestRawExprToStr &other);
-  TestRawExprToStr& operator=(const TestRawExprToStr &ohter);
+  TestRawExprHash(const TestRawExprHash &other);
+  TestRawExprHash& operator=(const TestRawExprHash &ohter);
 };
 #define T(expr1)                                         \
   do                                                     \
@@ -62,7 +61,7 @@ private:
   uint64_t hash = expr->hash(0);                         \
   _OB_LOG(INFO, "hash(%s) = %lu", expr1, hash);        \
   } while(0)
-TEST_F(TestRawExprToStr, basic)
+TEST_F(TestRawExprHash, basic)
 {
   int ret = OB_SUCCESS;
   //ObExprOperatorGFactory::get_instance()->init();
@@ -83,12 +82,9 @@ TEST_F(TestRawExprToStr, basic)
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ctx.is_extract_param_type_ = false;
   ObSQLSessionInfo session;
-  session.effective_tenant_id_ = 1;
   ctx.session_info_ = &session;
-  OBSERVER.init_version();
-
   EXPECT_TRUE(OB_SUCCESS == oceanbase::ObPreProcessSysVars::init_sys_var());
-  EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, 0, NULL));
+  EXPECT_TRUE(OB_SUCCESS == session.test_init(0, 0, NULL));
   EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
 
   // const int64_t buf_len = 1024;
@@ -111,11 +107,4 @@ TEST_F(TestRawExprToStr, basic)
   T("c1");
 }
 
-}
-
-int main(int argc, char **argv)
-{
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc,argv);
-  return RUN_ALL_TESTS();
 }

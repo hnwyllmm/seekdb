@@ -17,6 +17,7 @@
 #ifndef OCEANBASE_MEMTABLE_OB_MEMTABLE_INTERFACE_
 #define OCEANBASE_MEMTABLE_OB_MEMTABLE_INTERFACE_
 
+#include "lib/atomic/ob_atomic.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_id_map.h"
 #include "lib/allocator/ob_lf_fifo_allocator.h"
@@ -26,7 +27,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
 #include "storage/tx/ob_trans_define.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/checkpoint/ob_common_checkpoint.h"
 
 namespace oceanbase
 {
@@ -59,17 +60,15 @@ public:
   virtual int trans_replay_end(const bool commit,
                                const share::SCN trans_version,
                                const share::SCN final_scn,
-                               const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0) = 0;
   virtual void print_callbacks() = 0;
   //method called when leader takeover
   virtual int replay_to_commit(const bool is_resume) = 0;
   //method called when leader revoke
   virtual int commit_to_replay() = 0;
-  virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx) = 0;
+  virtual void set_trans_ctx(transaction::ObTxCtx *ctx) = 0;
   virtual void inc_truncate_cnt() = 0;
-  virtual uint64_t get_tenant_id() const = 0;
-  virtual int get_conflict_trans_ids(common::ObIArray<transaction::ObTransIDAndAddr> &array) = 0;
+  
   VIRTUAL_TO_STRING_KV("", "");
 public:
   // return OB_AGAIN/OB_SUCCESS
@@ -85,8 +84,6 @@ struct CreateMemtableArg {
   share::SCN clog_checkpoint_scn_;
   share::SCN new_clog_checkpoint_scn_;
   bool for_replay_;
-  bool for_inc_direct_load_;
-  bool is_delete_insert_;
 
   CreateMemtableArg() { reset(); }
 
@@ -95,35 +92,25 @@ struct CreateMemtableArg {
     clog_checkpoint_scn_.set_min();
     new_clog_checkpoint_scn_.set_min();
     for_replay_ = false;
-    for_inc_direct_load_ = false;
-    is_delete_insert_ = false;
   }
 
   TO_STRING_KV(K(schema_version_),
                K(clog_checkpoint_scn_),
                K(new_clog_checkpoint_scn_),
-               K(for_replay_),
-               K(for_inc_direct_load_),
-               K(is_delete_insert_));
+               K(for_replay_));
 };
 
 class ObIMemtable : public storage::ObITable {
 public:
   ObIMemtable()
-    : ls_id_(),
-      snapshot_version_(share::SCN::max_scn()),
-      trace_id_(checkpoint::INVALID_TRACE_ID)
+    : snapshot_version_(share::SCN::max_scn())
   {}
   virtual ~ObIMemtable() {}
   void reset()
   {
     ObITable::reset();
-    ls_id_.reset();
     snapshot_version_.set_max();
-    reset_trace_id();
   }
-  int get_ls_id(share::ObLSID &ls_id);
-  share::ObLSID get_ls_id() const;
   virtual ObTabletID get_tablet_id() const = 0;
   virtual int get(const storage::ObTableIterParam &param,
                   storage::ObTableAccessContext &context,
@@ -182,40 +169,15 @@ public:
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "split a single range is not supported", KR(ret), K(input_range), K(part_cnt));
     } else if (OB_FAIL(range_array.push_back(input_range))) {
-      STORAGE_LOG(WARN, "push back to range array failed", K(ret));
     }
     return ret;
   }
 
   virtual bool is_empty() const override { return false; }
 
-  virtual int64_t dec_ref()
-  {
-    int64_t ref_cnt = ObITable::dec_ref();
-    checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*);
-    if (0 == ref_cnt) {
-      if (get_tablet_id().is_ls_inner_tablet()) {
-        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, this)
-      }
-    }
-    return ref_cnt;
-  }
-
-  void set_trace_id(const int64_t trace_id)
-  {
-    if (get_tablet_id().is_ls_inner_tablet()) {
-      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObCheckpointUnitDiagnoseInfo, trace_id);
-    } else {
-      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObMemtableDiagnoseInfo, trace_id);
-    }
-  }
-  void reset_trace_id() { ATOMIC_STORE(&trace_id_, checkpoint::INVALID_TRACE_ID); }
-  int64_t get_trace_id() const { return ATOMIC_LOAD(&trace_id_); }
+  virtual int64_t dec_ref() { return ObITable::dec_ref(); }
 protected:
-  share::ObLSID ls_id_;
   share::SCN snapshot_version_;
-  // a round tablet freeze identifier for checkpoint diagnose
-  int64_t trace_id_;
 };
 }  // namespace storage
 

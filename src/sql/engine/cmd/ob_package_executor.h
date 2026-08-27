@@ -19,7 +19,7 @@
 
 #include "lib/container/ob_vector.h"
 #include "sql/parser/parse_node.h"
-#include "sql/resolver/ob_stmt_type.h"
+#include "share/statement/ob_stmt_type.h"
 #include "share/schema/ob_package_info.h"
 
 #define DEF_SIMPLE_EXECUTOR(name)                          \
@@ -39,7 +39,6 @@ namespace sql
 {
 class ObExecContext;
 class ObCreatePackageStmt;
-class ObAlterPackageStmt;
 class ObDropPackageStmt;
 
 class ObCreatePackageExecutor
@@ -50,16 +49,6 @@ public:
   int execute(ObExecContext &ctx, ObCreatePackageStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePackageExecutor);
-};
-
-class ObAlterPackageExecutor
-{
-public:
-  ObAlterPackageExecutor() {}
-  virtual ~ObAlterPackageExecutor() {}
-  int execute(ObExecContext &ctx, ObAlterPackageStmt &stmt);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAlterPackageExecutor);
 };
 
 DEF_SIMPLE_EXECUTOR(ObDropPackage);

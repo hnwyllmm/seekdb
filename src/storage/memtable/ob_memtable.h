@@ -17,9 +17,7 @@
 #ifndef OCEANBASE_MEMTABLE_OB_MEMTABLE_
 #define OCEANBASE_MEMTABLE_OB_MEMTABLE_
 
-#include "share/allocator/ob_memstore_allocator.h"
-#include "share/ob_tenant_mgr.h"
-#include "share/ob_cluster_version.h"
+#include "storage/allocator/ob_memstore_allocator.h"
 #include "lib/literals/ob_literals.h"
 #include "lib/worker.h"
 
@@ -28,7 +26,6 @@
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_query_engine.h"
 #include "storage/blocksstable/ob_sstable.h"
-#include "storage/checkpoint/ob_checkpoint_diagnose.h"
 #include "storage/blocksstable/ob_row_writer.h"
 
 namespace oceanbase
@@ -127,13 +124,11 @@ public:
     int64_t data_size = 0;
     new_node = nullptr;
     if (OB_FAIL(get_data_size(data, data_size))) {
-      TRANS_LOG(WARN, "get_data_size failed", K(ret), KP(data), K(data_size));
     } else if (OB_ISNULL(new_node = (ObMvccTransNode *)allocator.alloc(sizeof(ObMvccTransNode) + data_size))
                || OB_ISNULL(new(new_node) ObMvccTransNode())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "alloc ObMvccTransNode fail", K(data_size));
     } else if (OB_FAIL(ObMemtableDataHeader::build(reinterpret_cast<ObMemtableDataHeader *>(new_node->buf_), data))) {
-      TRANS_LOG(WARN, "MemtableData dup fail", K(ret));
     }
     return ret;
   }
@@ -182,52 +177,6 @@ public:
 class ObMemtable : public ObITabletMemtable
 {
 public:
-struct TabletMemtableUpdateFreezeInfo
-{
-public:
-  TabletMemtableUpdateFreezeInfo(ObMemtable &memtable) : memtable_(memtable) {}
-  TabletMemtableUpdateFreezeInfo& operator=(const TabletMemtableUpdateFreezeInfo&) = delete;
-  void operator()(const checkpoint::ObCheckpointDiagnoseParam& param) const
-  {
-    checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*);
-    if (OB_NOT_NULL(cdm)) {
-      cdm->update_freeze_info(param, memtable_.get_rec_scn(),
-       memtable_.get_start_scn(), memtable_.get_end_scn(), memtable_.get_btree_alloc_memory());
-    }
-  }
-private:
-  ObMemtable &memtable_;
-};
-
-struct UpdateMergeInfoForMemtable
-{
-public:
-  UpdateMergeInfoForMemtable(int64_t merge_start_time,
-    int64_t merge_finish_time,
-    int64_t occupy_size,
-    int64_t concurrent_cnt)
-    : merge_start_time_(merge_start_time),
-      merge_finish_time_(merge_finish_time),
-      occupy_size_(occupy_size),
-      concurrent_cnt_(concurrent_cnt)
-  {}
-  UpdateMergeInfoForMemtable& operator=(const UpdateMergeInfoForMemtable&) = delete;
-  void operator()(const checkpoint::ObCheckpointDiagnoseParam& param) const
-  {
-    checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*);
-    if (OB_NOT_NULL(cdm)) {
-      cdm->update_merge_info_for_memtable(param, merge_start_time_, merge_finish_time_,
-          occupy_size_, concurrent_cnt_);
-    }
-  }
-private:
-  int64_t merge_start_time_;
-  int64_t merge_finish_time_;
-  int64_t occupy_size_;
-  int64_t concurrent_cnt_;
-};
-
-public:
   typedef share::ObMemstoreAllocator::AllocHandle ObSingleMemstoreAllocator;
 public:
   ObMemtable();
@@ -241,7 +190,7 @@ public: // derived from ObFreezeCheckpoint
 
 public: // derived from ObITabletMemtable
   virtual int init(const ObITable::TableKey &table_key,
-                   ObLSHandle &ls_handle,
+                   ObLS *tenant_ls,
                    storage::ObFreezer *freezer,
                    storage::ObTabletMemtableMgr *memtable_mgr,
                    const int64_t schema_version,
@@ -266,7 +215,7 @@ public: // derived from ObITable
   // rowkey_len is the length of the row key in columns and new_row(NB: can we encapsulate it better?)
   // columns is the schema of the new_row, it both contains the row key and row value
   // update_idx is the index of the updated columns for update
-  // old_row is the old version of the row for set action, it contains all columns(NB: it works for liboblog only currently)
+  // old_row is the complete old version of the row for an update.
   // new_row is the new version of the row for set action, it only contains the necessary columns for update and entire columns for insert
   virtual int set(
       const storage::ObTableIterParam &param,
@@ -347,7 +296,6 @@ public: // derived from ObITable
   // replay_row is used to replay rows in redo log for follower
   // ctx is the writer tx's context, we need the scn, tx_id for fulfilling the tx node
   // mmi is mutator iterator for replay
-  // decrypt_buf is used for decryption
   virtual int replay_row(
       storage::ObStoreCtx &ctx,
       const share::SCN &scn,
@@ -366,8 +314,6 @@ public:
   int row_compact(ObMvccRow *value,
                   const share::SCN snapshot_version,
                   const int64_t flag);
-  int64_t get_hash_item_count() const;
-  int64_t get_hash_alloc_memory() const;
   int64_t get_btree_item_count() const;
   int64_t get_btree_alloc_memory() const;
 
@@ -397,34 +343,29 @@ public:
   const ObMvccEngine &get_mvcc_engine() const { return mvcc_engine_; }
   void pre_batch_destroy_keybtree();
   static int batch_remove_unused_callback_for_uncommited_txn(
-    const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);
 
   /* freeze */
-  virtual int flush(share::ObLSID ls_id) override;
+  virtual int flush() override;
 
   bool is_empty() const override
   {
     return ObITable::get_end_scn() == ObITable::get_start_scn() &&
       share::ObScnRange::MIN_SCN == get_max_end_scn();
   }
-  void fill_compaction_param_(
-    const int64_t current_time,
-    compaction::ObTabletMergeDagParam &param);
+  void fill_merge_dag_param_(compaction::ObTabletMergeDagParam &param);
   int resolve_snapshot_version_();
   int resolve_max_end_scn_();
   // User should take response of the recommend scn. All version smaller than
   // recommend scn should belong to the tables before the memtable and the
   // memtable. And under exception case, user need guarantee all new data is
   // bigger than the recommend_scn.
-  inline void set_transfer_freeze(const share::SCN recommend_scn)
+  inline void set_recommend_snapshot_freeze(const share::SCN recommend_scn)
   {
     recommend_snapshot_version_.atomic_set(recommend_scn);
-    ATOMIC_STORE(&transfer_freeze_flag_, true);
+    ATOMIC_STORE(&recommend_snapshot_freeze_flag_, true);
   }
-  inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
-  virtual void set_delete_insert_flag(const bool rhs) override { is_delete_insert_table_ = rhs; }
-  inline bool is_delete_insert_table() const { return is_delete_insert_table_; }
+  inline bool is_recommend_freeze() const { return ATOMIC_LOAD(&recommend_snapshot_freeze_flag_); }
   virtual uint32_t get_freeze_flag() override;
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
@@ -450,10 +391,8 @@ public:
                        K_(contain_hotspot_row),
                        K_(snapshot_version),
                        K_(contain_hotspot_row),
-                       K_(ls_id),
-                       K_(transfer_freeze_flag),
-                       K_(recommend_snapshot_version),
-                       K_(is_delete_insert_table));
+                       K_(recommend_snapshot_freeze_flag),
+                       K_(recommend_snapshot_version));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
 
@@ -549,11 +488,10 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;
-  bool transfer_freeze_flag_;
+  bool recommend_snapshot_freeze_flag_;
   bool contain_hotspot_row_;
-  bool is_delete_insert_table_;
 
-  storage::ObLSHandle ls_handle_;
+  storage::ObLS *ls_;
   ObSingleMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
   ObQueryEngine query_engine_;
@@ -566,7 +504,6 @@ private:
   share::SCN recommend_snapshot_version_;
 
   int64_t state_;
-  lib::Worker::CompatMode mode_;
   int64_t minor_merged_time_;
   int64_t max_column_cnt_; // record max column count of row
 };

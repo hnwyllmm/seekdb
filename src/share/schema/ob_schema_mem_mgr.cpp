@@ -22,13 +22,12 @@ namespace oceanbase
 {
 using namespace common;
 
-void ObSchemaMemory::init(const int64_t pos, const uint64_t &tenant_id,
+void ObSchemaMemory::init(const int64_t pos,
                           const int64_t &mem_used, const int64_t &mem_total,
                           const int64_t &used_schema_mgr_cnt,
                           const int64_t &free_schema_mgr_cnt,
                           const int64_t &allocator_idx) {
   pos_ = pos;
-  tenant_id_ = tenant_id;
   mem_used_ = mem_used;
   mem_total_ = mem_total;
   used_schema_mgr_cnt_ = used_schema_mgr_cnt;
@@ -42,8 +41,7 @@ namespace schema
 
 ObSchemaMemMgr::ObSchemaMemMgr()
   : pos_(0),
-    is_inited_(false),
-    tenant_id_(OB_INVALID_TENANT_ID)
+    is_inited_(false)
 {
 }
 
@@ -51,19 +49,18 @@ ObSchemaMemMgr::~ObSchemaMemMgr()
 {
 }
 
-int ObSchemaMemMgr::init(const char *label, const uint64_t tenant_id)
+int ObSchemaMemMgr::init(const char *label)
 {
   int ret = OB_SUCCESS;
 
-  auto attr = SET_USE_500(label, ObCtxIds::SCHEMA_SERVICE);
-  //FIXME: The memory split of the subsequent 500 tenants is then set to the corresponding tenant_id
+  auto attr = lib::ObMemAttr(label, ObCtxIds::SCHEMA_SERVICE);
+  // Schema memory is owned by the single server runtime.
   new(&allocator_[0]) ObArenaAllocator(attr, OB_MALLOC_BIG_BLOCK_SIZE);
   new(&allocator_[1]) ObArenaAllocator(attr, OB_MALLOC_BIG_BLOCK_SIZE);
   all_ptrs_[0] = 0;
   all_ptrs_[1] = 0;
   ptrs_[0].set_attr(attr);
   ptrs_[1].set_attr(attr);
-  tenant_id_ = tenant_id;
   is_inited_ = true;
 
   return ret;
@@ -101,7 +98,6 @@ int ObSchemaMemMgr::alloc_(const int size, void *&ptr,
       LOG_ERROR("alloc mem failed", K(ret), K(size), K(pos_));
     } else if (FALSE_IT(all_ptrs_[pos_]++)) {
     } else if (OB_FAIL(ptrs_[pos_].push_back(tmp_ptr))) {
-      LOG_WARN("push back ptr failed", K(ret), K(pos_));
     } else {
       ptr = tmp_ptr;
       LOG_INFO("alloc schema mgr", K(tmp_ptr), KP(tmp_ptr));
@@ -110,7 +106,7 @@ int ObSchemaMemMgr::alloc_(const int size, void *&ptr,
       }
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(tmp_ptr)) {
-      LOG_WARN("alloc ptr failed", KR(ret), K(tenant_id_), K(size), K(pos_));
+      LOG_WARN("alloc ptr failed", KR(ret), K(size), K(pos_));
       int tmp_ret = OB_SUCCESS;
       if(OB_TMP_FAIL(free_(tmp_ptr))) {
         FLOG_ERROR("fail to free tmp_ptr", KR(ret), KR(tmp_ret));
@@ -123,7 +119,7 @@ int ObSchemaMemMgr::alloc_(const int size, void *&ptr,
 }
 
 ERRSIM_POINT_DEF(ERRSIM_ALLOC_SCHEMA_MGR);
-int ObSchemaMemMgr::alloc_schema_mgr(ObSchemaMgr *&schema_mgr, bool alloc_for_liboblog)
+int ObSchemaMemMgr::alloc_schema_mgr(ObSchemaMgr *&schema_mgr)
 {
   int ret = OB_SUCCESS;
   void *tmp_ptr = NULL;
@@ -133,12 +129,9 @@ int ObSchemaMemMgr::alloc_schema_mgr(ObSchemaMgr *&schema_mgr, bool alloc_for_li
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("turn on error injection ERRSIM_ALLOC_SCHEMA_MGR", KR(ret));
   } else if (OB_FAIL(alloc_(sizeof(ObSchemaMgr), tmp_ptr, &allocator))) {
-    LOG_WARN("alloc memory for schema_mgr falied", KR(ret));
   } else if (OB_ISNULL(allocator) || OB_ISNULL(tmp_ptr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tmp ptr or allocator is null", KR(ret), K(tmp_ptr), K(allocator));
-  } else if (alloc_for_liboblog) {
-    schema_mgr = new (tmp_ptr) ObSchemaMgr();
   } else {
     schema_mgr = new (tmp_ptr) ObSchemaMgr(*allocator);
     schema_mgr->set_allocator_idx(pos_);
@@ -191,9 +184,7 @@ int ObSchemaMemMgr::free_(void *ptr)
     int idx1 = -1;
     int idx2 = -1;
     if (OB_FAIL(find_ptr(ptr, pos_, idx1))) {
-      LOG_WARN("find ptr failed", K(pos_), K(ptr), K(idx1));
     } else if (OB_FAIL(find_ptr(ptr, 1 - pos_, idx2))) {
-      LOG_WARN("find ptr failed", K(1 - pos_), K(ptr), K(idx2));
     }
     if (OB_SUCC(ret)) {
       if (-1 == idx1 && -1 == idx2) {
@@ -204,11 +195,9 @@ int ObSchemaMemMgr::free_(void *ptr)
       } else {
         if (-1 != idx1) {
           if (OB_FAIL(ptrs_[pos_].remove(idx1))) {
-            LOG_WARN("failed to remove ptr", K(idx1), K(ret));
           }
         } else {
           if (OB_FAIL(ptrs_[1 - pos_].remove(idx2))) {
-            LOG_WARN("failed to remove ptr", K(idx2), K(ret));
           }
         }
       }
@@ -226,14 +215,13 @@ int ObSchemaMemMgr::free_schema_mgr(ObSchemaMgr *&schema_mgr)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("turn on error injection ERRSIM_FREE_SCEHMA_MGR", KR(ret));
   } else if (OB_NOT_NULL(schema_mgr)) {
-    const uint64_t tenant_id = schema_mgr->get_tenant_id();
+    
     const int64_t timestamp_in_slot = schema_mgr->get_timestamp_in_slot();
     const int64_t schema_version = schema_mgr->get_schema_version();
     schema_mgr->~ObSchemaMgr();
-    FLOG_INFO("[SCHEMA_RELEASE] free schema mgr", K(tenant_id), K(schema_version), K(timestamp_in_slot));
+    FLOG_INFO("[SCHEMA_RELEASE] free schema mgr", K(schema_version), K(timestamp_in_slot));
     SpinWLockGuard guard(schema_mem_rwlock_);
     if (OB_FAIL(free_(static_cast<void *>(schema_mgr)))) {
-      LOG_ERROR("free schema_mgr failed", KR(ret), K(tenant_id), K(schema_version));
     } else {
       schema_mgr = NULL;
     }
@@ -257,24 +245,21 @@ int ObSchemaMemMgr::get_all_alloc_info(common::ObIArray<ObSchemaMemory> &schema_
     int64_t mem_total = OB_INVALID_COUNT;
     int64_t used_schema_mgr_cnt = OB_INVALID_COUNT;
     int64_t free_schema_mgr_cnt = OB_INVALID_COUNT;
-    int64_t tenant_id = OB_INVALID_TENANT_ID;
+    
 
-    tenant_id = tenant_id_;
     mem_used = allocator_[pos_].used();
     mem_total = allocator_[pos_].total();
     used_schema_mgr_cnt = ptrs_[pos_].count();
     free_schema_mgr_cnt = all_ptrs_[pos_] - used_schema_mgr_cnt;
-    schema_mem.init(0, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt, pos_);
+    schema_mem.init(0, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt, pos_);
     if (OB_FAIL(schema_mem_infos.push_back(schema_mem))) {
-      LOG_WARN("fail to push back schema_mem", KR(ret));
     } else {
       mem_used = allocator_[1 - pos_].used();
       mem_total = allocator_[1 - pos_].total();
       used_schema_mgr_cnt = ptrs_[1 - pos_].count();
       free_schema_mgr_cnt = all_ptrs_[1 - pos_] - used_schema_mgr_cnt;
-      schema_mem.init(1, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt, 1 - pos_);
+      schema_mem.init(1, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt, 1 - pos_);
       if (OB_FAIL(schema_mem_infos.push_back(schema_mem))) {
-        LOG_WARN("fail to push back schema_mem", KR(ret));
       }
     }
   }
@@ -297,7 +282,6 @@ int ObSchemaMemMgr::check_can_switch_allocator(const int64_t &switch_cnt, bool &
     cur_alloc_cnt = all_ptrs_[pos_];
     can_switch = alloc_not_in_use && cur_alloc_cnt > switch_cnt;
   }
-  LOG_TRACE("check can switch", KR(ret), K_(tenant_id), K_(pos), K(can_switch), K(cur_alloc_cnt), K(switch_cnt));
   return ret;
 }
 
@@ -317,7 +301,7 @@ int ObSchemaMemMgr::switch_allocator()
     allocator_[1 - pos_].reset();
     all_ptrs_[1 - pos_] = 0;
     pos_ = 1 - pos_;
-    FLOG_INFO("[SCHEMA_RELEASE] switch_allocator", K_(tenant_id), K_(pos));
+    FLOG_INFO("[SCHEMA_RELEASE] switch_allocator", K_(pos));
   }
   return ret;
 }
@@ -332,7 +316,7 @@ int ObSchemaMemMgr::switch_back_allocator()
     LOG_WARN("inner stat error", K(ret));
   } else {
     pos_ = 1 - pos_;
-    FLOG_WARN("[SCHEMA_RELEASE] schema mgr encounters something wrong, it needs to switch_back_allocator", K_(tenant_id), K_(pos));
+    FLOG_WARN("[SCHEMA_RELEASE] schema mgr encounters something wrong, it needs to switch_back_allocator", K_(pos));
   }
 
   return ret;
@@ -347,7 +331,6 @@ void ObSchemaMemMgr::dump() const
 void ObSchemaMemMgr::dump_without_lock_() const
 {
   FLOG_INFO("[SCHEMA_STATISTICS] cur allocator",
-            K_(tenant_id),
             "cur_pos", pos_,
             "mem_used", allocator_[pos_].used(),
             "mem_total", allocator_[pos_].total(),
@@ -355,7 +338,6 @@ void ObSchemaMemMgr::dump_without_lock_() const
             "all_ptrs_cnt", all_ptrs_[pos_],
             "ptrs", ptrs_[pos_]);
   FLOG_INFO("[SCHEMA_STATISTICS] another allocator",
-            K_(tenant_id),
             "another_pos", 1 - pos_,
             "mem_used", allocator_[1 - pos_].used(),
             "mem_total", allocator_[1 - pos_].total(),
@@ -392,22 +374,22 @@ int ObSchemaMemMgr::try_reset_allocator()
 
   if (OB_FAIL(ret)) {
   } else if (0 != ptrs_[pos_].count()) {
-    LOG_INFO("allocator is not empty, just skip", K_(tenant_id));
+    LOG_INFO("allocator is not empty, just skip");
     dump_without_lock_();
   } else {
     all_ptrs_[pos_] = 0;
     allocator_[pos_].reset();
-    FLOG_INFO("[SCHEMA_RELEASE] reset schema_mem_mgr", K_(tenant_id));
+    FLOG_INFO("[SCHEMA_RELEASE] reset schema_mem_mgr");
   }
 
   if (OB_FAIL(ret)) {
   } else if (0 != ptrs_[1 - pos_].count()) {
-    LOG_INFO("another allocator is not empty, just skip", K_(tenant_id));
+    LOG_INFO("another allocator is not empty, just skip");
     dump_without_lock_();
   } else {
     all_ptrs_[1 - pos_] = 0;
     allocator_[1 - pos_].reset();
-    FLOG_INFO("[SCHEMA_RELEASE] reset another schema_mem_mgr", K_(tenant_id));
+    FLOG_INFO("[SCHEMA_RELEASE] reset another schema_mem_mgr");
   }
   return ret;
 }
@@ -421,12 +403,12 @@ int ObSchemaMemMgr::try_reset_another_allocator()
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
   } else if (0 != ptrs_[1 - pos_].count()) {
-    LOG_INFO("another allocator is not empty, just skip", K_(tenant_id));
+    LOG_INFO("another allocator is not empty, just skip");
     dump_without_lock_();
   } else {
     all_ptrs_[1 - pos_] = 0;
     allocator_[1 - pos_].reset();
-    FLOG_INFO("[SCHEMA_RELEASE] reset another allocator", K_(tenant_id), "pos", 1 - pos_);
+    FLOG_INFO("[SCHEMA_RELEASE] reset another allocator", "pos", 1 - pos_);
   }
   return ret;
 }
@@ -444,7 +426,6 @@ int ObSchemaMemMgr::get_another_ptrs(common::ObArray<void *> &ptrs)
     common::ObArray<void *> &another_ptrs = ptrs_[1 - pos_];
     for (int64_t i = 0; OB_SUCC(ret) && i < another_ptrs.count(); i++) {
       if (OB_FAIL(ptrs.push_back(another_ptrs.at(i)))) {
-        LOG_WARN("fail to push back ptr", K(ret), K(i));
       }
     }
   }
@@ -464,7 +445,6 @@ int ObSchemaMemMgr::get_current_ptrs(common::ObArray<void *> &ptrs)
     common::ObArray<void *> &current_ptrs = ptrs_[pos_];
     for (int64_t i = 0; OB_SUCC(ret) && i < current_ptrs.count(); i++) {
       if (OB_FAIL(ptrs.push_back(current_ptrs.at(i)))) {
-        LOG_WARN("fail to push back ptr", KR(ret), K(i));
       }
     }
   }
@@ -485,12 +465,10 @@ int ObSchemaMemMgr::get_all_ptrs(common::ObArray<void *> &ptrs)
     common::ObArray<void *> &another_ptrs = ptrs_[1 - pos_];
     for (int64_t i = 0; OB_SUCC(ret) && i < current_ptrs.count(); i++) {
       if (OB_FAIL(ptrs.push_back(current_ptrs.at(i)))) {
-        LOG_WARN("fail to push back current ptr", KR(ret), K(i));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < another_ptrs.count(); i++) {
       if (OB_FAIL(ptrs.push_back(another_ptrs.at(i)))) {
-        LOG_WARN("fail to push back another ptr", KR(ret), K(i));
       }
     }
   }

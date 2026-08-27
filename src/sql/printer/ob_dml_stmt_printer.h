@@ -21,71 +21,26 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/printer/ob_raw_expr_printer.h"
 #include "share/schema/ob_schema_struct.h"
-#include "share/catalog/ob_catalog_utils.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
+
 #define PRINT_TABLE_NAME(print_params, table_item)                          \
   do {                                                                		  \
-    if (!print_params_.for_dblink_) {                                       \
-      PRINT_TABLE_NAME_NORMAL(table_item);                                  \
-    } else {                                                                \
-      PRINT_TABLE_NAME_FOR_DBLINK(table_item);                              \
-    }                                                                       \
-  } while (0)
-
-#define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
-  do {                                                                		  \
-    ObString catalog_name = table_item->catalog_name_;                      \
-    ObString database_name = table_item->synonym_name_.empty() ?         \
-                            ( table_item->is_link_table() ?                 \
-                              table_item->link_database_name_ :             \
-                              table_item->database_name_ ) :                 \
-                             table_item->synonym_db_name_;                  \
-    ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
+    ObString database_name = table_item->database_name_;                    \
+    ObString table_name = table_item->table_name_;                          \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
-      if (!catalog_name.empty() && table_item->type_ == TableItem::BASE_TABLE && need_print_catalog_name(catalog_name)) { \
-        PRINT_IDENT_WITH_QUOT(catalog_name);                               \
-        DATA_PRINTF(".");                                                   \
-      }                                                                     \
       if (!database_name.empty()) {                                         \
         PRINT_IDENT_WITH_QUOT(database_name);                               \
         DATA_PRINTF(".");                                                   \
       }                                                                     \
       PRINT_IDENT_WITH_QUOT(table_name);                                      \
-      if (table_item->synonym_name_.empty() && table_item->is_link_type()) {  \
-        const ObString &dblink_name = table_item->dblink_name_;               \
-        DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                       \
-      } \
     } else {																																\
       PRINT_IDENT_WITH_QUOT(table_name);                                    \
     }																																				\
-  } while (0)
-
-#define PRINT_TABLE_NAME_FOR_DBLINK(table_item)                             \
-  do {                                                                		  \
-    ObString database_name = table_item->database_name_;                    \
-    ObString table_name = table_item->table_name_;                          \
-    if (table_item->cte_type_ == TableItem::NOT_CTE) {								\
-      if (!database_name.empty()) {                                         \
-        PRINT_IDENT_WITH_QUOT(database_name);                               \
-        DATA_PRINTF(".");                                                   \
-      }                                                                     \
-      PRINT_IDENT_WITH_QUOT(table_name);                                    \
-      if (table_item->is_link_type()) {                                    \
-        const ObString &dblink_name = table_item->dblink_name_;             \
-        if (table_item->is_reverse_link_) {                                 \
-          DATA_PRINTF("@%.*s!", LEN_AND_PTR(dblink_name));                  \
-        }  else {                                                           \
-          DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                   \
-        }                                                                   \
-      }                                                                     \
-    } else {																																\
-      PRINT_IDENT_WITH_QUOT(table_name);                                    \
-    }																																			  \
   } while (0)
 
 #define PRINT_COLUMN_NAME(column_name) \
@@ -112,17 +67,14 @@ public:
 
   int print_from(bool need_from = true);
   int print_semi_join();
-  int print_semi_info_to_subquery();
   int print_where();
   int print_order_by();
   int print_approx();
   int print_limit();
   int print_vector_index_query_param();
   int print_fetch();
-  int print_returning();
   int print_json_table(const TableItem *table_item);
   int print_values_table(const TableItem &table_item, bool no_print_alias);
-  int print_values_table_to_union_all(const TableItem &table_item, bool no_print_alias);
   int print_table(const TableItem *table_item,
                   bool no_print_alias = false);
   int print_table_with_subquery(const TableItem *table_item);
@@ -151,7 +103,6 @@ public:
   int print_cte_define_title(const ObSelectStmt *sub_select_stmt);
   bool is_root_stmt() const { return is_root_; }
   int print_with();
-  bool need_print_catalog_name(const ObString& catalog_name);
 private:
   // added for json table
   int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);

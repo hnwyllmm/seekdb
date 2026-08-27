@@ -241,7 +241,6 @@ int ObFixedHashMap<Key, Value, HashFunc>::get(Key key, Value &value)
     ret = common::OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(hash_func_(key, hash_val))) {
-    SHARE_LOG(WARN, "hash failed", K(ret));
   } else {
     ret = common::OB_ENTRY_NOT_EXIST;
     const int64_t pos = hash_val % bucket_num_;
@@ -295,7 +294,6 @@ int ObFixedHashMap<Key, Value, HashFunc>::set(const Key &key, const Value &value
     ret = common::OB_SIZE_OVERFLOW;
     SHARE_LOG(WARN, "hashmap is full", K(ret), K_(size), K_(node_num));
   } else if (OB_FAIL(hash_func_(key, hash_val))) {
-    SHARE_LOG(WARN, "hash failed", K(ret));
   } else {
     const int64_t pos = hash_val % bucket_num_;
     Node *node = buckets_[pos];
@@ -334,7 +332,6 @@ int ObFixedHashMap<Key, Value, HashFunc>::erase(const Key &key)
     ret = common::OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(hash_func_(key, hash_val))) {
-    SHARE_LOG(WARN, "hash failed", K(ret));
   } else {
     ret = common::OB_ENTRY_NOT_EXIST;
     const int64_t pos = hash_val % bucket_num_;
@@ -542,7 +539,6 @@ int ObSimpleFixedArray<T>::init(const int64_t capacity, const char *label)
     this->set_allocator(&local_allocator_);
     ret = this->common::ObFixedArrayImpl<T, common::ObArenaAllocator>::init(capacity);
     if (OB_FAIL(ret)) {
-      SHARE_LOG(WARN, "array init failed", K(ret), K(capacity));
     } else {
       inited_ = true;
     }
@@ -572,172 +568,46 @@ void ObSimpleFixedArray<T>::destroy()
   inited_ = false;
 }
 
+// Store the process-wide washable size in one atomic value. The wash path concurrently reads (get_washable_size)
+// while the wash thread writes (reuse/add/copy_from), so all access goes through
+// ATOMIC_* to keep the original concurrency-safety guarantee.
 class ObWashableSizeInfo
 {
 public:
-  ObWashableSizeInfo()
-    : buckets_(nullptr),
-      bucket_num_(0),
-      nodes_(nullptr),
-      size_(0),
-      count_(0),
-      allocator_(nullptr),
-      is_inited_(false) {}
-  ~ObWashableSizeInfo()
+  ObWashableSizeInfo() : washable_size_(0) {}
+  ~ObWashableSizeInfo() {}
+  void reuse()
   {
-    destroy();
-  }
-  int init(const int64_t size, const int64_t bucket_num, ObIAllocator &allocator)
-  {
-    int ret = OB_SUCCESS;
-    if (IS_INIT) {
-      ret = OB_INIT_TWICE;
-      COMMON_LOG(WARN, "Init twice", K(ret), K(is_inited_));
-    } else if (OB_UNLIKELY(size <= 0 || bucket_num <= 0)) {
-      ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "Invalid argument", K(ret), K(size), K(bucket_num));
-    } else {
-      char *buf = static_cast<char*>(allocator.alloc(sizeof(int32_t) * bucket_num + sizeof(Node) * size));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        COMMON_LOG(WARN, "Fail to alloc memory", K(ret));
-      } else {
-        allocator_ = &allocator;
-        buckets_ = reinterpret_cast<int32_t *>(buf);
-        bucket_num_ = bucket_num;
-        MEMSET(buckets_, -1, sizeof(int32_t) * bucket_num);
-        nodes_ = reinterpret_cast<Node *>(buf + sizeof(int32_t) * bucket_num);
-        new (nodes_) Node[size];
-        size_ = size;
-        is_inited_ = true;
-      }
-    }
-    return ret;
+    ATOMIC_STORE(&washable_size_, 0);
   }
   void destroy()
   {
-    is_inited_= false;
-    if (OB_NOT_NULL(buckets_) && OB_NOT_NULL(allocator_)) {
-      allocator_->free(buckets_);
-    }
-    allocator_ = nullptr;
-    buckets_ = nullptr;
-    bucket_num_ = 0;
-    nodes_ = nullptr;
-    size_ = 0;
-    count_ = 0;
-  }
-  void reuse()
-  {
-    MEMSET(buckets_, -1, sizeof(int32_t) * bucket_num_);
-    for (int i = 0 ; i < size_ ; ++i) {
-      nodes_[i].reuse();
-    }
-    count_ = 0;
+    ATOMIC_STORE(&washable_size_, 0);
   }
   int copy_from(const ObWashableSizeInfo &other)
   {
-    int ret = OB_SUCCESS;
-    if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      COMMON_LOG(WARN, "Not inited", K(ret));
-    } else if (OB_UNLIKELY(!other.is_inited_ || bucket_num_ != other.bucket_num_ || size_ != other.size_)) {
-      ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "Invalid argument", K(ret), K(other.is_inited_), K(bucket_num_),
-                                           K(other.bucket_num_), K(size_), K(other.size_));
-    } else {
-      MEMCPY(buckets_, other.buckets_, sizeof(int32_t) * bucket_num_ + sizeof(Node) * size_);
-      count_ = other.count_;
-    }
-    return ret;
+    ATOMIC_STORE(&washable_size_, ATOMIC_LOAD(&other.washable_size_));
+    return OB_SUCCESS;
   }
-  int get_size(const uint64_t tenant_id, int64_t &washable_size)
+  int get_size(int64_t &washable_size) const
+  {
+    washable_size = ATOMIC_LOAD(&washable_size_);
+    return OB_SUCCESS;
+  }
+  int add_washable_size(const int64_t size)
   {
     int ret = OB_SUCCESS;
-    washable_size = 0;
-    if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      COMMON_LOG(WARN, "Not inited", K(ret));
-    } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    if (OB_UNLIKELY(size < 0)) {
       ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
+      COMMON_LOG(WARN, "Invalid argument", K(ret), K(size));
     } else {
-      Node *tenant_node = find_tenant_node(tenant_id);
-      if (tenant_node != nullptr) {
-        washable_size = tenant_node->washable_size_;
-      }
-    }
-    return ret;
-  }
-  int add_washable_size(const uint64_t tenant_id, const int64_t size)
-  {
-    int ret = OB_SUCCESS;
-    if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      COMMON_LOG(WARN, "Not inited", K(ret));
-    } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || size < 0)) {
-      ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id), K(size));
-    } else {
-      Node *tenant_node = find_tenant_node(tenant_id, true /* add tenant */);
-      if (tenant_node != nullptr) {
-        tenant_node->washable_size_ += size;
-      }
+      ATOMIC_AAF(&washable_size_, size);
     }
     return ret;
   }
 
 private:
-  struct Node
-  {
-    Node() : tenant_id_(OB_INVALID_TENANT_ID), washable_size_(0), next_(-1) {}
-    void reuse() {
-      tenant_id_ = OB_INVALID_TENANT_ID;
-      washable_size_ = 0;
-      next_ = -1;
-    }
-    TO_STRING_KV(K_(tenant_id), K_(washable_size), K_(next));
-    uint64_t tenant_id_;
-    int64_t washable_size_;
-    int32_t next_;
-  };
-
-  Node *find_tenant_node(const uint64_t tenant_id, const bool add_tenant_node = false)
-  {
-    Node *tenant_node = nullptr;
-    int32_t idx = buckets_[tenant_id % bucket_num_];
-    tenant_node = get_node(idx);
-    while (tenant_node != nullptr) {
-      if (tenant_id == tenant_node->tenant_id_) {
-        break;
-      } else {
-        tenant_node = get_node(tenant_node->next_);
-      }
-    }
-    if (nullptr == tenant_node && add_tenant_node && count_ < size_) {
-      tenant_node = nodes_ + count_;
-      tenant_node->tenant_id_ = tenant_id;
-      tenant_node->next_ = idx;
-      buckets_[tenant_id % bucket_num_] = count_++;
-    }
-    return tenant_node;
-  }
-  Node *get_node(const int32_t idx) const
-  {
-    Node *node = nullptr;
-    if (idx >= 0 && idx < size_) {
-      node = nodes_ + idx;
-    }
-    return node;
-  }
-
-  int32_t *buckets_;
-  int64_t bucket_num_;
-  Node *nodes_;
-  int64_t size_;
-  int32_t count_;
-  ObIAllocator *allocator_;
-  bool is_inited_;
+  int64_t washable_size_;
 };
 
 

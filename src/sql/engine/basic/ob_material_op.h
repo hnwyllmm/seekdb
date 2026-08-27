@@ -44,7 +44,6 @@ public:
   ObMaterialOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     : ObOpInput(ctx, spec), bypass_(false) {};
   virtual ~ObMaterialOpInput() = default;
-  virtual int init(ObTaskInfo &task_info) override { UNUSED(task_info); return common::OB_SUCCESS; }
   virtual void reset() override { bypass_ = false; }
   void set_bypass(bool bypass) { bypass_ = bypass; }
   int64_t is_bypass() const { return bypass_; }
@@ -67,7 +66,7 @@ public:
   virtual int inner_get_next_batch(int64_t max_row_cnt) override;
   virtual int inner_close() override;
   virtual void destroy() override;
-  int init_material_impl(int64_t tenant_id, int64_t row_count);
+  int init_material_impl(int64_t row_count);
 
   int get_material_row_count(int64_t &count) const
   {

@@ -15,15 +15,11 @@
  */
 
 #include <gtest/gtest.h>
-#include "logservice/leader_coordinator/table_accessor.h"
+#include "lib/container/ob_tuple.h"
 
 namespace oceanbase
 {
-using namespace share;
 using namespace common;
-using namespace palf;
-using namespace logservice;
-using namespace logservice::coordinator;
 namespace unittest
 {
 
@@ -51,15 +47,4 @@ TEST_F(TestObTule, normal)
 }
 
 }
-}
-
-int main(int argc, char **argv)
-{
-  system("rm -rf etc run log wallet store");
-  system("rm -rf test_ob_tuple.log");
-  oceanbase::common::ObLogger &logger = oceanbase::common::ObLogger::get_logger();
-  logger.set_file_name("test_ob_tuple.log", false, false);
-  logger.set_log_level("DEBUG");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
 }

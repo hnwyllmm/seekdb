@@ -28,7 +28,7 @@ using namespace common;
 TEST(RARowStore, keep_projector)
 {
   ObRARowStore rs(NULL, true);
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SYS_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_RUNTIME_ID));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -84,7 +84,7 @@ TEST(RARowStore, alloc_project_fail)
 {
   ObEmptyAlloc alloc;
   ObRARowStore rs(&alloc, true);
-  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SYS_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, rs.init(100 << 20, OB_SERVER_RUNTIME_ID));
   const int64_t OBJ_CNT = 3;
   ObObj objs[OBJ_CNT];
   ObNewRow r;
@@ -105,10 +105,3 @@ TEST(RARowStore, alloc_project_fail)
 
 } // end namespace sql
 } // end namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

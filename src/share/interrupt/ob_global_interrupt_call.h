@@ -17,14 +17,13 @@
 #ifndef OCEANBASE_COMMON_GLOBAL_INTERRUPT_CALL_H_
 #define OCEANBASE_COMMON_GLOBAL_INTERRUPT_CALL_H_
 
-#include "share/interrupt/ob_interrupt_rpc_proxy.h"
+#include "share/interrupt/ob_interrupt_message.h"
 #include "lib/ob_errno.h"
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/coro/co_var.h"
 
-using oceanbase::obrpc::ObInterruptMessage;
-using oceanbase::obrpc::ObInterruptRpcProxy;
+using oceanbase::obcall::ObInterruptMessage;
 
 namespace oceanbase {
 
@@ -244,9 +243,7 @@ private:
   bool checker_exist_;
 };
 
-/// Remote interrupt manager
-/// Exist in singleton mode to provide
-/// Interface for remote interrupt signal transmission
+/// Process-global interrupt manager.
 class ObGlobalInterruptManager
 {
 private:
@@ -264,20 +261,18 @@ public:
 public:
   static ObGlobalInterruptManager *getInstance();
 
-  /// The initialization method is used to obtain the host and rpc transmitter of the current machine, and initialize the map
-  int init(const ObAddr &host, ObInterruptRpcProxy *rpc_proxy);
+  /// Initialize the local checker map.
+  int init();
 
   /// Record the checker pointer in the map with tid as the key
   int register_checker(ObInterruptChecker *checker, const ObInterruptibleTaskID &tid);
 
   int unregister_checker(ObInterruptChecker *checker, const ObInterruptibleTaskID &tid);
 
-  /// Interface for remote call
-  /// If the dst is consistent with the local address, the interrupt message will not be sent through rpc
-  int interrupt(const ObAddr &dst, const ObInterruptibleTaskID &tid, ObInterruptCode &code);
+  /// Deliver an interrupt asynchronously inside this process.
+  int interrupt_async(const ObInterruptibleTaskID &tid, ObInterruptCode &code);
 
-  /// Local coroutine notification interface
-  /// You can directly modify the state of the local coroutine checker or as the handle method of the RPC receiver
+  /// Deliver an interrupt synchronously inside this process.
   int interrupt(const ObInterruptibleTaskID &tid, ObInterruptCode &code);
 
   /// Used to release map resources, etc.
@@ -287,15 +282,13 @@ public:
 
   MAP &get_map() { return map_; }
 private:
-  ObGlobalInterruptManager() : rpc_proxy_(nullptr), map_(), is_inited_(false) {};
+  ObGlobalInterruptManager() : map_(), is_inited_(false) {};
   ObGlobalInterruptManager(const ObGlobalInterruptManager &) {};
 
 private:
   static ObGlobalInterruptManager *instance_;
 
 private:
-  ObAddr local_;
-  ObInterruptRpcProxy *rpc_proxy_;
   MAP map_;
   bool is_inited_;
 };

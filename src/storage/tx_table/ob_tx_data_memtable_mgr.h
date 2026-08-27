@@ -28,7 +28,7 @@ namespace oceanbase
 
 namespace share
 {
-class ObTenantTxDataAllocator;
+class ObTxDataAllocator;
 };
 
 namespace storage
@@ -43,15 +43,13 @@ public:
   }
   ~ObTxDataMemtableWriteGuard() { reset(); }
 
-  int push_back_table(ObIMemtable *i_memtable, ObTenantMetaMemMgr *t3m)
+  int push_back_table(ObIMemtable *i_memtable, ObStorageMetaMemMgr *t3m)
   {
     int ret = OB_SUCCESS;
     ObTxDataMemtable *tx_data_memtable = nullptr;
     if (OB_FAIL(handles_[size_].set_table(
             static_cast<ObITable *const>(i_memtable), t3m, ObITable::TableType::TX_DATA_MEMTABLE))) {
-      STORAGE_LOG(WARN, "set i memtable to handle failed", KR(ret), KP(i_memtable), KP(t3m));
     } else if (OB_FAIL(handles_[size_].get_tx_data_memtable(tx_data_memtable))) {
-      STORAGE_LOG(ERROR, "get tx data memtable from memtable handle failed", KR(ret), K(handles_[size_]));
     } else if (OB_ISNULL(tx_data_memtable)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "tx data memtable is unexpected nullptr", K(ret), KPC(tx_data_memtable));
@@ -96,9 +94,8 @@ public:  // ObTxDataMemtableMgr
   ObTxDataMemtableMgr();
   virtual ~ObTxDataMemtableMgr();
   int init(const common::ObTabletID &tablet_id,
-           const share::ObLSID &ls_id,
            ObFreezer *freezer,
-           ObTenantMetaMemMgr *t3m) override;
+           ObStorageMetaMemMgr *t3m) override;
   virtual void destroy() override;
 
   int offline();
@@ -146,7 +143,7 @@ public:  // ObTxDataMemtableMgr
   // ================ INHERITED FROM ObCommonCheckpoint ===============
   virtual share::SCN get_rec_scn() override;
 
-  virtual int flush(share::SCN recycle_scn, const int64_t trace_id, bool need_freeze = true) override;
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) override;
 
   virtual ObTabletID get_tablet_id() const override;
 
@@ -155,7 +152,6 @@ public:  // ObTxDataMemtableMgr
   INHERIT_TO_STRING_KV("ObIMemtableMgr",
                        ObIMemtableMgr,
                        K_(is_freezing),
-                       K_(ls_id),
                        K_(mini_merge_recycle_commit_versions_ts),
                        KP_(tx_data_table),
                        KP_(ls_tablet_svr));
@@ -181,14 +177,12 @@ private:  // ObTxDataMemtableMgr
 
   int get_all_memtables_(ObTableHdlArray &handles);
 
-  int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles, 
-      const int64_t trace_id);
+  int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles);
 
   ObTxDataMemtable *get_tx_data_memtable_(const int64_t pos) const;
 
 private:  // ObTxDataMemtableMgr
   bool is_freezing_;
-  share::ObLSID ls_id_;
   int64_t mini_merge_recycle_commit_versions_ts_;
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;

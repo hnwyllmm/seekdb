@@ -20,7 +20,7 @@
 #include "lib/literals/ob_literals.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/blockstore/ob_shared_object_reader_writer.h"
+#include "storage/blockstore/ob_object_reader_writer.h"
 
 namespace oceanbase
 {
@@ -28,11 +28,6 @@ namespace oceanbase
 namespace blocksstable
 {
 class ObSSTable;
-}
-
-namespace share
-{
-class ObTabletAutoincSeq;
 }
 
 namespace storage
@@ -49,19 +44,18 @@ class ObStorageMetaKey final : public common::ObIKVCacheKey
 public:
   ObStorageMetaKey();
   ObStorageMetaKey(
-      const uint64_t tenant_id,
       const ObMetaDiskAddr &phy_addr);
   virtual ~ObStorageMetaKey();
   virtual bool operator ==(const ObIKVCacheKey &other) const override;
-  virtual uint64_t get_tenant_id() const override;
+  
   virtual uint64_t hash() const override;
   virtual int64_t size() const override;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
   bool is_valid() const;
   const ObMetaDiskAddr &get_meta_addr() const;
-  TO_STRING_KV(K_(tenant_id), K_(phy_addr));
+  TO_STRING_KV(K_(phy_addr));
 private:
-  uint64_t tenant_id_;
+  
   ObMetaDiskAddr phy_addr_;
 };
 
@@ -71,9 +65,8 @@ public:
   enum MetaType : uint16_t
   {
     SSTABLE         = 0,
-    CO_SSTABLE      = 1,
-    TABLE_STORE     = 2,
-    MAX             = 3,
+    TABLE_STORE     = 1,
+    MAX             = 2,
   };
 public:
   ObStorageMetaValue();
@@ -94,12 +87,6 @@ public:
     obj_ = nullptr;
   }
   static int process_sstable(
-      ObStorageMetaValueHandle &handle,
-      const ObStorageMetaKey &key,
-      const char *buf,
-      const int64_t size,
-      const ObTablet *tablet);
-  static int process_co_sstable(
       ObStorageMetaValueHandle &handle,
       const ObStorageMetaKey &key,
       const char *buf,
@@ -196,7 +183,7 @@ private:
 private:
   friend class ObStorageMetaCache;
   ObMetaDiskAddr phy_addr_;
-  ObSharedObjectReadHandle io_handle_;
+  ObObjectReadHandle io_handle_;
   ObStorageMetaValueHandle cache_handle_;
 };
 
@@ -208,7 +195,7 @@ public:
 public:
   ObStorageMetaCache();
   virtual ~ObStorageMetaCache();
-  int init(const char *cache_name, const int64_t priority);
+  int init(const char *cache_name);
   void destory();
   int get_meta(
       const ObStorageMetaValue::MetaType type,
@@ -226,7 +213,7 @@ public:
       common::ObSafeArenaAllocator &allocator,
       common::ObIArray<ObStorageMetaHandle> &meta_handles);
 private:
-  class ObStorageMetaIOCallback : public ObSharedObjectIOCallback
+  class ObStorageMetaIOCallback : public ObObjectIOCallback
   {
   public:
     ObStorageMetaIOCallback(
@@ -242,7 +229,7 @@ private:
     const char *get_cb_name() const override { return "StorageMetaIOCB"; }
     bool is_valid() const;
 
-    INHERIT_TO_STRING_KV("ObSharedObjectIOCallback", ObSharedObjectIOCallback,
+    INHERIT_TO_STRING_KV("ObObjectIOCallback", ObObjectIOCallback,
         K_(key), KP_(tablet), KP_(arena_allocator));
 
   private:
@@ -284,7 +271,7 @@ int ObStorageMetaValue::bypass_process_storage_meta(
     const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "ProcMetaVaule"));
+  ObArenaAllocator tmp_allocator(common::ObMemAttr("ProcMetaVaule"));
   int64_t pos = 0;
   T t;
   char *buffer = nullptr;
@@ -293,7 +280,6 @@ int ObStorageMetaValue::bypass_process_storage_meta(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(size), K(handle));
   } else if (OB_FAIL(t.deserialize(tmp_allocator, buf, size, pos))) {
-    STORAGE_LOG(WARN, "fail to deserialize ", K(ret), KP(buf), K(size));
   } else {
     time_guard.click("deserialize");
     ObIStorageMetaObj *tiny_meta = nullptr;
@@ -303,7 +289,6 @@ int ObStorageMetaValue::bypass_process_storage_meta(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buffer_size));
     } else if (OB_FAIL(t.deep_copy(buffer + buffer_pos, t.get_deep_copy_size(), tiny_meta))) {
-      STORAGE_LOG(WARN, "fail to deserialize T", K(ret), KP(buf), K(size));
     } else {
       time_guard.click("deep_copy");
       handle.get_cache_value()->value_ = new (buffer) ObStorageMetaValue(type, tiny_meta);
@@ -316,4 +301,3 @@ int ObStorageMetaValue::bypass_process_storage_meta(
 } // end oceanbase
 
 #endif /* OCEANBASE_STORAGE_OB_STORAGE_META_CACHE_H_ */
-

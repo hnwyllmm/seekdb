@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_ALL_VIRTUAL_ENGINE_TABLE_
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_ALL_VIRTUAL_ENGINE_TABLE_
 
-#include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
 
 namespace oceanbase
 {
@@ -25,13 +25,12 @@ namespace observer
 {
 class ObAllVirtualEngineTable : public common::ObVirtualTableScannerIterator
 {
-  static const int32_t ENGINE_COLUMN_COUNT = 6;
+  static const int32_t ENGINE_COLUMN_COUNT = 5;
   enum COLUMN_NAME {
     ENGINE = common::OB_APP_MIN_COLUMN_ID,
     SUPPORT,
     COMMENT,
     TRANSACTIONS,
-    XA,
     SAVEPOINTS,
   };
 public:

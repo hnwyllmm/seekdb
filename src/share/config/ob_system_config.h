@@ -19,7 +19,7 @@
 
 #include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_array.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "common/mysqlclient/ob_mysql_proxy.h"
 #include "share/config/ob_system_config_key.h"
 #include "share/config/ob_system_config_value.h"
 
@@ -46,7 +46,7 @@ public:
            const ObSystemConfigValue *&pvalue) const;
   int read_int64(const ObSystemConfigKey &key, int64_t &value, const int64_t &def) const;
   int read_int(const ObSystemConfigKey &key, int64_t &value, const int64_t &def) const;
-  int read_config(const uint64_t tenant_id, const ObSystemConfigKey &key, ObConfigItem &item) const;
+  int read_config(const ObSystemConfigKey &key, ObConfigItem &item) const;
 
   int update_value(const ObSystemConfigKey &key, const ObSystemConfigValue &value);
 
@@ -68,7 +68,6 @@ inline int ObSystemConfig::init()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(map_.create(MAP_SIZE, ObModIds::OB_HASH_BUCKET_SYS_CONF))) {
-    OB_LOG(WARN, "create params_map_ fail", K(ret));
   }
   return ret;
 }

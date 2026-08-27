@@ -3,7 +3,6 @@ explain_protocol: 0
 
 set @@ob_enable_plan_cache = 0;
 drop table if exists t1;
-alter system set default_table_store_format = "row";
 create table t1 (c1 int, c2 int unsigned,
     c3 tinyint, c4 tinyint unsigned,
     c5 smallint, c6 smallint unsigned,
@@ -7592,6 +7591,8 @@ select * from t1;
 +----------+
 drop table t1;
 
+create table t_nullif_source(id bigint primary key);
+insert into t_nullif_source values (1), (2), (3), (4), (5);
 select
   subq_0.c3,
   nullif(subq_0.c3, cast(32 as decimal)) as c14
@@ -7601,14 +7602,17 @@ from
           cast(
               (
                 select
-                  help_keyword_id
+                  id
                 from
-                  mysql.help_keyword
+                  t_nullif_source
+                order by
+                  id
                 limit
                   1 offset 4
               ) as DECIMAL
       ) as c3
   ) as subq_0;
+drop table t_nullif_source;
 
 ##bugfix: 
 create table t1 (pk int);

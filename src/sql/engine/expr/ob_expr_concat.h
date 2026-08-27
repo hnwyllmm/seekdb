@@ -40,21 +40,7 @@ public:
                   const common::ObString obj1,
                   const common::ObString obj2,
                   common::ObIAllocator *allocator,
-                  bool is_oracle_mode,
                   const int64_t max_result_len);
-  // Check result length with OB_MAX_PACKET_LENGTH.
-  // %result type is set to ObLongTextType
-  static int calc(common::ObObj &result,
-                         const char *obj1_ptr,
-                         const int32_t this_len,
-                         const char *obj2_ptr,
-                         const int32_t other_len,
-                         common::ObIAllocator *allocator);
-  static int calc_text(common::ObObj &result,
-                                     const common::ObObj obj1,
-                                     const common::ObObj obj2,
-                                     ObIAllocator *allocator);
-
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

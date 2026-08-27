@@ -16,7 +16,7 @@
  
 #ifndef OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_H_
 #define OB_ALL_VIRTUAL_KVCACHE_STORE_MEMBLOCK_H_
-#include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
 #include "share/cache/ob_kv_storecache.h"
 
 namespace oceanbase
@@ -39,16 +39,12 @@ private:
 private:
   enum CACHE_COLUMN
   {
-        CACHE_ID = common::OB_APP_MIN_COLUMN_ID,
-    CACHE_NAME,
-    MEMBLOCK_PTR,
-    REF_COUNT,
+    MEMBLOCK_PTR = common::OB_APP_MIN_COLUMN_ID,
     STATUS,
     POLICY,
     KV_CNT,
     GET_CNT,
     RECENT_GET_CNT,
-    PRIORITY,
     SCORE,
     ALIGN_SIZE
   };

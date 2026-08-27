@@ -27,7 +27,7 @@ using namespace common;
 ObEncodingHashTable::ObEncodingHashTable() : is_created_(false), bucket_num_(0),
     node_num_(0), list_num_(0), node_cnt_(0), list_cnt_(0), buckets_(NULL), nodes_(NULL),
     lists_(NULL), skip_bit_(NULL), hash_val_(NULL),
-    alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE, OB_MALLOC_NORMAL_BLOCK_SIZE)
   {
   MEMSET(&null_nodes_, 0, sizeof(null_nodes_));
   MEMSET(&nope_nodes_, 0, sizeof(nope_nodes_));
@@ -127,7 +127,6 @@ int ObEncodingHashTableBuilder::add_to_table(const ObDatum &datum, const int64_t
   while (OB_SUCC(ret) && nullptr != list) {
     bool is_equal = false;
     if (OB_FAIL(equal(*list->header_->datum_, datum, is_equal))) {
-      LOG_WARN("check datum equality failed", K(ret), K(datum), KPC(list->header_->datum_));
     } else if (is_equal) {
       add_to_list(*list, nodes_[row_idx], datum, node_cnt_);
       break;
@@ -159,7 +158,7 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
   } else {
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
     const bool need_binary_hash =
-        (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC || store_class == ObRoaringBitmapSC);
+        store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC || store_class == ObGeometrySC;
     const bool need_batch_hash = !need_binary_hash;
     bool has_lob_header = col_desc.col_type_.is_lob_storage();
     ObPrecision precision = PRECISION_UNKNOWN_YET;
@@ -168,9 +167,9 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
       OB_ASSERT(precision != PRECISION_UNKNOWN_YET);
       OB_ASSERT(precision >= 0 && precision <= OB_MAX_DECIMAL_PRECISION);
     }
-    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
+    common::ObDatumBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
         col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type(),
-        col_desc.col_type_.get_scale(), lib::is_oracle_mode(), has_lob_header, precision);
+        col_desc.col_type_.get_scale(), has_lob_header, precision);
     ObHashFunc hash_func;
     hash_func.hash_func_ = basic_funcs->murmur_hash_v2_;
     hash_func.batch_hash_func_ = basic_funcs->murmur_hash_v2_batch_;
@@ -203,11 +202,9 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
           } else if (!need_batch_hash) {
             uint64_t pos = 0;
             if (OB_FAIL(hash(datum, hash_func, need_binary_hash, pos))) {
-              STORAGE_LOG(WARN, "hash failed", K(ret));
             } else {
               pos = pos & mask;
               if (OB_FAIL(add_to_table(datum, pos, row_id))) {
-                STORAGE_LOG(WARN, "fail to add to table", K(ret), K(row_id));
               }
             }
           }
@@ -224,13 +221,13 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
             *skip_bit_,
             datum_array_size,
             &seed,
-            false);
+            false,
+            nullptr);
         for (int64_t idx = 0; OB_SUCC(ret) && idx < datum_array_size && list_cnt_ < list_num_; ++idx) {
           if (!skip_bit_->at(idx)) {
             int64_t row_id = i * dimension_size + idx;
             uint64_t pos = hash_val_[idx] & mask;
             if (OB_FAIL(add_to_table(col_datums.at(row_id), pos, row_id))) {
-              STORAGE_LOG(WARN, "fail to add to table", K(ret), K(row_id), K(pos));
             }
           }
         }
@@ -286,7 +283,7 @@ int ObEncodingHashTableBuilder::hash(
   if (need_binary) {
     res = xxhash64(datum.ptr_, datum.len_, seed);
   } else {
-    ret = hash_func.hash_func_(datum, seed, res);
+    ret = hash_func.hash_func_(datum, seed, res, nullptr);
   }
   return ret;
 }
@@ -295,7 +292,7 @@ ObEncodingHashTableFactory::ObEncodingHashTableFactory()
   : allocator_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObMalloc(blocksstable::OB_ENCODING_LABEL_HT_FACTORY)),
     hashtables_()
 {
-  lib::ObMemAttr attr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_HT_FACTORY);
+  lib::ObMemAttr attr(blocksstable::OB_ENCODING_LABEL_HT_FACTORY);
   allocator_.set_attr(attr);
   hashtables_.set_attr(attr);
 }
@@ -426,8 +423,7 @@ int build_column_encoding_ctx(ObEncodingHashTable *ht,
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
-      case ObGeometrySC:
-      case ObRoaringBitmapSC: { // geometry, json and text storage class have the same behavior currently
+      case ObGeometrySC: { // geometry, json and text storage class have the same behavior currently
         col_ctx.fix_data_size_ = -1;
         col_ctx.max_string_size_ = -1;
         bool var_store = false;

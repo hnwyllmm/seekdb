@@ -44,8 +44,16 @@ function variables_prepare {
   export task="default"
   fi
   port_gen=$((100*($(id -u)%500)+10000))
-  HOST=$(hostname -i)
-  DATA_PATH="/data/$(whoami)"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    HOST=$(ipconfig getifaddr en0 2>/dev/null || echo "127.0.0.1")
+  else
+    HOST=$(hostname -i)
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    DATA_PATH="$HOME"
+  else
+    DATA_PATH="/data/$(whoami)"
+  fi
   IPADDRESS="127.0.0.1"
   COMPONENT="seekdb"
   if grep 'dep_create.sh' $BASE_DIR/build.sh 2>&1 >/dev/null
@@ -89,7 +97,7 @@ function mirror_create {
     echo $obs_version_info
     return 1
   fi
-  obs_version=$(echo "$obs_version_info" | grep -E "(observer|seekdb) \(OceanBase([ \_][sS]eek[dD][bB])? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
+  obs_version=$(echo "$obs_version_info" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
   if [[ "$obs_version" == "" ]]
   then
     echo "can not check seekdb version"
@@ -101,6 +109,7 @@ function mirror_create {
   mirror_path=$DEPLOY_PATH/mirror_create
   mkdir -p $mirror_path/bin/ && \
     cp -rf $DEPLOY_PATH/etc $mirror_path/ && \
+    rm -f $mirror_path/etc/seekdb.data_version.bin && \
     cp -rf $DEPLOY_PATH/admin $mirror_path/ && \
     ln -sf $DEPLOY_PATH/bin/seekdb $mirror_path/bin/seekdb && \
     success=1
@@ -159,13 +168,12 @@ EOF
 )
   single_conf=${base_template}
   single_conf=${single_conf//"{{%% SERVERS %%}}"/$SERVERS}
-  single_without_proxy_conf=${single_conf//"{{%% PROXY_CONF %%}}"/}
 
-  [ ! -f ./single.yaml ] && echo "$single_without_proxy_conf" > ./single.yaml && echo "generate yaml config file: $(readlink -f ./single.yaml)"
+  [ ! -f ./single.yaml ] && echo "$single_conf" > ./single.yaml && echo "generate yaml config file: $(readlink -f ./single.yaml)"
 }
 
 function show_deploy_name {
-  echo -e "\e[1m\033[32mDeploy name: $deploy_name \033[0m"
+  echo -e "\033[1m\033[32mDeploy name: $deploy_name \033[0m"
 }
 
 function get_deploy_name {
@@ -250,7 +258,11 @@ function deploy_cluster {
     if [[ -f $config_yaml ]]
     then
       echo "Use config file: " $config_yaml
-      temp_config_yaml=$(mktemp /tmp/oceanbase-seekdb-config-XXXXXX.yaml)
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        temp_config_yaml=$(mktemp /tmp/oceanbase-seekdb-config-XXXXXX)
+      else
+        temp_config_yaml=$(mktemp /tmp/oceanbase-seekdb-config-XXXXXX.yaml)
+      fi
       cp $config_yaml $temp_config_yaml
       config_yaml=$temp_config_yaml
 
@@ -269,7 +281,11 @@ function deploy_cluster {
   fi
   if [[ -f $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml ]]
   then
-    sed -i '/$_deploy_/d' $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      sed -i '' '/$_deploy_/d' $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml
+    else
+      sed -i '/$_deploy_/d' $OBD_CLUSTER_PATH/$deploy_name/inner_config.yaml
+    fi
   fi
   yaml_config_args="--config $config_yaml"
   obd cluster deploy "$deploy_name" --force --clean $yaml_config_args || exit 1
@@ -279,8 +295,7 @@ function deploy_cluster {
     do
       read -r -p "Start $deploy_name failed, do you want to edit config and continue?[Y/n]" input
       case $input in
-        [Yy]);&
-        "")
+        [Yy]|"")
         obd cluster edit-config "$deploy_name"
         if obd cluster start "$deploy_name" -f;
         then
@@ -312,7 +327,7 @@ function get_init_sql {
   [[ "$INIT_FLIES" != "" ]] && return
   if [[ -f $BASE_DIR/tools/deploy/init.sql ]]
   then
-    INIT_FLIES="--init-sql-files=init.sql,init_user.sql|root@sys|test"
+    INIT_FLIES="--init-sql-files=init.sql,init_user.sql|root|test"
   fi
 }
 
@@ -415,7 +430,7 @@ function edit {
   obd cluster edit-config $deploy_name
   if [[ "$(grep 'config_status: NEED_REDEPLOY' $OBD_CLUSTER_PATH/$deploy_name/.data)" != "" ]]
   then
-    echo -e "\e[33mif you need redeploy, please use '$entrance redeploy -n $deploy_name'\e[0m"
+    echo -e "\033[33mif you need redeploy, please use '$entrance redeploy -n $deploy_name'\033[0m"
   fi
 }
 
@@ -427,11 +442,6 @@ function display {
 function sysbench {
   get_deploy_name
   obd test sysbench $deploy_name $OBCLIENT_BIN_ARGS $extra_args
-}
-
-function tpch {
-  get_deploy_name
-  obd test tpch $deploy_name $OBCLIENT_BIN_ARGS $extra_args
 }
 
 function tpcc {
@@ -446,7 +456,11 @@ function set-config {
     key="$1"
     value="$2"
     if [[ $(grep -E "^$key=" $OB_DO_GLOBAL_CONFIG) ]]; then
-      sed -i "s/^$key=.*/$key=$value/g" $OB_DO_GLOBAL_CONFIG
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        sed -i '' "s/^$key=.*/$key=$value/g" $OB_DO_GLOBAL_CONFIG
+      else
+        sed -i "s/^$key=.*/$key=$value/g" $OB_DO_GLOBAL_CONFIG
+      fi
     else
       echo "$key=$value" >> $OB_DO_GLOBAL_CONFIG
     fi
@@ -472,15 +486,14 @@ upgrade [-n DEPLOY_NAME]                 Upgrade cluster.
 list [-n DEPLOY_NAME]                    List cluster.
 display [-n DEPLOY_NAME]                 Display cluster info.
 sysbench [-n DEPLOY_NAME]                Run sysbench, use '--help' for more details.
-tpch [-n DEPLOY_NAME]                    Run tpch test, use '--help' for more details.
 tpcc [-n DEPLOY_NAME]                    Run tpcc test, use '--help' for more details.
 mysqltest [-n DEPLOY_NAME]               Run mysqltest, use '--help' for more details.
 pid [-n DEPLOY_NAME]                     Get pid list for servers, use '--help' for more details.
 ssh [-n DEPLOY_NAME]                     Ssh to target server and change directory to log path, use '--help' for more details.
 less [-n DEPLOY_NAME]                    Use command less to the seekdb.log, use '--help' for more details.
 gdb [-n DEPLOY_NAME]                     Use gdb to attch target server, use '--help' for more details.
-sql [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
-sys [-n DEPLOY_NAME]                     Connect to target server by root@sys, use '--help' for more details.
+sql [-n DEPLOY_NAME]                     Connect to target server by root, use '--help' for more details.
+sys [-n DEPLOY_NAME]                     Connect to target server by root, use '--help' for more details.
 graph [-n DEPLOY_NAME]
 
 Options:
@@ -562,7 +575,7 @@ function main() {
   then
   obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
   fi
-  OBD_DEPLOY_BASE_DIR=$(grep -Po '"OBD_DEPLOY_BASE_DIR": "(.*?)"[,}]' ./.obd/.obd_environ  | sed 's/"OBD_DEPLOY_BASE_DIR": "\(.*\)"[,}]/\1/g')
+  OBD_DEPLOY_BASE_DIR=$(awk -F'"' '/"OBD_DEPLOY_BASE_DIR"/{print $4}' ./.obd/.obd_environ 2>/dev/null)
   if [[ ! -d $OBD_DEPLOY_BASE_DIR ]]
   then
   obd env set OBD_DEPLOY_BASE_DIR "$DEPLOY_PATH"
@@ -605,8 +618,7 @@ function main() {
     [[ "$EXEC_CP" == "1" ]] && copy_sh
     mysqltest
     ;;
-    sql);&
-    sys)
+    sql|sys)
     connect
     ;;
     pid)
@@ -637,9 +649,6 @@ function main() {
     ;;
     sysbench)
     sysbench
-    ;;
-    tpch)
-    tpch
     ;;
     tpcc)
     tpcc

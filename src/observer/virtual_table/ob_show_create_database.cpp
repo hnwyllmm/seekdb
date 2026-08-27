@@ -16,7 +16,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_show_create_database.h"
-#include "share/schema/ob_schema_printer.h"
+#include "sql/printer/ob_schema_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
@@ -51,22 +51,17 @@ int ObShowCreateDatabase::inner_get_next_row(common::ObNewRow *&row)
       const ObDatabaseSchema *db_schema = NULL;
       uint64_t show_database_id = OB_INVALID_ID;
       if (OB_FAIL(calc_show_database_id(show_database_id))) {
-        LOG_WARN("fail to calc show database id", K(ret));
       } else if (OB_UNLIKELY(OB_INVALID_ID == show_database_id)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
-      } else if (OB_FAIL(schema_guard_->get_database_schema(effective_tenant_id_,
+      } else if (OB_FAIL(schema_guard_->get_database_schema(
                  show_database_id, db_schema))) {
-        LOG_WARN("failed to get database_schema", K(ret), K_(effective_tenant_id), K(show_database_id));
       } else if (OB_UNLIKELY(NULL == db_schema)) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_WARN("db_schema is null", K(ret), K(show_database_id));
       } else {
         if (OB_FAIL(fill_row_cells(show_database_id, db_schema->get_database_name_str()))) {
-          LOG_WARN("fail to fill row cells", K(ret),
-                     K(show_database_id), K(db_schema->get_database_name_str()));
         } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-          LOG_WARN("fail to add row", K(ret), K(cur_row_));
         } else {
           scanner_it_ = scanner_.begin();
           start_to_read_ = true;
@@ -129,9 +124,7 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
                K(cur_row_.count_),
                K(output_column_ids_.count()));
   } else if (OB_FAIL(session_->get_show_ddl_in_compat_mode(strict_mode))) {
-    SERVER_LOG(WARN, "failed to get _show_ddl_in_compat_mode", K(ret));
   } else if (OB_FAIL(session_->get_sql_quote_show_create(sql_quote_show_create))) {
-    SERVER_LOG(WARN, "failed to get sql_quote_show_create", K(ret));
   } else if (OB_FALSE_IT(IS_ANSI_QUOTES(session_->get_sql_mode(), ansi_quotes))) {
     // do nothing
   } else {
@@ -161,14 +154,11 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
           // create_database
           ObSchemaPrinter schema_printer(*schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes);
           int64_t pos = 0;
-          if (OB_FAIL(schema_printer.print_database_definiton(effective_tenant_id_,
-                                                              show_database_id,
+          if (OB_FAIL(schema_printer.print_database_definiton(show_database_id,
                                                               false,
                                                               db_def_buf,
                                                               db_def_buf_size,
                                                               pos))) {
-            LOG_WARN("Generate database definition failed",
-                     K(ret), K(effective_tenant_id_), K(show_database_id));
           } else {
             ObString value_str(static_cast<int32_t>(db_def_buf_size),
                                static_cast<int32_t>(pos), db_def_buf);
@@ -182,14 +172,11 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
           // create_database_with_if_not_exists
           ObSchemaPrinter schema_printer(*schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes);
           int64_t pos = 0;
-          if (OB_FAIL(schema_printer.print_database_definiton(effective_tenant_id_,
-                                                              show_database_id,
+          if (OB_FAIL(schema_printer.print_database_definiton(show_database_id,
                                                               true,
                                                               db_def_buf,
                                                               db_def_buf_size,
                                                               pos))) {
-            LOG_WARN("Generate database definition failed",
-                     K(ret), K(effective_tenant_id_), K(show_database_id));
           } else {
             ObString value_str(static_cast<int32_t>(db_def_buf_size),
                                static_cast<int32_t>(pos), db_def_buf);

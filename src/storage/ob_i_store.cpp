@@ -17,18 +17,14 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_i_store.h"
-#include "storage/tx/ob_trans_part_ctx.h"
+#include "share/rc/ob_server_runtime.h"
+#include "storage/tx/ob_tx_ctx.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
 using namespace transaction;
 using namespace share;
-namespace common
-{
-OB_SERIALIZE_MEMBER(ObQueryFlag, flag_);
-}
-
 namespace storage
 {
 using namespace common;
@@ -45,7 +41,6 @@ int ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(ObColDescIArray &store_ou
     // so in effect we store the latest version first
     desc.col_order_ = ObOrderType::ASC;
     if (OB_FAIL(store_out_cols.push_back(desc))) {
-      STORAGE_LOG(WARN, "add store utput columns failed", K(ret));
     }
   }
   return ret;
@@ -53,7 +48,6 @@ int ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(ObColDescIArray &store_ou
 
 void ObStoreCtx::reset()
 {
-  ls_id_.reset();
   ls_ = nullptr;
   branch_ = 0;
   tablet_id_.reset();
@@ -70,45 +64,34 @@ void ObStoreCtx::reset()
   check_seq_ = 0;
 }
 
-int ObStoreCtx::init_for_read(const ObLSID &ls_id,
-                              const common::ObTabletID tablet_id,
+int ObStoreCtx::init_for_read(const common::ObTabletID tablet_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
                               const SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ObLSHandle ls_handle;
-  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    STORAGE_LOG(WARN, "get_ls from ls service fail.", K(ret), K(*ls_svr));
+  ObLSService *ls_svr = ::oceanbase::share::server_service<::oceanbase::storage::ObLSService>();
+  ObLS *tenant_ls = nullptr;
+  if (OB_FAIL(ls_svr->get_ls(tenant_ls))) {
   } else {
     tablet_id_ = tablet_id;
-    ret = init_for_read(ls_handle, timeout, tx_lock_timeout, snapshot_version);
+    ret = init_for_read(tenant_ls, timeout, tx_lock_timeout, snapshot_version);
   }
   return ret;
 }
 
-int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
+int ObStoreCtx::init_for_read(ObLS *tenant_ls,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
                               const SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  ObTxTable *tx_table = nullptr;
-  if (!ls_handle.is_valid() || timeout < 0 || !snapshot_version.is_valid()) {
+  if (OB_ISNULL(tenant_ls) || timeout < 0 || !snapshot_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "get invalid arguments", K(ret), K(ls_handle), K(timeout), K(tx_lock_timeout), K(snapshot_version));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls is null", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(tx_table = ls->get_tx_table())) {
-    ret = OB_ERR_NULL_VALUE;
-    STORAGE_LOG(WARN, "get_tx_table from log stream fail.", K(ret), K(*ls));
-  } else if (OB_FAIL(mvcc_acc_ctx_.init_read(tx_table, snapshot_version, timeout, tx_lock_timeout))) {
-    STORAGE_LOG(WARN, "mvcc_acc_ctx init read fail", KR(ret), K(mvcc_acc_ctx_));
+    STORAGE_LOG(WARN, "get invalid arguments", K(ret), K(tenant_ls), K(timeout), K(tx_lock_timeout), K(snapshot_version));
+  } else if (OB_FAIL(mvcc_acc_ctx_.init_read(tenant_ls->get_tx_table(),
+                                             snapshot_version, timeout, tx_lock_timeout))) {
   } else {
-    ls_id_ = ls->get_ls_id();
     timeout_ = timeout;
   }
   return ret;
@@ -175,7 +158,6 @@ int ObStoreCtxForkGuard::enter_fork_snapshot(const share::SCN &fork_snapshot_scn
     STORAGE_LOG(WARN, "fork snapshot entered twice", K(ret));
   } else if (OB_FAIL(ctx_.enter_fork_snapshot(fork_snapshot_scn,
                                               saved_snapshot_version_))) {
-    STORAGE_LOG(WARN, "enter fork snapshot failed", K(ret), K(fork_snapshot_scn));
   } else {
     opened_ = true;
   }
@@ -199,7 +181,6 @@ int ObStoreCtx::get_all_tables(ObIArray<ObITable *> &iter_tables)
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "table must not be null", K(ret), KPC(table_iter_));
     } else if (OB_FAIL(iter_tables.push_back(table_ptr))) {
-      TRANS_LOG(WARN, "rowkey_exists check::", K(ret), KPC(table_ptr));
     }
   }
   return ret;
@@ -218,16 +199,13 @@ int ObStoreCtx::get_fork_snapshot_scn(const common::ObTabletID &tablet_id,
     if (OB_ISNULL(fork_infos) || fork_infos->empty()) {
       fork_snapshot_map_inited_ = true;
     } else if (OB_FAIL(fork_snapshot_map_.create(fork_infos->count() * 2, "ForkSnapMap"))) {
-      STORAGE_LOG(WARN, "failed to create fork snapshot map", K(ret), K(fork_infos->count()));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < fork_infos->count(); ++i) {
         const share::ObForkTabletInfo &fork_info = fork_infos->at(i);
         share::SCN fork_snapshot_scn;
         if (OB_FAIL(fork_snapshot_scn.convert_for_tx(fork_info.get_fork_snapshot_version()))) {
-          STORAGE_LOG(WARN, "failed to convert fork snapshot version", K(ret), K(fork_info));
         } else if (OB_FAIL(fork_snapshot_map_.set_refactored(
                      fork_info.get_fork_src_tablet_id(), fork_snapshot_scn, true))) {
-          STORAGE_LOG(WARN, "failed to set fork snapshot map", K(ret), K(fork_info));
         }
       }
       if (OB_SUCC(ret)) {
@@ -441,3 +419,47 @@ int ObLockRowChecker::check_lock_row_valid(const blocksstable::ObDatumRow &row, 
 
 }
 }
+
+// === demoted from ObTableSchema  storage free function(old member definition was split across modules, now fully moved out of the share class) ===
+namespace oceanbase
+{
+namespace storage
+{
+int get_orig_default_row(const share::schema::ObTableSchema &table_schema,
+                         const common::ObIArray<share::schema::ObColDesc> &column_ids,
+                         blocksstable::ObDatumRow &default_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_cnt = table_schema.get_column_count();
+  if (OB_UNLIKELY(!default_row.is_valid() || default_row.count_ != column_ids.count() || column_ids.count() > column_cnt + 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(column_cnt), K(default_row), K(column_ids.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+    if (column_ids.at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID ||
+        column_ids.at(i).col_id_ == OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID) {
+      default_row.storage_datums_[i].set_int(0);
+    } else {
+      bool found = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < column_cnt; ++j) {
+        const share::schema::ObColumnSchemaV2 *column = table_schema.column_begin()[j];
+        if (NULL == column) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column must not null", K(ret), K(j), K(column_cnt));
+        } else if (column->get_column_id() == column_ids.at(i).col_id_) {
+          if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(column->get_orig_default_value()))) {
+          } else {
+            found = true;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !found) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("column id not found", K(ret), K(column_ids.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+} // namespace storage
+} // namespace oceanbase

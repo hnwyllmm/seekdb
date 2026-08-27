@@ -20,7 +20,6 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
 #include "lib/lock/ob_spin_lock.h"
-#include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
@@ -31,7 +30,6 @@
 namespace oceanbase
 {
 namespace share {
-  struct ObExternalFileInfo;
 }
 namespace sql
 {
@@ -101,7 +99,6 @@ public :
     op_info_.reset();
     tablet_arrays_.reset();
     run_time_pruning_flags_.reset();
-    external_table_files_.reset();
     query_range_by_runtime_filter_.reset();
     locations_order_.reset();
   }
@@ -128,7 +125,6 @@ public :
   int pruning_ret_;
   //-----end
   common::ObArray<ObPxTabletInfo> partitions_info_; // not used after 4.0, used for pkey split range with row info
-  common::ObArray<share::ObExternalFileInfo> external_table_files_;
   int64_t parallelism_;
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;
@@ -152,22 +148,19 @@ class ObGITaskSet {
 public:
   struct ObGITaskInfo
   {
-    ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0), granule_type_(OB_GRANULE_UNINITIALIZED) {}
+    ObGITaskInfo() : tablet_loc_(nullptr), range_(), idx_(0), hash_value_(0), granule_type_(OB_GRANULE_UNINITIALIZED) {}
     ObGITaskInfo(ObDASTabletLoc *tablet_loc,
                  const common::ObNewRange &range,
-                 const common::ObNewRange &ss_range,
                  int64_t idx) :
-        tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0), granule_type_(OB_GRANULE_UNINITIALIZED) {}
+        tablet_loc_(tablet_loc), range_(range), idx_(idx), hash_value_(0), granule_type_(OB_GRANULE_UNINITIALIZED) {}
     TO_STRING_KV(KPC(tablet_loc_),
                  KP(tablet_loc_),
                  K(range_),
-                 K(ss_range_),
                  K(idx_),
                  K(hash_value_),
                  K(granule_type_));
     ObDASTabletLoc *tablet_loc_;
     common::ObNewRange range_;
-    common::ObNewRange ss_range_;
     int64_t idx_;
     uint64_t hash_value_;
     ObGranuleType granule_type_;; // one partition one task when OB_PARTITION_GRANULE
@@ -192,7 +185,6 @@ public:
   int set_block_order(bool asc);
   int construct_taskset(const common::ObIArray<ObDASTabletLoc*> &taskset_tablets,
                         const common::ObIArray<ObNewRange> &taskset_ranges,
-                        const common::ObIArray<ObNewRange> &ss_ranges,
                         const common::ObIArray<int64_t> &taskset_idxs,
                         ObGIRandomType random_type);
   int append_taskset(ObGITaskSet &other);
@@ -246,7 +238,6 @@ public :
   static int get_query_range(ObExecContext &ctx,
                              const ObQueryRangeProvider &tsc_pre_query_range,
                              ObIArray<ObNewRange> &ranges,
-                             ObIArray<ObNewRange> &ss_ranges,
                              int64_t table_id,
                              int64_t op_id,
                              bool partition_granule,
@@ -464,7 +455,6 @@ public:
                               const bool check_task_exist, int64_t &idx);
 
 private:
-  int init_external_odps_table_downloader(ObGranulePumpArgs &args);
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
                                  int64_t &pos,
                                  ObGranuleTaskInfo &info,
@@ -495,7 +485,6 @@ private:
                const ObIArray<const ObTableScanSpec*> &scan_ops,
                const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                common::ObIArray<ObPxTabletInfo> &partitions_info,
-               const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                const ObTableModifySpec* modify_op,
                int64_t parallelism,
                int64_t tablet_size,

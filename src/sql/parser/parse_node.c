@@ -16,15 +16,11 @@
 
 #include "sql/parser/parse_node.h"
 #include <string.h>
-#include "lib/alloc/alloc_assist.h"
+#include "lib/utility/alloc_assist.h"
 #include "sql/parser/parse_node_hash.h"
 #include "sql/parser/sql_parser_base.h"
 #include "sql/executor/ob_memory_tracker_wrapper.h"
 extern const char *get_type_name(int type);
-
-#ifdef SQL_PARSER_COMPILATION
-#include "sql/parser/parser_proxy_func.h"
-#endif // SQL_PARSER_COMPILATION
 
 int count_child(ParseNode *root, void *malloc_pool, int *count);
 
@@ -115,10 +111,6 @@ int deep_copy_parse_node_base(void *malloc_pool, const ParseNode *src_node, Pars
     dst_node->pos_ = src_node->pos_;
     dst_node->stmt_loc_ = src_node->stmt_loc_;
     dst_node->raw_param_idx_ = src_node->raw_param_idx_;
-  #ifdef SQL_PARSER_COMPILATION
-    dst_node->token_off_= src_node->token_off_;
-    dst_node->token_len_ = src_node->token_len_;
-  #endif
     if (src_node->str_len_ > 0 && src_node->str_value_ != NULL) {
       char *buf = NULL;
       if (OB_UNLIKELY(NULL == (buf = (char *)parser_alloc(malloc_pool, src_node->str_len_ + 1)))) {
@@ -202,10 +194,6 @@ ParseNode *new_node(void *malloc_pool, ObItemType type, int num)
       node->num_child_ = num;
       node->value_ = INT64_MAX;
       node->pl_str_off_ = -1;
-  #ifdef SQL_PARSER_COMPILATION
-      node->token_off_ = -1;
-      node->token_len_ = -1;
-  #endif
       if (num > 0) {
         int64_t alloc_size = sizeof(ParseNode *) * num ;
         node->children_ = (ParseNode **)parse_malloc(alloc_size, malloc_pool);

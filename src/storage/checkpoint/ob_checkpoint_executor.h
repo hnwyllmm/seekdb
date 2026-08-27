@@ -18,7 +18,7 @@
 #define OCEANBASE_STORAGE_OB_CHECKPOINT_EXECUTOR_H_
 
 #include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
-#include "logservice/ob_log_base_type.h"
+#include "share/log/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
 #include "share/scn.h"
 
@@ -39,23 +39,6 @@ struct ObCheckpointVTInfo
     K(rec_scn),
     K(service_type)
   );
-};
-
-struct CheckpointDiagnoseInfo
-{
-  CheckpointDiagnoseInfo() { reset(); }
-  ~CheckpointDiagnoseInfo() { reset(); }
-  share::SCN checkpoint_;
-  share::SCN min_rec_scn_;
-  logservice::ObLogBaseType log_type_;
-  TO_STRING_KV(K(checkpoint_),
-               K(min_rec_scn_),
-               K(log_type_));
-  void reset() {
-    checkpoint_.reset();
-    min_rec_scn_.reset();
-    log_type_ = logservice::ObLogBaseType::INVALID_LOG_BASE_TYPE;
-  }
 };
 
 class ObCheckpointExecutor
@@ -89,8 +72,7 @@ public:
 
 
   void get_min_rec_scn(int &log_type, share::SCN &min_rec_scn) const;
-
-  int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
+  int get_physical_restore_checkpoint_scn(share::SCN &checkpoint_scn) const;
 
   int traversal_flush() const;
 

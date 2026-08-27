@@ -18,6 +18,7 @@
 
 #include "ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log_reader.h"
+#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {
@@ -120,8 +121,7 @@ int ObStorageLogReplayer::unregister_redo_module(enum ObRedoLogMainType cmd_pref
 
 int ObStorageLogReplayer::replay(
     const common::ObLogCursor &replay_start_cursor,
-    common::ObLogCursor &finish_cursor,
-    const uint64_t tenant_id)
+    common::ObLogCursor &finish_cursor)
 {
   int ret = OB_SUCCESS;
   ObStorageLogReader slog_reader;
@@ -135,10 +135,8 @@ int ObStorageLogReplayer::replay(
   } else if (OB_UNLIKELY(!replay_start_cursor.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_REDO_LOG(WARN, "Invalid argument", K(ret), K(replay_start_cursor));
-  } else if (OB_FAIL(slog_reader.init(log_dir_, replay_start_cursor, log_file_spec_, tenant_id))) {
-    STORAGE_REDO_LOG(WARN, "Fail to init slog reader", K(ret), K(log_dir_), K(replay_start_cursor));
-  } else if (OB_FAIL(check_empty_dir(is_empty_dir, tenant_id))) {
-    STORAGE_REDO_LOG(WARN, "Fail to check empty dir", K(ret), K(is_empty_dir));
+  } else if (OB_FAIL(slog_reader.init(log_dir_, replay_start_cursor, log_file_spec_))) {
+  } else if (OB_FAIL(check_empty_dir(is_empty_dir))) {
   } else if (is_empty_dir) {
     ret = OB_SUCCESS;
     finish_cursor.file_id_ = 1;
@@ -157,7 +155,11 @@ int ObStorageLogReplayer::replay(
 
     while(OB_SUCC(ret) && OB_SUCC(slog_reader.read_log(entry, log_data, disk_addr))) {
       ObIRedoModule::parse_cmd(entry.cmd_, main_type, sub_type);
-      if (ObRedoLogMainType::OB_REDO_LOG_SYS == main_type) {
+      if (ObRedoLogMainType::OB_REDO_LOG_INVALID == main_type
+          || static_cast<int>(main_type) >= static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_MAX)) {
+        ret = OB_NOT_SUPPORTED;
+        STORAGE_REDO_LOG(WARN, "Unsupported redo log main type", K(ret), K(main_type), K(sub_type));
+      } else if (ObRedoLogMainType::OB_REDO_LOG_SYS == main_type) {
         STORAGE_REDO_LOG(INFO, "Skip these kinds of log", K(entry.cmd_));
       } else {
         if (OB_UNLIKELY(nullptr == redo_modules_[static_cast<int>(main_type)])) {
@@ -171,8 +173,6 @@ int ObStorageLogReplayer::replay(
           replay_param.disk_addr_ = disk_addr;
           replay_param.data_size_ = disk_addr.size() - dummy_entry.get_serialize_size();
           if (OB_FAIL(redo_modules_[static_cast<int>(main_type)]->replay(replay_param))) {
-            STORAGE_REDO_LOG(WARN, "Fail to replay", K(ret), K(main_type),
-                K(sub_type), K(replay_param));
           }
           replay_cost[static_cast<int>(main_type)] += ObTimeUtility::current_time() - replay_start_time;
           replay_cnt[static_cast<int>(main_type)]++;
@@ -188,17 +188,16 @@ int ObStorageLogReplayer::replay(
       ret = OB_SUCCESS;
     }
     FLOG_INFO("slog replay stat: ", K(ret),
-        "tenant storage log cnt", replay_cnt[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE)],
-        "tenant storage log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE)],
-        "tenant config log cnt", replay_cnt[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_SERVER_TENANT)],
-        "tenant config log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_SERVER_TENANT)]
+        "local storage log cnt", replay_cnt[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_LOCAL_STORAGE)],
+        "local storage log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_LOCAL_STORAGE)],
+        "server runtime log cnt", replay_cnt[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_SERVER_RUNTIME)],
+        "server runtime log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_SERVER_RUNTIME)]
         );
   }
 
   if (OB_SUCC(ret)) {
     if (-1 != last_entry_seq) {
       if (OB_FAIL(slog_reader.get_finish_cursor(finish_cursor))) {
-        STORAGE_REDO_LOG(WARN, "Fail to get write_start_cursor", K(ret));
       }
     } else if (!is_empty_dir) {
       // if last_entry_seq is -1,
@@ -220,7 +219,6 @@ int ObStorageLogReplayer::replay_over()
   for (int64_t i = 0; OB_SUCC(ret) && i < static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_MAX); i++) {
     if (nullptr != redo_modules_[i]) {
       if (OB_FAIL(redo_modules_[i]->replay_over())) {
-        STORAGE_REDO_LOG(WARN, "Fail to replay over", K(ret));
       }
     }
   }
@@ -246,8 +244,7 @@ int ObStorageLogReplayer::parse_log(
   if (OB_ISNULL(log_dir) || OB_ISNULL(stream) || OB_UNLIKELY(log_file_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_REDO_LOG(WARN, "Invalid arguments.", K(ret), KP(log_dir), K(log_file_id), KP(stream));
-  } else if (OB_FAIL(slog_reader.init(log_dir, cursor, log_file_spec, OB_SERVER_TENANT_ID))) {
-    STORAGE_REDO_LOG(WARN, "Fail to init log_reader, ", K(ret), KP(log_dir), K(cursor));
+  } else if (OB_FAIL(slog_reader.init(log_dir, cursor, log_file_spec))) {
   } else {
     ObMetaDiskAddr disk_addr;
     char *log_data = nullptr;
@@ -285,7 +282,6 @@ int ObStorageLogReplayer::parse_log(
         STORAGE_REDO_LOG(WARN, "The redo module has not been registered.", K(ret), K(main_type));
       } else if (OB_FAIL(redo_modules_[static_cast<int>(main_type)]->parse(
           entry.cmd_, log_data, disk_addr.size() - dummy_entry.get_serialize_size(), stream))) {
-        STORAGE_REDO_LOG(WARN, "Fail to parse slog.", K(ret), K(main_type), K(entry), K(disk_addr));
       }
     }
 
@@ -307,7 +303,6 @@ int ObStorageLogReplayer::print_slog(
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   if (OB_FAIL(slog_entry.deserialize(buf, len, pos))) {
-    LOG_WARN("Fail to deserialize slog entry.", K(ret), KP(buf), K(len), K(pos));
   } else {
     ObCStringHelper helper;
     if (0 > fprintf(stream, "%s\n%s\n", slog_name, helper.convert(slog_entry))) {
@@ -318,15 +313,14 @@ int ObStorageLogReplayer::print_slog(
   return ret;
 }
 
-int ObStorageLogReplayer::check_empty_dir(bool &is_empty_dir, const uint64_t tenant_id)
+int ObStorageLogReplayer::check_empty_dir(bool &is_empty_dir)
 {
   int ret = OB_SUCCESS;
   ObLogFileHandler file_handler;
   int64_t min_log_id = 0;
   int64_t max_log_id = 0;
 
-  if (OB_FAIL(file_handler.init(log_dir_, 256 << 20/*file_size*/, tenant_id))) {
-    STORAGE_REDO_LOG(WARN, "Fail to init log file handler", K(ret));
+  if (OB_FAIL(file_handler.init(log_dir_, 256 << 20))) {
   } else if (OB_FAIL(file_handler.get_file_id_range(min_log_id, max_log_id))
       && OB_ENTRY_NOT_EXIST != ret) {
     STORAGE_REDO_LOG(WARN, "Fail to get file id range", K(ret));

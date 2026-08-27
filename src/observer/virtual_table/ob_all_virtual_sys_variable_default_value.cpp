@@ -52,7 +52,6 @@ int ObSysVarDefaultValue::inner_get_next_row(ObNewRow *&row)
   } else if (start_to_read_) {
     //do nothing
   } else if (OB_FAIL(add_row())) {
-    SERVER_LOG(WARN, "fail to add row", K(ret));
   } else {
     scanner_it_ = scanner_.begin();
     start_to_read_ = true;
@@ -78,8 +77,8 @@ int ObSysVarDefaultValue::add_row()
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
   } else {
-    for (int64_t store_idx = 0; OB_SUCC(ret) && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT; ++store_idx) {
-      if (store_idx < 0 || store_idx >= ObSysVarFactory::ALL_SYS_VARS_COUNT) {
+    for (int64_t store_idx = 0; OB_SUCC(ret) && store_idx < share::ObSysVarMeta::ALL_SYS_VARS_COUNT; ++store_idx) {
+      if (store_idx < 0 || store_idx >= share::ObSysVarMeta::ALL_SYS_VARS_COUNT) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unexpected store idx", K(ret), K(store_idx));
       } else {

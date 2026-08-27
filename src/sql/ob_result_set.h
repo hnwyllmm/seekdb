@@ -19,32 +19,26 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_fast_array.h"
 #include "lib/container/ob_array_serialization.h"
-#include "lib/allocator/ob_mod_define.h"
+#include "lib/utility/ob_mod_define.h"
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_2d_array.h"
-#include "lib/timezone/ob_timezone_info.h"
-#include "rpc/obmysql/ob_mysql_global.h" // for EMySQLFieldType
+#include "common/timezone/ob_timezone_info.h"
+#include "common/mysqlclient/ob_mysql_global.h" // for EMySQLFieldType
 #include "common/object/ob_obj_type.h"
 #include "common/object/ob_object.h"
 #include "common/row/ob_row.h"
 #include "common/ob_string_buf.h"
-#include "share/ob_srv_rpc_proxy.h"
 #include "common/ob_field.h"
-#include "share/ob_common_rpc_proxy.h"
-#include "share/ob_scanner.h"
-#include "sql/optimizer/ob_log_plan_factory.h"
+#include "sql/ob_scanner.h"
 #include "sql/executor/ob_executor.h"
 #include "sql/executor/ob_execute_result.h"
-#include "sql/executor/ob_executor_rpc_impl.h"
-#include "sql/executor/ob_executor_rpc_proxy.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_sql_trans_control.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
-#include "observer/ob_inner_sql_rpc_proxy.h"
-#include "observer/ob_req_time_service.h"
+#include "query/plan_cache/ob_plan_cache_access_service.h"
 #include "sql/resolver/tcl/ob_end_trans_stmt.h"
 
 namespace oceanbase
@@ -79,8 +73,6 @@ public:
         is_select_for_update_(false),
         has_hidden_rowid_(false),
         stmt_sql_(),
-        is_bulk_(false),
-        has_link_table_(false),
         is_skip_locked_(false) {}
     virtual ~ExternalRetrieveInfo() {}
 
@@ -101,8 +93,6 @@ public:
     bool is_select_for_update_;
     bool has_hidden_rowid_;
     ObString stmt_sql_;
-    bool is_bulk_;
-    bool has_link_table_;
     bool is_skip_locked_;
   };
 
@@ -110,12 +100,15 @@ public:
   {
     NO_PS = 0, //not PS
     SIMPLE_PS, // only go through parser, not resolver, simple PS for use by PL in MySQL mode
-    STD_PS, // use the standard PS of resolver, for Oracle mode, and for the ps protocol of MySQL mode
+    STD_PS, // use the standard PS of resolver and the ps protocol of MySQL mode
   };
 
   typedef common::ObFastArray<ObPhysicalPlan*, 8> CandidatePlanArray;
 public:
-  explicit ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator &allocator);
+  explicit ObResultSet(
+      ObSQLSessionInfo &session,
+      common::ObIAllocator &allocator,
+      query::ObIPlanCacheAccessService &plan_cache_access_service);
   virtual ~ObResultSet();
 
   static ObResultSet *alloc(ObSQLSessionInfo &session, common::ObIAllocator &allocator);
@@ -153,7 +146,6 @@ public:
   /// get the field columns
   const common::ColumnsFieldIArray *get_field_columns() const;
   const common::ParamsFieldIArray *get_param_fields() const;
-  const common::ParamsFieldIArray *get_returning_param_fields() const;
 
   /**
    * Get the number of fields (columns)
@@ -165,8 +157,6 @@ public:
   void set_p_param_fileds(common::ParamsFieldIArray *p_param_columns) { p_param_columns_ = p_param_columns; }
 
   void set_p_column_fileds(common::ColumnsFieldIArray *p_columns_field ) { p_field_columns_ = p_columns_field; }
-  void set_p_returning_param_fileds(common::ParamsFieldIArray *p_returning_param_columns)
-  { p_returning_param_columns_ = p_returning_param_columns; }
   void set_exec_result(ObIExecuteResult *exec_result) { exec_result_ = exec_result; }
   ExternalRetrieveInfo &get_external_retrieve_info() { return external_retrieve_info_; }
   ObIArray<ObRawExpr*> &get_external_params();
@@ -177,8 +167,6 @@ public:
   ObString &get_stmt_sql();
   bool get_is_select_for_update();
   inline bool has_hidden_rowid();
-  inline bool is_bulk();
-  inline bool is_link_table();
   inline bool is_skip_locked();
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
@@ -205,9 +193,6 @@ public:
   int64_t get_query_string_id() const;
   void refresh_location_cache_by_errno(bool is_nonblock, int err);
   void force_refresh_location_cache(bool is_nonblock, int err);
-  bool need_execute_remote_sql_async() const
-  { return get_exec_context().use_remote_sql() && !is_inner_result_set_; }
-
   ////////////////////////////////////////////////////////////////
   // the following methods are used by the ob_sql module internally
   /// add a field columns
@@ -228,8 +213,6 @@ public:
   int reserve_param_columns(int64_t size) { return param_columns_.reserve(size); };
   int add_field_column(const common::ObField &field);
   int add_param_column(const common::ObField &field);
-  int reserve_returning_param_column(int64_t size) { return returning_param_columns_.reserve(size); };
-  int add_returning_param_column(const common::ObField &param);
 
   int from_plan(const ObPhysicalPlan &phy_plan, const common::ObIArray<ObPCParam *> &raw_params);
   int to_plan(const PlanCacheMode mode, ObPhysicalPlan *phy_plan);
@@ -246,7 +229,6 @@ public:
   uint64_t get_last_insert_id_to_client();
   void set_warning_count(const int64_t &warning_count);
   ObCacheObjGuard& get_cache_obj_guard();
-  ObCacheObjGuard& get_temp_cache_obj_guard();
   void set_cmd(ObICmd *cmd);
   bool is_end_trans_async();
   void set_end_trans_async(bool is_async);
@@ -293,8 +275,6 @@ public:
   int get_read_consistency(ObConsistencyLevel &consistency);
   void set_has_global_variable(bool has_global_variable) { has_global_variable_ = has_global_variable;}
   bool has_global_variable() const { return has_global_variable_; }
-  void set_returning(bool is_returning) { is_returning_ = is_returning; }
-  bool is_returning() const { return is_returning_; }
   void set_user_sql(bool is_user_sql) { is_user_sql_ = is_user_sql; }
   bool is_user_sql() const { return is_user_sql_; }
   // Fill parameter information into the field name with ?
@@ -312,29 +292,16 @@ public:
   int copy_field_columns(const ObPhysicalPlan &plan);
   bool has_implicit_cursor() const;
   int switch_implicit_cursor(int64_t &affected_rows);
-  void reset_implicit_cursor_idx()
-  {
-    if (get_exec_context().get_physical_plan_ctx() != nullptr)
-      get_exec_context().get_physical_plan_ctx()->set_cur_stmt_id(0);
-  }
+  void reset_implicit_cursor_idx();
   bool is_cursor_end() const;
 
-  inline bool can_execute_async() const
-  {
-    ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
-    return get_exec_context().use_remote_sql()
-        && physical_plan_ != nullptr
-        && physical_plan_->get_location_type() != OB_PHY_PLAN_UNCERTAIN;
-    // Temporarily do not allow the global index plan to execute asynchronously
-  }
+  bool can_execute_async() const;
   void set_is_com_filed_list() { is_com_filed_list_ = true; }
   bool get_is_com_filed_list() { return is_com_filed_list_; }
   void set_wildcard_string(common::ObString string) { wild_str_ = string; }
   common::ObString &get_wildcard_string() { return wild_str_;}
   common::ParamStore &get_ps_params() { return ps_params_; }
-  static void replace_lob_type(const ObSQLSessionInfo &session,
-                               const ObField &field,
-                               obmysql::ObMySQLField &mfield);
+  static void replace_lob_type(obmysql::ObMySQLField &mfield);
   void set_close_fail_callback(ObFunction<void(const int, int&)> func) { close_fail_cb_ = func; }
   void set_will_retry() { will_retry_ = true; }
   static int implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_info,
@@ -386,6 +353,7 @@ private:
   int store_last_insert_id(ObExecContext &ctx);
   int drive_dml_query();
   int inner_get_next_row(const common::ObNewRow *&row);
+  static int clear_ddl_checksum(ObPhysicalPlan *physical_plan);
 
   // make final field name
   int make_final_field_name(char *src, int64_t len, common::ObString &field_name);
@@ -393,14 +361,12 @@ private:
   // Always called in the ObResultSet constructor
   void update_start_time() const
   {
-    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
-    req_timeinfo.update_start_time();
+    query::begin_plan_cache_access(plan_cache_access_service_);
   }
   // Always called at the end of the ObResultSet destructor
   void update_end_time() const
   {
-    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
-    req_timeinfo.update_end_time();
+    query::end_plan_cache_access(plan_cache_access_service_);
   }
   bool is_will_retry_() const { return will_retry_; }
 protected:
@@ -409,7 +375,6 @@ protected:
 private:
   // add cache object guard
   ObCacheObjGuard cache_obj_guard_;
-  ObCacheObjGuard temp_cache_obj_guard_;
   // data members
   common::ObArenaAllocator inner_mem_pool_;
   common::ObIAllocator &mem_pool_;
@@ -428,8 +393,6 @@ private:
 
   const common::ColumnsFieldIArray *p_field_columns_;
   const common::ParamsFieldIArray *p_param_columns_;
-  common::ParamsFieldArray returning_param_columns_;
-  const common::ParamsFieldIArray *p_returning_param_columns_;
 
   stmt::StmtType stmt_type_;
   // for a prepared SELECT, stmt_type_ is T_PREPARE
@@ -446,6 +409,7 @@ private:
    */
   int errcode_;
   ObSQLSessionInfo &my_session_; // The session who owns this result set
+  query::ObIPlanCacheAccessService &plan_cache_access_service_;
   int64_t begin_timestamp_;
   ObIExecuteResult *exec_result_;
   ObICmd *cmd_;
@@ -460,11 +424,8 @@ private:
   PsMode ps_protocol_;
   // Executor
   ObExecutor executor_;
-  bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
-  bool need_revert_tx_; //dblink
   bool will_retry_; // the query will retry, to figure out the final close
-  bool xa_checking_lock_stoped_;
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
   common::ObString ps_sql_; // for sql in pl
   bool is_init_;
@@ -500,10 +461,12 @@ private:
 //  return other;
 //}
 
-inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator &allocator)
+inline ObResultSet::ObResultSet(
+    ObSQLSessionInfo &session,
+    common::ObIAllocator &allocator,
+    query::ObIPlanCacheAccessService &plan_cache_access_service)
     : is_user_sql_(false),
-      cache_obj_guard_(MAX_HANDLE),
-      temp_cache_obj_guard_(MAX_HANDLE),
+      cache_obj_guard_(),
       inner_mem_pool_(),
       mem_pool_(allocator),
       statement_id_(common::OB_INVALID_ID),
@@ -518,8 +481,6 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       param_columns_(allocator),
       p_field_columns_(&field_columns_),
       p_param_columns_(&param_columns_),
-      returning_param_columns_(allocator),
-      p_returning_param_columns_(&returning_param_columns_),
       stmt_type_(stmt::T_NONE),
       inner_stmt_type_(stmt::T_NONE),
       literal_stmt_type_(stmt::T_NONE),
@@ -528,6 +489,7 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       has_global_variable_(false),
       errcode_(0),
       my_session_(session),
+      plan_cache_access_service_(plan_cache_access_service),
       begin_timestamp_(0),
       exec_result_(nullptr),
       cmd_(NULL),
@@ -539,11 +501,8 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       is_calc_found_rows_(false),
       ps_protocol_(NO_PS),
       executor_(),
-      is_returning_(false),
       is_com_filed_list_(false),
-      need_revert_tx_(false),
       will_retry_(false),
-      xa_checking_lock_stoped_(false),
       wild_str_(),
       ps_sql_(),
       is_init_(false),
@@ -599,7 +558,7 @@ inline void ObResultSet::set_errcode(int code)
   errcode_ = code;
   //Save the current execution state to determine whether to refresh location
   //and perform other necessary cleanup operations when the statement exits.
-  DAS_CTX(get_exec_context()).get_location_router().save_cur_exec_status(code);
+  DAS_CTX(get_exec_context()).save_cur_exec_status(code);
 }
 
 inline int ObResultSet::add_field_column(const common::ObField &field)
@@ -620,16 +579,6 @@ inline const common::ColumnsFieldIArray *ObResultSet::get_field_columns() const
 inline const common::ParamsFieldIArray *ObResultSet::get_param_fields() const
 {
   return p_param_columns_;
-}
-
-inline int ObResultSet::add_returning_param_column(const common::ObField &param)
-{
-  return returning_param_columns_.push_back(param);
-}
-
-inline const common::ParamsFieldIArray *ObResultSet::get_returning_param_fields() const
-{
-  return p_returning_param_columns_;
 }
 
 inline ObIArray<ObRawExpr*> &ObResultSet::get_external_params()
@@ -670,16 +619,6 @@ inline bool ObResultSet::get_is_select_for_update()
 inline bool ObResultSet::has_hidden_rowid()
 {
   return external_retrieve_info_.has_hidden_rowid_;
-}
-
-inline bool ObResultSet::is_bulk()
-{
-  return external_retrieve_info_.is_bulk_;
-}
-
-inline bool ObResultSet::is_link_table()
-{
-  return external_retrieve_info_.has_link_table_;
 }
 
 inline bool ObResultSet::is_skip_locked()
@@ -762,11 +701,6 @@ inline ObCacheObjGuard& ObResultSet::get_cache_obj_guard()
   return cache_obj_guard_;
 }
 
-inline ObCacheObjGuard& ObResultSet::get_temp_cache_obj_guard()
-{
-  return temp_cache_obj_guard_;
-}
-
 inline void ObResultSet::fields_clear()
 {
   affected_rows_ = 0;
@@ -775,10 +709,8 @@ inline void ObResultSet::fields_clear()
   message_[0] = '\0';
   field_columns_.reset();
   param_columns_.reset();
-  returning_param_columns_.reset();
   p_field_columns_ = &field_columns_;
   p_param_columns_ = &param_columns_;
-  p_returning_param_columns_ = &returning_param_columns_;
 }
 
 inline int ObResultSet::get_row_desc(const common::ObRowDesc *&row_desc) const
@@ -877,62 +809,6 @@ inline bool ObResultSet::is_calc_found_rows() const
 {
   return is_calc_found_rows_;
 }
-
-inline ObPhysicalPlan *ObResultSet::get_physical_plan()
-{
-  return static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());
-}
-
-// for remote inner sql
-class ObRemoteResultSet
-{
-public:
-  /* functions */
-  explicit ObRemoteResultSet(common::ObIAllocator &allocator);
-  virtual ~ObRemoteResultSet();
-  int get_next_row(const common::ObNewRow *&row);
-  int close();
-
-  common::ObIAllocator& get_mem_pool() { return mem_pool_; }
-
-  obrpc::ObInnerSqlRpcStreamHandle *get_stream_handler() { return remote_resp_handler_; }
-  int reset_and_init_remote_resp_handler();
-
-  const common::ColumnsFieldIArray *get_field_columns() const { return &field_columns_; }
-  int copy_field_columns(const common::ObSArray<common::ObField> &field_columns);
-
-  sql::stmt::StmtType get_stmt_type() { return stmt_type_; }
-  void set_stmt_type(sql::stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
-
-private:
-  /* functions */
-  int setup_next_scanner();
-  int get_next_row_from_cur_scanner(const common::ObNewRow *&row);
-
-  uint64_t get_tenant_id_for_result_memory() const {
-    /* The actual innersql caller tenant alloctes the memory of ObRemoteResultSet.
-     * Currently set to user tenant or 500 tenant.
-     * For example, table recovery uses inner_sql's remote execution to query the data on the target
-     * tenant from（physically restored）auxiliary tenant in parallel. The innersql caller needs a large
-     * amount of memory to obtain the remote execution results. It's more appropriate for the innersql
-     * caller (user tenant or 500 tenant) to allocate this block of memory. */
-    return OB_INVALID_TENANT_ID != MTL_ID() && is_user_tenant(MTL_ID())
-            ? MTL_ID() : OB_SERVER_TENANT_ID;
-  }
-
-  /* variables */
-  common::ObIAllocator &mem_pool_;
-  obrpc::ObInnerSqlRpcStreamHandle *remote_resp_handler_;
-  common::ObSArray<common::ObField> field_columns_;
-  common::ObScanner *scanner_;
-  common::ObScanner::Iterator scanner_iter_;
-  bool all_data_empty_;
-  bool cur_data_empty_;
-  bool first_response_received_;
-  int64_t found_rows_;
-  sql::stmt::StmtType stmt_type_;
-};
-
 
 } // end namespace sql
 } // end namespace oceanbase

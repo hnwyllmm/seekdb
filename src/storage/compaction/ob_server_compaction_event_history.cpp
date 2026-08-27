@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/compaction/ob_server_compaction_event_history.h"
+#include "share/rc/ob_server_runtime.h"
 
 namespace oceanbase
 {
@@ -49,7 +50,7 @@ const char *ObServerCompactionEvent::get_comp_event_str(enum ObCompactionEvent e
 }
 
 const static char *ObCompactionRoleStr[] = {
-    "TENANT_RS",
+    "ROOT_SERVICE",
     "STORAGE",
     "LS_LEADER",
     "LS_SVR"
@@ -59,7 +60,7 @@ const char *ObServerCompactionEvent::get_comp_role_str(enum ObCompactionRole rol
 {
   STATIC_ASSERT(static_cast<int64_t>(COMPACTION_ROLE_MAX) == ARRAYSIZEOF(ObCompactionRoleStr), "compaction role str len is mismatch");
   const char *str = "";
-  if (role >= COMPACTION_ROLE_MAX || role < TENANT_RS) {
+  if (role >= COMPACTION_ROLE_MAX || role < ROOT_SERVICE) {
     str = "invalid_role";
   } else {
     str = ObCompactionRoleStr[role];
@@ -72,15 +73,13 @@ int ObServerCompactionEvent::generate_event_str(char *buf, const int64_t buf_len
   int ret = OB_SUCCESS;
   if (0 == strlen(comment_)) {
     if (OB_FAIL(databuff_printf(buf, buf_len, "%s", get_comp_event_str(event_)))) {
-      LOG_WARN("failed to generate str", K(ret), KPC(this));
     }
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "%s:%s", get_comp_event_str(event_), comment_))) {
-    LOG_WARN("failed to generate str", K(ret), KPC(this));
   }
   return ret;
 }
 
-int ObServerCompactionEventHistory::mtl_init(ObServerCompactionEventHistory* &event_history)
+int ObServerCompactionEventHistory::server_module_init(ObServerCompactionEventHistory* &event_history)
 {
   return event_history->init();
 }
@@ -89,7 +88,6 @@ int ObServerCompactionEventHistory::init()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObInfoRingArray::init(SERVER_EVENT_MAX_CNT))) {
-    STORAGE_LOG(WARN, "failed to init ObInfoRingArray", K(ret));
   }
   return ret;
 }
@@ -106,7 +104,6 @@ int ObServerCompactionEventHistory::add_event(const ObServerCompactionEvent &eve
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(event));
   } else if (OB_FAIL(ObInfoRingArray::add(event))) {
-    LOG_WARN("failed to add event", K(ret), K(event));
   }
   return ret;
 }
@@ -116,7 +113,6 @@ int ObServerCompactionEventHistory::get_last_event(ObServerCompactionEvent &even
   int ret = OB_SUCCESS;
   if (size() > 0) {
     if (OB_FAIL(get(get_last_pos(), event))) {
-      LOG_WARN("failed to get last event", K(ret), K(get_last_pos()));
     }
   } else {
     event.reset();
@@ -128,31 +124,21 @@ int ObServerCompactionEventHistory::get_last_event(ObServerCompactionEvent &even
  * ObServerCompactionEventIterator implement
  * */
 
-int ObServerCompactionEventIterator::open(const int64_t tenant_id)
+int ObServerCompactionEventIterator::open()
 {
   int ret = OB_SUCCESS;
-  omt::TenantIdList all_tenants;
-  all_tenants.set_label(ObModIds::OB_TENANT_ID_LIST);
   if (is_opened_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObServerCompactionEventIterator has been opened", K(ret));
-  } else if (!::is_valid_tenant_id(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id));
-  } else if (OB_SYS_TENANT_ID == tenant_id) { // sys tenant can get all tenants' info
-    GCTX.omt_->get_tenant_ids(all_tenants);
-  } else if (OB_FAIL(all_tenants.push_back(tenant_id))) {
-    LOG_WARN("failed to push back tenant_id", K(ret), K(tenant_id));
   }
-  for (int i = 0; OB_SUCC(ret) && i < all_tenants.size(); ++i) {
-    if (!is_virtual_tenant_id(all_tenants[i])) { // skip virtual tenant
-      MTL_SWITCH(all_tenants[i]) {
-        if (OB_FAIL(MTL(ObServerCompactionEventHistory *)->get_list(event_array_))) {
-          LOG_WARN("failed to get compaction info", K(ret));
+  if (OB_SUCC(ret)) {
+    {
+      SERVER_MODULE_SCOPE {
+        if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::compaction::ObServerCompactionEventHistory>()->get_list(event_array_))) {
         }
       } else {
-        if (OB_TENANT_NOT_IN_SERVER != ret) {
-          STORAGE_LOG(WARN, "switch tenant failed", K(ret), K(all_tenants[i]));
+        if (OB_SERVER_RUNTIME_NOT_READY != ret) {
+          STORAGE_LOG(WARN, "enter server module scope failed", K(ret));
         } else {
           ret = OB_SUCCESS;
           continue;

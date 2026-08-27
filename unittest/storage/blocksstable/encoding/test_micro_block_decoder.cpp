@@ -22,7 +22,6 @@
 #include "storage/blocksstable/encoding/ob_micro_block_encoder.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "../ob_row_generate.h"
-#include "share/ob_storage_format.h"
 
 namespace oceanbase
 {
@@ -36,11 +35,9 @@ using namespace share::schema;
 class TestMicroBlockDecoder : public ::testing::Test
 {
 public:
-  TestMicroBlockDecoder(): tenant_ctx_(500)
+  TestMicroBlockDecoder(): runtime_state_()
   {
-    share::ObTenantEnv::set_tenant(&tenant_ctx_);
-    encoder_.data_buffer_.allocator_.set_tenant_id(500);
-    encoder_.row_buf_holder_.allocator_.set_tenant_id(500);
+    share::g_server_runtime = &runtime_state_;
   }
   static const int64_t ROWKEY_CNT = 1;
   static const int64_t COLUMN_CNT = ObExtendType - 1;
@@ -49,14 +46,14 @@ public:
   virtual void SetUp();
   virtual void TearDown() {}
 
-protected:
+public:
   ObRowGenerate row_generate_;
   ObMicroBlockEncodingCtx ctx_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
   ObMicroBlockEncoder encoder_;
   ObArenaAllocator allocator_;
   ObObjType *col_obj_types_;
-  share::ObTenantBase tenant_ctx_;
+  share::ObServerRuntimeState runtime_state_;
   int64_t extra_rowkey_cnt_;
   int64_t column_cnt_;
   int64_t full_column_cnt_;
@@ -86,8 +83,6 @@ void TestMicroBlockDecoder::SetUp()
   ObTableSchema table;
   ObColumnSchemaV2 col;
   table.reset();
-  table.set_tenant_id(1);
-  table.set_tablegroup_id(1);
   table.set_database_id(1);
   table.set_table_id(tid);
   table.set_table_name("test_micro_block_decoder_schema");
@@ -96,7 +91,6 @@ void TestMicroBlockDecoder::SetUp()
   table.set_block_size(2 * 1024);
   table.set_compress_func_name("none");
   table.set_row_store_type(ENCODING_ROW_STORE);
-  table.set_storage_format_version(OB_STORAGE_FORMAT_VERSION_V4);
 
   ObSqlString str;
   for (int64_t i = 0; i < COLUMN_CNT; ++i) {
@@ -111,9 +105,7 @@ void TestMicroBlockDecoder::SetUp()
         || ObTextType == type){
       col.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
       if (ObCharType == type) {
-        const int64_t max_char_length = lib::is_oracle_mode()
-                                        ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE
-                                        : OB_MAX_CHAR_LENGTH;
+        const int64_t max_char_length = OB_MAX_CHAR_LENGTH;
         col.set_data_length(max_char_length);
       }
     } else {
@@ -177,12 +169,3 @@ TEST_F(TestMicroBlockDecoder, decode_test)
 
 } // end namespace blocksstable
 } // end namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  system("rm -f test_micro_block_decoder.log*");
-  OB_LOGGER.set_file_name("test_micro_block_decoder.log", true, false);
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

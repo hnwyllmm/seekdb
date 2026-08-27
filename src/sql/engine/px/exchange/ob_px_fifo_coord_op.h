@@ -19,7 +19,6 @@
 
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/px/ob_dfo_mgr.h"
-#include "sql/engine/px/ob_px_rpc_proxy.h"
 #include "sql/engine/px/ob_px_data_ch_provider.h"
 #include "sql/engine/px/ob_px_dtl_proc.h"
 #include "sql/engine/px/ob_px_coord_msg_proc.h"
@@ -28,7 +27,6 @@
 #include "sql/engine/px/ob_dfo_scheduler.h"
 #include "sql/engine/px/datahub/components/ob_dh_barrier.h"
 #include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
-#include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
@@ -110,13 +108,10 @@ private:
   ObWinbufPieceMsgP winbuf_piece_msg_proc_;
   ObPxQcInterruptedP interrupt_proc_;
   ObDynamicSamplePieceMsgP sample_piece_msg_proc_;
-  ObRollupKeyPieceMsgP rollup_key_piece_msg_proc_;
   ObRDWFPieceMsgP rd_wf_piece_msg_proc_;
   ObInitChannelPieceMsgP init_channel_piece_msg_proc_;
   ObReportingWFPieceMsgP reporting_wf_piece_msg_proc_;
   ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
-  ObSPWinFuncPXPieceMsgP sp_winfunc_px_piece_msg_proc_;
-  ObRDWinFuncPXPieceMsgP rd_winfunc_px_piece_msg_proc_;
   ObJoinFilterCountRowPieceMsgP join_filter_count_row_piece_msg_proc_;
 };
 

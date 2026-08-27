@@ -17,7 +17,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tmp_file/ob_tmp_file_io_ctx.h"
-#include "observer/ob_server_struct.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -58,9 +58,9 @@ ObTmpFileIOCtx::ObTmpFileIOCtx():
                 aggregate_read_io_cnt_(0),
                 wbp_page_read_hits_(0)
 {
-  io_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_IO_HDL"));
-  page_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_PCACHE_HDL"));
-  block_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_BCACHE_HDL"));
+  io_handles_.set_attr(ObMemAttr("TMP_IO_HDL"));
+  page_cache_handles_.set_attr(ObMemAttr("TMP_PCACHE_HDL"));
+  block_cache_handles_.set_attr(ObMemAttr("TMP_BCACHE_HDL"));
 }
 
 ObTmpFileIOCtx::~ObTmpFileIOCtx()
@@ -193,7 +193,6 @@ int ObTmpFileIOCtx::prepare_read(char *read_buf, const int64_t read_size, const 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(fd_), K(read_offset));
   } else if (OB_FAIL(prepare_read(read_buf, read_size))) {
-    LOG_WARN("failed to prepare read", KR(ret), K(fd_), KP(read_buf), K(read_size));
   } else {
     read_offset_in_file_ = read_offset;
   }
@@ -263,7 +262,6 @@ int ObTmpFileIOCtx::wait()
     // there are no asynchronous io tasks need to wait
     // do nothing
   } else if (OB_FAIL(wait_read_finish_())) {
-    STORAGE_LOG(WARN, "wait read finish failed", KR(ret), K(fd_), K(is_read_));
   }
 
   return ret;
@@ -280,7 +278,6 @@ int ObTmpFileIOCtx::wait_read_finish_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("done_size_ + todo_size_ is not equal to buf size", KR(ret), KPC(this));
   } else if (OB_FAIL(do_read_wait_())) {
-    LOG_WARN("fail to wait tmp file io", KR(ret), K(fd_));
   }
 
   return ret;
@@ -332,9 +329,6 @@ int ObTmpFileIOCtx::do_read_wait_()
       if (OB_ISNULL(block_buf)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data buf is null", KR(ret), K(fd_), K(block_cache_handle));
-      } else if (GCTX.is_shared_storage_mode()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support read from block cache in shared storage mode", KR(ret), KPC(this));
       } else if (OB_UNLIKELY(!check_buf_range_valid(read_buf, read_size))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid range", KR(ret), K(fd_), KP(read_buf), KP(buf_), K(read_size), K(buf_size_), KPC(this));
@@ -358,7 +352,6 @@ int ObTmpFileIOCtx::do_read_wait_()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("io handle is not valid", KR(ret), K(fd_), K(io_handle), KPC(this));
     } else if (OB_FAIL(io_handle.handle_.wait())) {
-      LOG_WARN("fail to do object handle read wait", KR(ret), K(fd_), K(io_handle));
     } else {
       const char * data_buf = io_handle.handle_.get_buffer();
       const int64_t offset = io_handle.offset_in_src_data_buf_;
@@ -460,13 +453,7 @@ bool ObTmpFileIOCtx::ObIOReadHandle::is_valid()
               handle_.is_valid();
 
   if (bret) {
-    if (!GCTX.is_shared_storage_mode()) {
-      bret = read_size_ <= ObTmpFileGlobal::SN_BLOCK_SIZE && block_handle_.is_inited();
-    #ifdef OB_BUILD_SHARED_STORAGE
-    } else {
-      bret = read_size_ <= ObTmpFileGlobal::SS_BLOCK_SIZE;
-    #endif
-    }
+    bret = read_size_ <= ObTmpFileGlobal::SN_BLOCK_SIZE && block_handle_.is_inited();
   }
 
   return bret;
@@ -489,8 +476,7 @@ ObTmpFileIOCtx::ObBlockCacheHandle::~ObBlockCacheHandle()
 bool ObTmpFileIOCtx::ObBlockCacheHandle::is_valid()
 {
   bool bret = false;
-  if (!GCTX.is_shared_storage_mode() &&
-      OB_NOT_NULL(dest_user_read_buf_) && offset_in_src_data_buf_ >= 0 &&
+  if (OB_NOT_NULL(dest_user_read_buf_) && offset_in_src_data_buf_ >= 0 &&
       read_size_ >= 0 &&
       read_size_ <= ObTmpFileGlobal::SN_BLOCK_SIZE &&
       OB_NOT_NULL(block_handle_.value_) &&

@@ -28,12 +28,10 @@ namespace storage
 * ObTruncateInfoCacheKey
 * */
 ObTruncateInfoCacheKey::ObTruncateInfoCacheKey(
-  const uint64_t tenant_id,
   const ObTabletID &tablet_id,
   const int64_t schema_version,
   const int64_t last_major_snapshot)
-  : tenant_id_(tenant_id),
-    tablet_id_(tablet_id),
+  : tablet_id_(tablet_id),
     schema_version_(schema_version),
     last_major_snapshot_(last_major_snapshot)
 {
@@ -41,8 +39,7 @@ ObTruncateInfoCacheKey::ObTruncateInfoCacheKey(
 
 bool ObTruncateInfoCacheKey::is_valid() const
 {
-  return tenant_id_ > 0
-    && tablet_id_.is_valid()
+  return tablet_id_.is_valid()
     && schema_version_ > 0
     && last_major_snapshot_ > 0;
 }
@@ -55,7 +52,7 @@ int ObTruncateInfoCacheKey::equal(const ObIKVCacheKey &other, bool &equal) const
     ret = OB_INVALID_DATA;
     LOG_WARN("invalid data", KR(ret), KPC(this), K(other_key));
   } else {
-    equal = (tenant_id_ == other_key.tenant_id_
+    equal = (true
       && tablet_id_ == other_key.tablet_id_
       && schema_version_ == other_key.schema_version_
       && last_major_snapshot_ == other_key.last_major_snapshot_);
@@ -66,8 +63,7 @@ int ObTruncateInfoCacheKey::equal(const ObIKVCacheKey &other, bool &equal) const
 int ObTruncateInfoCacheKey::hash(uint64_t &hash_val) const
 {
   int ret = OB_SUCCESS;
-  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
-  hash_val = murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
+  hash_val = murmurhash(&tablet_id_, sizeof(tablet_id_), 0);
   hash_val = murmurhash(&schema_version_, sizeof(schema_version_), hash_val);
   hash_val = murmurhash(&last_major_snapshot_, sizeof(last_major_snapshot_), hash_val);
   return ret;
@@ -83,7 +79,7 @@ int ObTruncateInfoCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCac
     ret = OB_INVALID_DATA;
     LOG_WARN("invalid truncate info cache key", K(ret), K(*this));
   } else {
-    key = new (buf) ObTruncateInfoCacheKey(tenant_id_, tablet_id_, schema_version_, last_major_snapshot_);
+    key = new (buf) ObTruncateInfoCacheKey(tablet_id_, schema_version_, last_major_snapshot_);
   }
   return ret;
 }
@@ -140,7 +136,6 @@ int ObTruncateInfoCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVC
     pos += sizeof(ObTruncateInfo) * count_;
     for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
       if (OB_FAIL(truncate_info_array_[i].deep_copy(buf, buf_len, pos, pfuse_value->truncate_info_array_[i]))) {
-        STORAGE_LOG(WARN, "Failed to deep copy truncate info", K(ret), K(i), K(truncate_info_array_[i]));
       }
     }
 
@@ -157,11 +152,10 @@ int ObTruncateInfoCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVC
 /*
 * ObTruncateInfoKVCache
 * */
-int ObTruncateInfoKVCache::init(const char *cache_name, const int64_t priority)
+int ObTruncateInfoKVCache::init(const char *cache_name)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL((ObKVCache<ObTruncateInfoCacheKey, ObTruncateInfoCacheValue>::init(cache_name,  priority)))) {
-    LOG_WARN("fail to init truncate info kv cache", K(ret), K(priority));
+  if (OB_FAIL((ObKVCache<ObTruncateInfoCacheKey, ObTruncateInfoCacheValue>::init(cache_name)))) {
   }
   return ret;
 }
@@ -177,13 +171,11 @@ int ObTruncateInfoKVCache::get_truncate_info_array(const ObTruncateInfoCacheKey 
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       LOG_WARN("fail to get key from truncate info cache", K(ret));
     }
-    EVENT_INC(ObStatEventIds::TRUNCATE_INFO_CACHE_MISS);
   } else if (OB_ISNULL(value)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, the value must not be NULL", K(ret));
   } else {
     handle.value_ = value;
-    EVENT_INC(ObStatEventIds::TRUNCATE_INFO_CACHE_HIT);
   }
   return ret;
 }
@@ -220,7 +212,6 @@ int ObTruncateInfoKVCacheUtil::get_truncate_info_array(
       LOG_WARN("invalid data from truncate info kv cache", KR(ret), K(cache_key), K(cache_handle));
     } else if (OB_FAIL(input_array.init_with_kv_cache_array(
         allocator, ObArrayWrap<ObTruncateInfo>(cache_handle.value_->get_truncate_info_array(), cache_handle.value_->get_count())))) {
-      LOG_WARN("failed to init truncate info array", KR(ret), K(cache_key), K(cache_handle));
     }
   }
   return ret;
@@ -231,14 +222,13 @@ int ObTruncateInfoKVCacheUtil::put_truncate_info_array(
     ObIArray<ObTruncateInfo *> &distinct_array)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator temp_allocator(ObMemAttr(MTL_ID(), "CopyTrunValue"));
+  ObArenaAllocator temp_allocator(ObMemAttr("CopyTrunValue"));
   ObTruncateInfoCacheValue cache_value;
   if (OB_UNLIKELY(!cache_key.is_valid() || distinct_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cache_key), K(distinct_array));
   } else if (1 == distinct_array.count()) {
     if (OB_FAIL(cache_value.init(distinct_array.count(), distinct_array.at(0)))) {
-      LOG_WARN("failed to init truncate info value", KR(ret), K(distinct_array));
     }
   } else {
     const int64_t count = distinct_array.count();
@@ -255,7 +245,6 @@ int ObTruncateInfoKVCacheUtil::put_truncate_info_array(
           ret = OB_INVALID_DATA;
           LOG_WARN("invalid truncate info", KR(ret), K(idx), KPC(info));
         } else if (OB_FAIL(info->shallow_copy(dst_array[idx]))) {
-          LOG_WARN("failed to shallow copy truncate info", KR(ret), K(idx), KPC(info));
         }
       } // for
     }

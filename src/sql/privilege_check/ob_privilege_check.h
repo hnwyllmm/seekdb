@@ -19,8 +19,7 @@
 
 #include <cstdint>
 #include "share/schema/ob_schema_struct.h"
-#include "share/ob_compatibility_control.h"
-#include "sql/resolver/ob_stmt_type.h"
+#include "share/statement/ob_stmt_type.h"
 namespace oceanbase {
 namespace sql {
 struct ObSqlCtx;
@@ -50,11 +49,6 @@ public:
                                  const ObStmt *basic_stmt,
                                  share::schema::ObStmtNeedPrivs &stmt_need_privs);
 
-  static int can_do_operation_on_db(const share::schema::ObSessionPrivInfo &session_priv,
-                                    const common::ObString &db_name);
-  static int can_do_operation_on_db(const share::schema::ObSessionPrivInfo &session_priv,
-                                    const common::ObIArray<const ObDmlTableInfo*> &table_infos,
-                                    const common::ObString &op_literal);
   static int can_do_grant_on_db_table(const share::schema::ObSessionPrivInfo &session_priv,
                                       const ObPrivSet priv_set,
                                       const common::ObString &db_name,
@@ -66,8 +60,7 @@ public:
 	// check if password is expired according to the flag in session info
   static int check_password_expired(const ObSqlCtx &ctx, const stmt::StmtType stmt_type);
 	// check if password is expired and set the flag in session info
-  static int check_password_expired_on_connection(const uint64_t tenant_id,
-                                                  const uint64_t user_id,
+  static int check_password_expired_on_connection(const uint64_t user_id,
                                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                                   sql::ObSQLSessionInfo &session);
   ///Get all privilege info needed by a stmt, including sub-queries.
@@ -78,11 +71,6 @@ public:
   static int get_stmt_need_privs(const share::schema::ObSessionPrivInfo &session_priv,
                                  const ObStmt *basic_stmt,
                                  common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
-  // check privilege version for upgrade compatibility
-  static int get_priv_need_check(const share::schema::ObSessionPrivInfo &session_priv,
-                                 const share::ObCompatFeatureType feature_type,
-                                 bool &need_check);
-
   static int check_read_only(const ObSqlCtx &ctx,
                              const stmt::StmtType stmt_type,
                              const bool has_global_variable,
@@ -99,8 +87,7 @@ private:
 
   static const ObGetStmtNeedPrivsFunc priv_check_funcs_[];
 
-  static int check_password_life_time_mysql(const uint64_t tenant_id,
-                                            const uint64_t user_id,
+  static int check_password_life_time_mysql(const uint64_t user_id,
                                             share::schema::ObSchemaGetterGuard &schema_guard,
                                             sql::ObSQLSessionInfo &session);
   enum ObPasswordLifeTime { FOREVER = 0, LIMIT};

@@ -20,7 +20,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_fixed_array.h"
 #include "lib/lock/ob_scond.h"
-#include "objit/common/ob_item_type.h"
+#include "sql/parser/ob_item_type.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/basic/ob_ra_datum_store.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
@@ -151,7 +151,6 @@ public:
     : ObOpInput(ctx, spec), local_task_count_(1), total_task_count_(1),
       wf_participator_shared_info_(0) {};
   virtual ~ObWindowFunctionOpInput() = default;
-  virtual int init(ObTaskInfo &task_info) override { UNUSED(task_info); return common::OB_SUCCESS; }
   virtual void reset() override { local_task_count_ = 1; total_task_count_ = 1;}
 
   void set_local_task_count(uint64_t task_count) { local_task_count_ = task_count; }
@@ -252,24 +251,29 @@ public:
                   const STORE_ROW_R *r,
                   const int64_t begin,
                   const int64_t end,
-                  int &cmp_ret) const;
+                  int &cmp_ret,
+                  const common::ObDatumAccessContext *access_ctx) const;
 
   template <typename STORE_ROW_L, typename STORE_ROW_R>
-  int rd_pby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret) const
+  int rd_pby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret,
+                  const common::ObDatumAccessContext *access_ctx) const
   {
-    return rd_sort_cmp(l, r, 0, rd_pby_sort_cnt_, cmp_ret);
+    return rd_sort_cmp(l, r, 0, rd_pby_sort_cnt_, cmp_ret, access_ctx);
   }
 
   template <typename STORE_ROW_L, typename STORE_ROW_R>
-  int rd_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret) const
+  int rd_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret,
+                 const common::ObDatumAccessContext *access_ctx) const
   {
-    return rd_sort_cmp(l, r, rd_pby_sort_cnt_, rd_sort_collations_.count(), cmp_ret);
+    return rd_sort_cmp(
+        l, r, rd_pby_sort_cnt_, rd_sort_collations_.count(), cmp_ret, access_ctx);
   }
 
   template <typename STORE_ROW_L, typename STORE_ROW_R>
-  int rd_pby_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret) const
+  int rd_pby_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret,
+                     const common::ObDatumAccessContext *access_ctx) const
   {
-    return rd_sort_cmp(l, r, 0, rd_sort_collations_.count(), cmp_ret);
+    return rd_sort_cmp(l, r, 0, rd_sort_collations_.count(), cmp_ret, access_ctx);
   }
 
   int64_t get_role_type() const { return role_type_; }
@@ -369,11 +373,9 @@ public:
       if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump<true>())) {
         SQL_ENG_LOG(WARN, "fail to dump_by_priority", K(ret), K(ObToStringExprRow(*ctx, exprs)));
       } else if (OB_FAIL(ra_rs_.add_row(exprs, ctx, stored_row))) {
-        SQL_ENG_LOG(WARN, "fail to add_row for ra_rs_", K(ret));
       } else {
         stored_row_cnt_++;
         row_cnt_ += add_row_cnt;
-        SQL_ENG_LOG(DEBUG, "add_row", K(ret), K_(row_cnt), K_(stored_row_cnt));
       }
       return ret;
     }
@@ -387,11 +389,9 @@ public:
       if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump<false>())) {
         SQL_ENG_LOG(WARN, "fail to dump_by_priority", K(ret));
       } else if (OB_FAIL(ra_rs_.add_row(datums, stored_row))) {
-        SQL_ENG_LOG(WARN, "fail to add_row for ra_rs_", K(ret));
       } else {
         row_cnt_ += add_row_cnt;
         ++stored_row_cnt_;
-        SQL_ENG_LOG(DEBUG, "add_row", K(ret), K_(row_cnt), K_(stored_row_cnt), K(add_row_cnt));
       }
       return ret;
     }
@@ -407,7 +407,6 @@ public:
                   K(begin_idx_), K(output_row_idx_),
       K(row_cnt_), K(stored_row_cnt_), K(ObToStringExprRow(*ctx, exprs)));
       if (OB_FAIL(add_row(exprs, ctx, stored_row, add_row_cnt))) {
-        LOG_WARN("fail to add_row", K(ret));
       }
       return ret;
     }
@@ -423,7 +422,7 @@ public:
     // return row count which window function not computed
     inline int64_t to_compute_rows() const { return stored_row_cnt_ - row_cnt_; }
     inline bool is_empty() const { return stored_row_cnt_ == begin_idx_; }
-    inline int reset_buf(const uint64_t tenant_id)
+    inline int reset_buf()
     {
       int ret = common::OB_SUCCESS;
       //row_cnt_ no need reset
@@ -432,8 +431,7 @@ public:
       const int64_t mem_limit = INT64_MAX; // disable dump by mem limit, use auto memory manage instead
       const int64_t mem_ctx_id = common::ObCtxIds::WORK_AREA;
       const char *label = common::ObModIds::OB_SQL_WINDOW_ROW_STORE;
-      if (OB_FAIL(ra_rs_.init(mem_limit, tenant_id, mem_ctx_id, label))) {
-        LOG_WARN("init ra datum store failed", K(ret), K(tenant_id));
+      if (OB_FAIL(ra_rs_.init(mem_limit, mem_ctx_id, label))) {
       } else if (OB_ISNULL(op_.mem_context_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null memory context", K(ret));
@@ -447,7 +445,7 @@ public:
       }
       return ret;
     }
-    inline int reset(const uint64_t tenant_id)
+    inline int reset()
     {
       begin_idx_ = 0;
       output_row_idx_ = 0;
@@ -455,7 +453,7 @@ public:
       row_cnt_ = 0;
       local_mem_limit_version_ = 0;
       prior_dumping_rows_stores_.clear();
-      return reset_buf(tenant_id);
+      return reset_buf();
     }
     inline int get_row(const int64_t row_idx, const ObRADatumStore::StoredRow *&sr)
     {
@@ -471,7 +469,6 @@ public:
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "get row failed", K(row_idx), K(ret));
       } else {
-        SQL_ENG_LOG(DEBUG, "get row", K(row_idx), KPC(sr));
       }
       return ret;
     }
@@ -515,9 +512,9 @@ public:
       foreach_store([](RowsStore *&s) { s->~RowsStore(); s = NULL; return OB_SUCCESS; });
     }
 
-    int reset(const int64_t tenant_id)
+    int reset()
     {
-      return foreach_store([&](RowsStore *&s) { return s->reset(tenant_id); });
+      return foreach_store([](RowsStore *&s) { return s->reset(); });
     }
 
     void destroy()
@@ -571,7 +568,6 @@ public:
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(WARN, "get row failed", K(row_idx), K(ret));
       } else {
-        SQL_ENG_LOG(DEBUG, "get row", K(row_idx), KPC(sr));
       }
       return ret;
     }
@@ -596,7 +592,7 @@ public:
       last_valid_frame_.head_ = last_valid_frame_.tail_ = -1;
       reset_for_restart_self();
     }
-    int reset_res(const int64_t tenant_id);
+    int reset_res();
     virtual bool is_aggr() const = 0;
     VIRTUAL_TO_STRING_KV(K_(wf_idx), K_(wf_info), K_(part_first_row_idx),
                          K_(res), K_(last_valid_frame));
@@ -618,10 +614,10 @@ public:
   class AggrCell : public WinFuncCell
   {
   public:
-    AggrCell(WinFuncInfo &wf_info, ObWindowFunctionOp &op, ObIArray<ObAggrInfo> &aggr_infos, const int64_t tenant_id)
+    AggrCell(WinFuncInfo &wf_info, ObWindowFunctionOp &op, ObIArray<ObAggrInfo> &aggr_infos)
       : WinFuncCell(wf_info, op),
         finish_prepared_(false),
-        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc", op.get_monitor_info(), tenant_id),
+        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc", op.get_monitor_info()),
         result_(),
         got_result_(false),
         remove_type_(wf_info.remove_type_)
@@ -765,13 +761,15 @@ public:
   public:
     template<class FuncType>
     int alloc(WinFuncCell *&return_func, WinFuncInfo &wf_info,
-              ObWindowFunctionOp &op, const int64_t tenant_id);
+              ObWindowFunctionOp &op);
     common::ObIAllocator *local_allocator_;
   };
 public:
   ObWindowFunctionOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),
-      local_allocator_(),
+      local_allocator_(ObModIds::OB_SQL_WINDOW_LOCAL,
+                       OB_MALLOC_NORMAL_BLOCK_SIZE,
+                       ObCtxIds::WORK_AREA),
       stat_(ProcessStatus::PARTIAL),
       input_rows_(),
       wf_list_(),
@@ -803,7 +801,7 @@ public:
       mem_context_(NULL),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info_),
-      hp_infras_mgr_(MTL_ID()),
+      hp_infras_mgr_(),
       distinct_aggr_count_(0),
       global_mem_limit_version_(0),
       amm_periodic_cnt_(0)
@@ -823,7 +821,8 @@ public:
                                      const WinFuncInfo &wf_info,
                                      common::ObIAllocator &alloc,
                                      const ObDatum &src0,
-                                     const ObDatum &src1);
+                                     const ObDatum &src1,
+                                     const common::ObDatumAccessContext *access_ctx);
 
   static int rank_add(ObDatum &res,
                       const WinFuncInfo &info,
@@ -859,8 +858,8 @@ protected:
   int create_stores(Stores &s);
   int set_it_age(Stores &s);
   int unset_it_age(Stores &s);
-  int reset_for_scan(const int64_t tenant_id);
-  int reset_for_part_scan(const int64_t tenant_id);
+  int reset_for_scan();
+  int reset_for_part_scan();
   int get_pos(RowsReader &assist_reader,
               WinFuncCell &func_ctx,
               const int64_t row_idx,
@@ -1079,7 +1078,8 @@ int ObWindowFunctionSpec::rd_sort_cmp(const STORE_ROW_L *l,
                                       const STORE_ROW_R *r,
                                       const int64_t begin,
                                       const int64_t end,
-                                      int &cmp_ret) const
+                                      int &cmp_ret,
+                                      const common::ObDatumAccessContext *access_ctx) const
 {
   int ret = OB_SUCCESS;
   cmp_ret = 0;
@@ -1092,8 +1092,8 @@ int ObWindowFunctionSpec::rd_sort_cmp(const STORE_ROW_L *l,
     cmp_ret = -1;
   } else {
     for (int64_t i = begin; 0 == cmp_ret && i < end && OB_SUCC(ret); i++) {
-      if (OB_FAIL(rd_sort_cmp_funcs_.at(i).cmp_func_(l->cells()[i], r->cells()[i], cmp_ret))) {
-        SQL_ENG_LOG(WARN, "compare failed", K(ret));
+      if (OB_FAIL(rd_sort_cmp_funcs_.at(i).cmp_func_(
+              l->cells()[i], r->cells()[i], cmp_ret, access_ctx))) {
       } else if (!rd_sort_collations_.at(i).is_ascending_) {
         cmp_ret = cmp_ret * (-1);
       }
@@ -1122,7 +1122,6 @@ int ObWindowFunctionOp::update_mem_limit_version_periodically()
         return 0 == ((++amm_periodic_cnt_) % UPDATE_MEM_SIZE_PERIODIC_CNT);
       },
       updated))) {
-    LOG_WARN("failed to update max available memory size periodically", K(ret));
   } else if ((updated || need_dump()) &&
       OB_FAIL(sql_mem_processor_.extend_max_memory_size(
                 &mem_context_->get_malloc_allocator(),

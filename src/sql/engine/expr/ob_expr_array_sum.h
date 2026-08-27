@@ -17,10 +17,10 @@
 #ifndef OCEANBASE_SQL_OB_EXPR_ARRAY_SUM
 #define OCEANBASE_SQL_OB_EXPR_ARRAY_SUM
 
-#include "lib/udt/ob_array_type.h"
-#include "lib/udt/ob_collection_type.h"
-#include "share/datum/ob_datum.h"
-#include "share/vector/ob_i_vector.h"
+#include "common/udt/ob_array_type.h"
+#include "common/udt/ob_collection_type.h"
+#include "common/datum/ob_datum.h"
+#include "sql/engine/vector/ob_i_vector.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
@@ -50,8 +50,6 @@ public:
   static int eval_array_sum(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_array_sum_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                                   const int64_t batch_size);
-  static int eval_array_sum_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
-                                   const EvalBound &bound);
 
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

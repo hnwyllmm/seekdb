@@ -194,7 +194,7 @@ const char *ObSQLiteRowReader::get_text(int col_idx, int *len) const
 {
   const char *ret = nullptr;
   int text_len = 0;
-
+  
   if (OB_ISNULL(stmt_)) {
     if (nullptr != len) {
       *len = 0;
@@ -203,7 +203,7 @@ const char *ObSQLiteRowReader::get_text(int col_idx, int *len) const
     // Read raw data from SQLite
     const char *text = reinterpret_cast<const char *>(sqlite3_column_text(stmt_, col_idx));
     text_len = sqlite3_column_bytes(stmt_, col_idx);
-
+    
     if (nullptr == text || text_len <= 0) {
       if (nullptr != len) {
         *len = 0;
@@ -221,7 +221,7 @@ const char *ObSQLiteRowReader::get_text(int col_idx, int *len) const
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -244,7 +244,7 @@ const void *ObSQLiteRowReader::get_blob(int col_idx, int *len) const
 {
   const void *ret = nullptr;
   int blob_len = 0;
-
+  
   if (OB_ISNULL(stmt_)) {
     if (nullptr != len) {
       *len = 0;
@@ -253,7 +253,7 @@ const void *ObSQLiteRowReader::get_blob(int col_idx, int *len) const
     // Read raw data from SQLite
     const void *blob = sqlite3_column_blob(stmt_, col_idx);
     blob_len = sqlite3_column_bytes(stmt_, col_idx);
-
+    
     if (nullptr == blob || blob_len <= 0) {
       if (nullptr != len) {
         *len = 0;
@@ -269,7 +269,7 @@ const void *ObSQLiteRowReader::get_blob(int col_idx, int *len) const
       }
     }
   }
-
+  
   return ret;
 }
 
@@ -382,7 +382,6 @@ void ObSQLiteConnection::close()
     if (is_in_transaction()) {
       int ret = rollback();
       if (OB_SUCCESS != ret) {
-        LOG_WARN("failed to rollback transaction on close", K(ret));
       }
     }
     sqlite3_close(db_);
@@ -404,7 +403,6 @@ int ObSQLiteConnection::query(
     ObSQLiteStmt *stmt = nullptr;
     // Use prepare_query
     if (OB_FAIL(prepare_query(sql, binder, stmt))) {
-      LOG_WARN("failed to prepare query", K(ret));
     } else if (OB_NOT_NULL(stmt)) {
       if (row_processor) {
         // Process rows using step_query
@@ -528,7 +526,6 @@ int ObSQLiteConnection::execute(
     ObSQLiteStmt *stmt = nullptr;
     // Use prepare_execute
     if (OB_FAIL(prepare_execute(sql, stmt))) {
-      LOG_WARN("failed to prepare execute", K(ret));
     } else if (OB_NOT_NULL(stmt)) {
       // Use step_execute
       ret = step_execute(stmt, binder, affected_rows);
@@ -587,7 +584,7 @@ int ObSQLiteConnection::commit()
     int sqlite_ret = sqlite3_exec(db_, "COMMIT", nullptr, nullptr, &err_msg);
     if (SQLITE_OK != sqlite_ret) {
       ret = OB_ERROR;
-      LOG_WARN("failed to commit transaction", K(ret), "sqlite_err", err_msg ? err_msg : sqlite3_errmsg(db_));
+      LOG_ERROR("failed to commit transaction", K(ret), "sqlite_err", err_msg ? err_msg : sqlite3_errmsg(db_));
       if (err_msg) {
         sqlite3_free(err_msg);
       }
@@ -612,7 +609,7 @@ int ObSQLiteConnection::rollback()
     int sqlite_ret = sqlite3_exec(db_, "ROLLBACK", nullptr, nullptr, &err_msg);
     if (SQLITE_OK != sqlite_ret) {
       ret = OB_ERROR;
-      LOG_WARN("failed to rollback transaction", K(ret), "sqlite_err", err_msg ? err_msg : sqlite3_errmsg(db_));
+      LOG_ERROR("failed to rollback transaction", K(ret), "sqlite_err", err_msg ? err_msg : sqlite3_errmsg(db_));
       if (err_msg) {
         sqlite3_free(err_msg);
       }

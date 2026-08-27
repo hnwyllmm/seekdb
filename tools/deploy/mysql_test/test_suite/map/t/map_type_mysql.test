@@ -71,8 +71,6 @@ select array_union([1,2,3], map(1,11));
 select array_union(map(1,11), [1,2]);
 --error 5083
 select element_at(map(1,11), 1);
---error 5083
-select rb_build(map(1,11));
 
 --error 5083
 select WEIGHT_STRING(map(1,11));
@@ -328,19 +326,15 @@ drop table t1;
 
 create table t1 as select map(1,1) as m1, map(1,1,2,2,3,3) as m2, map(1.1,1.11) as m3, map('a','b') as m4;
 desc t1;
---replace_regex /REPLICA_NUM = [0-9]*/REPLICA_NUM = replica_num/g
 show create table t1;
 create table t2 as select map(1,1.11,2.2,'b') as m1, map(1,[1]) as m2, map(1,[['b']]) as m3;
 desc t2;
---replace_regex /REPLICA_NUM = [0-9]*/REPLICA_NUM = replica_num/g
 show create table t1;
 create table t3 as select m1, m2, m3, m4 from t1;
 desc t3;
---replace_regex /REPLICA_NUM = [0-9]*/REPLICA_NUM = replica_num/g
 show create table t1;
 create table t4 as select m1, m2, m3 from t2;
 desc t4;
---replace_regex /REPLICA_NUM = [0-9]*/REPLICA_NUM = replica_num/g
 show create table t1;
 drop table t1, t2, t3, t4;
 
@@ -425,13 +419,8 @@ select max(m) from t1;
 --error 1210
 select min(m) from t1;
 
-# materialized view
 --disable_warnings
-drop materialized view if exists mv1, mv2;
 --enable_warnings
-create materialized view mv1 parallel 2 refresh complete on demand  as select * from t1;
-create materialized view mv2 parallel 2 refresh complete on demand  as select * from t2;
-drop materialized view mv1, mv2;
 
 drop table t1, t2, t3, t4;
 
@@ -524,7 +513,7 @@ insert into t1 value (1, [1,1,1], '1', 1, '{1:1}', '{"1":1}');
 insert into t1 value (2, [2,2,2], '2', 2, '{2:2}', '{"2":2}');
 alter table t1 modify c1 tinyint;
 desc t1;
-alter table t1 modify c3 varchar(5) charset 'gbk';
+alter table t1 modify c3 varchar(5) charset 'utf8mb4';
 desc t1;
 alter table t1 modify c3 char(8) , add c7 int, drop column c6;
 desc t1;
@@ -611,35 +600,17 @@ alter table t1 partition by range(c1) (partition p3 values less than (10000));
 insert into t1 value (4000, [4,4,4], '4', 4, '{4:4}', '{"4":4}');
 select * from t1;
 
-# 10. MVIEW/VIEW
 drop table t1;
 create table t1 (id int primary key, c1 array(int), c2 map(int,int), c3 float, c4 json);
 insert into t1 values (1, [1,2], '{1:11,2:22}', 1.1, '{"1":11,"2":22}');
 insert into t1 values (2, '[]', '{}', 0, '{}');
-create materialized view mv1 refresh complete on demand  as select id,c1,c2,c3,c4 from t1 ;
-CREATE INDEX idx ON mv1 (c3);
---error 1235
-CREATE INDEX idx ON mv1 (c2);
---error 1235
-CREATE VECTOR INDEX idx ON mv1 (c2);
-desc mv1;
---sorted_result
-select * from mv1;
 
 drop table t1;
-drop  materialized view mv1;
 create table t1 (id int primary key, c1 array(int), c2 map(int,int), c3 float, c4 json);
 insert into t1 values (1, [1,2], '{1:11,2:22}', 1.1, '{"1":11,"2":22}');
 insert into t1 values (2, '[]', '{}', 0, '{}');
---error 1167
-create materialized view mv1(primary key(c2)) refresh complete on demand  as select c1,c2 from t1 ;
-create materialized view mv1(primary key(id)) refresh complete on demand  as select id,c1,c2 from t1 ;
-desc mv1;
---sorted_result
-select * from mv1;
 
 drop table t1;
-drop  materialized view mv1;
 create table t1 (id int primary key, c1 array(int), c2 map(int,int), c3 float, c4 json);
 create view v1 as select * from t1;
 insert into v1 values (1, [1,2], '{1:11,2:22}', 1.1, '{"1":11,"2":22}');
@@ -665,7 +636,7 @@ select * from t1;
 select * from t2;
 drop table t1, t2;
 
-# direct load
+# insert
 create table t1 (id int primary key not null auto_increment, m1 map(int, int), m2 map(varchar(20),array(varchar(20))), m3 map(float, array(array(int))))
   PARTITION BY LIST(id) (PARTITION p0 VALUES IN (1,2), PARTITION p1 VALUES IN (3,4), PARTITION p2 VALUES IN (DEFAULT));
 insert into t1 values (1, '{1:11,2:22}', '{"a1":["hi1","hello"], "b1":["ocean1","base"]}', '{1.11:[[11],[2]], 2.21:[[1,2]]}');
@@ -675,12 +646,11 @@ insert into t1 values (4, '{1:13,2:25}', '{"a3":["hi4","hello"], "b4":["ocean3",
 insert into t1 values (5, '{1:14,2:26}', '{"a4":["hi5","hello"], "b5":["ocean5","base"]}', '{1.15:[[15],[2]], 2.25:[[1,2]]}');
 select * from t1 order by id;
 CREATE TABLE t2(id int, m1 map(TINYINT, TINYINT), m2 map(varchar(10),array(varchar(10))), m3 map(double, array(array(SMALLINT))));
-INSERT /*+ direct(true,100) enable_parallel_dml parallel(2) append*/ INTO t2  SELECT * from t1;
+INSERT /*+ enable_parallel_dml parallel(2) */ INTO t2  SELECT * from t1;
 --sorted_result
 SELECT * from t2;
 ALTER TABLE t1 DROP PARTITION p0;
 ALTER TABLE t1 TRUNCATE PARTITION p1;
---replace_regex /REPLICA_NUM = [0-9]*/REPLICA_NUM = replica_num/g
 show create table t1;
 select * from t1 order by id;
 insert into t1 values (1, '{1:11,2:22}', '{"a1":["hi1","hello"], "b1":["ocean1","base"]}', '{1.11:[[11],[2]], 2.21:[[1,2]]}');

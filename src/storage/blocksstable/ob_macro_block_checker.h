@@ -19,7 +19,7 @@
 
 #include "lib/utility/ob_macro_utils.h"
 #include "share/ob_define.h"
-#include "share/schema/ob_table_param.h"
+#include "storage/access/ob_table_param.h"
 #include "storage/blocksstable/ob_macro_block_common_header.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_imicro_block_reader.h"
@@ -68,7 +68,7 @@ private:
       const char *macro_block_buf,
       const int64_t macro_block_buf_size);
   static int check_physical_checksum(
-      const ObSharedObjectHeader &shared_obj_header,
+      const ObObjectHeader &object_header,
       const char *macro_block_buf,
       const int64_t macro_block_buf_size);
   static int get_sstable_header_and_column_checksum(

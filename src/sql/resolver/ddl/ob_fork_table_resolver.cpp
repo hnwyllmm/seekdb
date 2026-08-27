@@ -26,7 +26,7 @@ namespace oceanbase
 using namespace common;
 using namespace share::schema;
 using namespace share;
-using namespace obrpc;
+using namespace obcall;
 namespace sql
 {
 
@@ -56,13 +56,13 @@ int ObForkTableResolver::resolve(const ParseNode &parse_tree)
     SQL_RESV_LOG(ERROR, "create fork table stmt failed", K(ret));
   } else {
     stmt_ = fork_table_stmt;
-    obrpc::ObForkTableArg &fork_table_arg = fork_table_stmt->get_fork_table_arg();
-    fork_table_arg.tenant_id_ = session_info_->get_effective_tenant_id();
+    obcall::ObForkTableArg &fork_table_arg = fork_table_stmt->get_fork_table_arg();
+    
     fork_table_arg.if_not_exist_ = false;
   }
 
   if (OB_SUCC(ret)) {
-    obrpc::ObForkTableArg &fork_table_arg = fork_table_stmt->get_fork_table_arg();
+    obcall::ObForkTableArg &fork_table_arg = fork_table_stmt->get_fork_table_arg();
     ParseNode *dst_table_node = parse_tree.children_[DST_TABLE_NODE];
     ParseNode *src_table_node = parse_tree.children_[SRC_TABLE_NODE];
     ObString dst_database_name;
@@ -74,17 +74,11 @@ int ObForkTableResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
     } else if (OB_FAIL(resolve_table_relation_node(dst_table_node, dst_table_name, dst_database_name))) {
-      SQL_RESV_LOG(WARN, "failed to resolve destination table", K(ret));
     } else if (OB_FAIL(deep_copy_str(dst_database_name, fork_table_arg.dst_database_name_))) {
-      SQL_RESV_LOG(WARN, "failed to deep copy dst database name", K(ret));
     } else if (OB_FAIL(deep_copy_str(dst_table_name, fork_table_arg.dst_table_name_))) {
-      SQL_RESV_LOG(WARN, "failed to deep copy dst table name", K(ret));
     } else if (OB_FAIL(resolve_table_relation_node(src_table_node, src_table_name, src_database_name))) {
-      SQL_RESV_LOG(WARN, "failed to resolve source table", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_database_name, fork_table_arg.src_database_name_))) {
-      SQL_RESV_LOG(WARN, "failed to deep copy src database name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_table_name, fork_table_arg.src_table_name_))) {
-      SQL_RESV_LOG(WARN, "failed to deep copy src table name", K(ret));
     }
   }
 
@@ -93,3 +87,4 @@ int ObForkTableResolver::resolve(const ParseNode &parse_tree)
 
 }
 }
+

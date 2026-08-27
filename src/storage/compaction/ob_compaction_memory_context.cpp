@@ -76,10 +76,10 @@ ObCompactionMemoryContext::ObCompactionMemoryContext(
     common::ObArenaAllocator &allocator)
   : arena_(allocator),
     ctx_id_(ObCtxIds::DEFAULT_CTX_ID),
-    inner_arena_("SafeArena", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ctx_id_),
+    inner_arena_("SafeArena", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx_id_),
     safe_arena_(inner_arena_),
     free_lock_(),
-    free_alloc_("FreeAlloc", MTL_ID()),
+    free_alloc_("FreeAlloc"),
     mem_monitor_(),
     mem_peak_total_(0),
     is_reserve_mode_(false)
@@ -104,8 +104,8 @@ void ObCompactionMemoryContext::inner_init(const ObTabletMergeDagParam &param)
           ? ObCtxIds::MERGE_RESERVE_CTX_ID
           : ObCtxIds::MERGE_NORMAL_CTX_ID;
 
-  lib::ObMemAttr arena_attr(MTL_ID(), "MemCtx", ctx_id_);
-  lib::ObMemAttr free_attr(MTL_ID(), "FreeMemCtx", ctx_id_);
+  lib::ObMemAttr arena_attr("MemCtx", ctx_id_);
+  lib::ObMemAttr free_attr("FreeMemCtx", ctx_id_);
 
   if (is_mini_merge(param.merge_type_)) {
     arena_attr.label_ = "MiniSafeMemCtx";
@@ -185,7 +185,6 @@ int ObCompactionBuffer::init(const int64_t capacity, const int64_t reserve_size)
 
   if (OB_SUCC(ret)) {
     if(OB_FAIL(reserve(reserve_size))) {
-      STORAGE_LOG(WARN, "failed to reserve", K(ret), K(reserve_size));
     } else {
       default_reserve_ = reserve_size;
       is_inited_ = true;
@@ -250,7 +249,6 @@ int ObCompactionBuffer::expand(const int64_t size)
     }
     expand_size = MIN(expand_size, capacity_);
     if (OB_FAIL(reserve(expand_size))) {
-      STORAGE_LOG(WARN, "fail to reserve", K(ret), K(expand_size));
     }
   }
 
@@ -294,7 +292,6 @@ int ObCompactionBuffer::ensure_space(const int64_t append_size)
     ret = OB_BUF_NOT_ENOUGH;
   } else if (len_ + append_size > buffer_size_) {
     if (OB_FAIL(expand(len_ + append_size))) {
-      STORAGE_LOG(WARN, "failed to expand size", K(ret), K(len_), K(append_size));
     }
   } 
 

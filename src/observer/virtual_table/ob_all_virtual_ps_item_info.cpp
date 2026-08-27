@@ -15,6 +15,7 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_ps_item_info.h"
+#include "share/rc/ob_server_runtime.h"
 
 #include "sql/plan_cache/ob_ps_cache.h"
 
@@ -30,42 +31,16 @@ int ObAllVirtualPsItemInfo::inner_get_next_row()
   int ret = OB_SUCCESS;
   bool is_sub_end = false;
 
-  do {
-    is_sub_end = false;
-    if (tenant_id_array_idx_ < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "invalid tenant_id_array idx", K(ret), K(tenant_id_array_idx_));
-    } else if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
-      ret = OB_ITER_END;
-      tenant_id_array_idx_ = 0;
-    } else {
-      uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
-      MTL_SWITCH(tenant_id) {
-        if (OB_FAIL(get_next_row_from_specified_tenant(tenant_id, is_sub_end))) {
-          SERVER_LOG(WARN, "get_next_row_from_specified_tenant failed", K(ret), K(tenant_id));
-        } else {
-          if (is_sub_end) {
-            ++tenant_id_array_idx_;
-          }
-        }
-      }
-    }
-  } while (is_sub_end && OB_SUCC(ret));
-  return ret;
-}
-
-int ObAllVirtualPsItemInfo::inner_open()
-{
-  int ret = OB_SUCCESS;
-  // sys tenant show all tenant infos
-  if (is_sys_tenant(effective_tenant_id_)) {
-    if(OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
-      SERVER_LOG(WARN, "failed to add tenant id", K(ret));
-    }
+  // At most one SERVER_MODULE_SCOPE pass
+  if (iter_end_) {
+    ret = OB_ITER_END;
   } else {
-    // user tenant show self tenant info
-    if (OB_FAIL(tenant_id_array_.push_back(effective_tenant_id_))) {
-      SERVER_LOG(WARN, "tenant id array fail to push back", KR(ret), K(effective_tenant_id_));
+    SERVER_MODULE_SCOPE {
+      if (OB_FAIL(get_next_row(is_sub_end))) {
+      } else if (is_sub_end) {
+        iter_end_ = true;
+        ret = OB_ITER_END;
+      }
     }
   }
   return ret;
@@ -79,8 +54,7 @@ void ObAllVirtualPsItemInfo::reset()
   ps_cache_ = NULL;
 }
 
-int ObAllVirtualPsItemInfo::fill_cells(uint64_t tenant_id,
-                                       ObPsStmtId stmt_id,
+int ObAllVirtualPsItemInfo::fill_cells(ObPsStmtId stmt_id,
                                        ObPsStmtItem *stmt_item,
                                        ObPsStmtInfo *stmt_info)
 {
@@ -112,7 +86,6 @@ int ObAllVirtualPsItemInfo::fill_cells(uint64_t tenant_id,
       case share::ALL_VIRTUAL_PS_ITEM_INFO_CDE::PS_SQL: {
         ObString ps_sql;
         if (OB_FAIL(ob_write_string(*allocator_, stmt_info->get_ps_sql(), ps_sql))) {
-          SERVER_LOG(WARN, "copy ps_sql failed", K(ret), K(stmt_info->get_ps_sql()));
         } else {
           cells[i].set_lob_value(ObLongTextType, ps_sql.ptr(),
                                  static_cast<int32_t>(ps_sql.length()));
@@ -163,17 +136,16 @@ int ObAllVirtualPsItemInfo::fill_cells(uint64_t tenant_id,
   return ret;
 }
 
-int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
+int ObAllVirtualPsItemInfo::get_next_row(bool &is_end)
 {
   int ret = OB_SUCCESS;
   is_end = false;
   if (OB_INVALID_ID == stmt_id_array_idx_) {
-    ps_cache_ = MTL(ObPsCache*);
+    ps_cache_ = ::oceanbase::share::server_service<::oceanbase::sql::ObPsCache>();
     if (false == ps_cache_->is_inited()) {
       is_end = true;
       SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()));
     } else if (OB_FAIL(ps_cache_->get_all_stmt_id(&stmt_id_array_))) {
-      SERVER_LOG(WARN, "get_all_stmt_id failed", K(ret));
     } else {
       stmt_id_array_idx_ = 0;
     }
@@ -202,7 +174,6 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
         ObPsStmtItem *stmt_item = NULL;
         int tmp_ret = ps_cache_->ref_stmt_info(stmt_id, stmt_info);
         if (OB_HASH_NOT_EXIST == tmp_ret) {
-          SERVER_LOG(DEBUG, "cannot get stmt_info, may be deleted", K(ret), K(tmp_ret), K(stmt_id));
         } else if (OB_SUCCESS != tmp_ret) {
           ret = tmp_ret;
           SERVER_LOG(WARN, "ref_stmt_info failed", K(ret), K(stmt_id));
@@ -221,12 +192,10 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "stmt_item is NULL", K(ret));
         }
-        SERVER_LOG(DEBUG, "all setup", K(ret), K(tmp_ret), KP(stmt_info), KP(stmt_item));
 
         if (OB_NOT_NULL(stmt_info)) {
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(fill_cells(tenant_id, stmt_id, stmt_item, stmt_info))) {
-              SERVER_LOG(WARN, "fail to fill cells", K(ret), K(stmt_id), K(tenant_id));
+            if (OB_FAIL(fill_cells(stmt_id, stmt_item, stmt_info))) {
             } else {
               is_filled = true;
             }

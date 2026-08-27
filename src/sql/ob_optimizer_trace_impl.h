@@ -20,9 +20,9 @@
 #include "lib/file/ob_file.h"
 #include "lib/allocator/ob_allocator.h"
 #include "lib/hash_func/murmur_hash.h"
-#include "common/storage/ob_io_device.h"
+#include "lib/restore/ob_io_device.h"
 #include "sql/printer/ob_raw_expr_printer.h"
-#include "common/ob_smart_call.h"
+#include "lib/utility/ob_smart_call.h"
 #include "lib/container/ob_array.h"
 #include <type_traits>
 
@@ -552,7 +552,6 @@ int ObOptimizerTraceImpl::append_format(const char *format, const ARGS&... args)
   int64_t print_len = snprintf(buf, BUF_LEN, format, args...);
   if (print_len > 0) {
     if (OB_FAIL(log_handle_.append(buf, std::min(print_len, BUF_LEN)))) {
-      COMMON_LOG(WARN, "failed to append value", K(ret));
     }
   }
   return ret;

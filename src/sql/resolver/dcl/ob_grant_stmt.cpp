@@ -30,7 +30,6 @@ ObGrantStmt::ObGrantStmt(ObIAllocator *name_pool)
       grant_level_(OB_PRIV_INVALID_LEVEL),
       database_(),
       table_(),
-      tenant_id_(OB_INVALID_ID),
       masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
@@ -58,7 +57,6 @@ ObGrantStmt::ObGrantStmt()
       grant_level_(OB_PRIV_INVALID_LEVEL),
       database_(),
       table_(),
-      tenant_id_(OB_INVALID_ID),
       masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
@@ -91,13 +89,9 @@ int ObGrantStmt::add_user(const common::ObString &user_name,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(users_.add_string(user_name))) {
-    LOG_WARN("failed to add user", K(ret));
   } else if (OB_FAIL(users_.add_string(host_name))) {
-    LOG_WARN("failed to add host_name", K(ret));
   } else if (OB_FAIL(users_.add_string(pwd))) {
-    LOG_WARN("failed to add password", K(ret));
   } else if (OB_FAIL(users_.add_string(need_enc))) {
-    LOG_WARN("failed to add need enc", K(ret));
   } else {
     //do nothing
   }
@@ -140,7 +134,6 @@ int ObGrantStmt::add_grantee(const ObString &grantee)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(grantees_.add_string(grantee))) {
-    LOG_WARN("failed to add grantee", K(ret));
   }
   return ret;
 }

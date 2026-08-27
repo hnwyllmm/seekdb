@@ -14,11 +14,16 @@
  * limitations under the License.
  */
 
+#include <chrono>
+
 #include <gtest/gtest.h>
 #define private public
 #define protected public
 #include "storage/blocksstable/ob_datum_rowkey_vector.h"
-#include "src/share/schema/ob_table_param.h"
+#include "storage/access/ob_table_param.h"
+#undef protected
+#undef private
+
 namespace oceanbase
 {
 
@@ -38,15 +43,13 @@ public:
   virtual void TearDown() override;
   static void SetUpTestCase();
   static void TearDownTestCase();
-private:
+public:
   void prepare_datum_util(const int64_t rowkey_cnt, ObStorageDatumUtils &datum_util);
-  bool is_oracle_mode_;
   ObArenaAllocator allocator_;
 };
 
 ObDatumRowkeyVectorTest::ObDatumRowkeyVectorTest()
 {
-  is_oracle_mode_ = false;
 }
 
 void ObDatumRowkeyVectorTest::SetUpTestCase()
@@ -79,7 +82,7 @@ void ObDatumRowkeyVectorTest::prepare_datum_util(const int64_t rowkey_cnt, ObSto
     ret = cols_desc.push_back(col_desc);
     ASSERT_EQ(ret, OB_SUCCESS);
   }
-  datum_util.init(cols_desc, rowkey_cnt, false, allocator_);
+  datum_util.init(cols_desc, rowkey_cnt, allocator_);
   ASSERT_EQ(ret, OB_SUCCESS);
 }
 
@@ -104,7 +107,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key)
   ObStorageDatum datum_key;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 2);
   ASSERT_EQ(end, 2);
@@ -114,7 +117,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 2);
   ASSERT_EQ(end, 5);
@@ -124,7 +127,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 8);
   ASSERT_EQ(end, 10);
@@ -138,7 +141,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 0);
   ASSERT_EQ(end, 1);
@@ -169,7 +172,7 @@ TEST_F(ObDatumRowkeyVectorTest, datum_vector_locate_key)
   int64_t end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 2);
   ASSERT_EQ(end, 2);
@@ -179,7 +182,7 @@ TEST_F(ObDatumRowkeyVectorTest, datum_vector_locate_key)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 2);
   ASSERT_EQ(end, 5);
@@ -189,7 +192,7 @@ TEST_F(ObDatumRowkeyVectorTest, datum_vector_locate_key)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 8);
   ASSERT_EQ(end, 10);
@@ -209,7 +212,7 @@ TEST_F(ObDatumRowkeyVectorTest, datum_vector_locate_key)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = datum_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 0);
   ASSERT_EQ(end, 1);
@@ -238,7 +241,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key_with_null)
   int64_t end = row_count;
   datum_key.reuse();
   datum_key.set_null();
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 0);
   ASSERT_EQ(end, 0);
@@ -249,7 +252,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key_with_null)
   int_vec.has_null_ = true;
   begin = 0;
   end = row_count;
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 0);
   ASSERT_EQ(end, 0);
@@ -257,7 +260,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key_with_null)
   need_upper_bound = true;
   begin = 0;
   end = row_count;
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 0);
   ASSERT_EQ(end, 5);
@@ -268,7 +271,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key_with_null)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 5);
   ASSERT_EQ(end, 5);
@@ -278,7 +281,7 @@ TEST_F(ObDatumRowkeyVectorTest, int_vector_locate_key_with_null)
   end = row_count;
   datum_key.reuse();
   datum_key.set_int(key);
-  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func, is_oracle_mode_);
+  ret = int_vec.locate_key(need_upper_bound, begin, end, datum_key, cmp_func);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin, 8);
   ASSERT_EQ(end, 8);
@@ -375,11 +378,10 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range)
 
   bool is_left_border = true;
   bool is_right_border = true;
-  bool is_normal_cg = false;
   int64_t begin_idx, end_idx;
   start_datums[0].set_min();
   end_datums[0].set_max();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, row_count - 1);
@@ -387,14 +389,14 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range)
   start_datums[0].set_min();
   end_datums[0].set_int(9);
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, 4);
 
   end_datums[0].set_int(9);
   range.set_right_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, 3);
@@ -404,7 +406,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range)
   range.set_left_open();
   range.set_right_open();
 
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 4);
   ASSERT_EQ(end_idx, 834);
@@ -412,13 +414,13 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range)
   start_datums[0].set_int(2610);
   end_datums[0].set_max();
   range.set_left_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 871);
   ASSERT_EQ(end_idx, row_count - 1);
 
   range.set_left_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 870);
   ASSERT_EQ(end_idx, row_count - 1);
@@ -431,7 +433,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range)
   end_datums[0].set_null();
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, row_count - 1);
@@ -481,7 +483,6 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   range.set_start_key(start_key);
   range.set_end_key(end_key);
 
-  bool is_normal_cg = false;
   bool is_left_border = true;
   bool is_right_border = true;
   int64_t begin_idx, end_idx;
@@ -492,21 +493,21 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_int(1);
   range.set_left_open();
   range.set_right_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 2);
   ASSERT_EQ(end_idx, 3);
 
   // (1,3 : 2,1] -> 2,6
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 2);
   ASSERT_EQ(end_idx, 6);
 
   // [1,3 : 2,1] -> 1,6
   range.set_left_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 1);
   ASSERT_EQ(end_idx, 6);
@@ -514,7 +515,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   // middle block
   is_left_border = false;
   is_right_border = false;
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, 12);
@@ -528,7 +529,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_int(1);
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 3);
   ASSERT_EQ(end_idx, 6);
@@ -540,7 +541,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_int(6);
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 10);
   ASSERT_EQ(end_idx, 12);
@@ -552,7 +553,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_max();
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 3);
   ASSERT_EQ(end_idx, 10);
@@ -564,7 +565,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_int(8);
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, 12);
@@ -576,7 +577,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_max();
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_BEYOND_THE_RANGE);
 
   MEMSET(bool_arr0, true, sizeof(bool_arr0));
@@ -590,14 +591,14 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_max();
   range.set_left_open();
   range.set_right_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, 12);
 
   start_datums[1].set_int(2);
   end_datums[1].set_int(9);
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 3);
   ASSERT_EQ(end_idx, 9);
@@ -615,14 +616,14 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_2int_col)
   end_datums[1].set_null();
   range.set_left_open();
   range.set_right_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 2);
   ASSERT_EQ(end_idx, 7);
 
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 1);
   ASSERT_EQ(end_idx, 8);
@@ -687,13 +688,12 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_with_datum)
 
   bool is_left_border = true;
   bool is_right_border = true;
-  bool is_normal_cg = false;
   int64_t begin_idx, end_idx;
   start_datums[0].set_min();
   start_datums[1].set_min();
   end_datums[0].set_max();
   end_datums[1].set_max();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 0);
   ASSERT_EQ(end_idx, row_count - 1);
@@ -704,14 +704,14 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_with_datum)
   end_datums[1].set_int(2);
   range.set_left_open();
   range.set_right_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 2);
   ASSERT_EQ(end_idx, 2);
 
   range.set_left_closed();
   range.set_right_closed();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 1);
   ASSERT_EQ(end_idx, 3);
@@ -720,7 +720,7 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_locate_range_with_datum)
   end_datums[1].set_max();
   range.set_left_open();
   range.set_right_open();
-  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, is_normal_cg, datum_utils, begin_idx, end_idx);
+  ret = rowkey_vector.locate_range(range, is_left_border, is_right_border, datum_utils, begin_idx, end_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(begin_idx, 1);
   ASSERT_EQ(end_idx, 3);
@@ -1054,13 +1054,4 @@ TEST_F(ObDatumRowkeyVectorTest, rowkey_vector_deep_copy)
 }
 
 }
-}
-
-int main(int argc, char **argv)
-{
-  system("rm -f test_datum_rowkey_vector.log*");
-  OB_LOGGER.set_file_name("test_datum_rowkey_vector.log", true, true);
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc,argv);
-  return RUN_ALL_TESTS();
 }

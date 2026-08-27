@@ -33,7 +33,6 @@ class ObExprField;
 class ObExprStrcmp;
 class ObExprAbs;
 class ObExprArgCase;
-class ObExprOracleDecode;
 class ObSubQueryRelationalExpr;
 class ObExprRand;
 class ObExprRandom;
@@ -41,7 +40,6 @@ class ObExprTypeToStr;
 class ObExprUDF;
 class ObExprNullif;
 class ObBaseExprColumnConv;
-class ObExprDllUdf;
 class ObExprPLIntegerChecker;
 class ObExprPLGetCursorAttr;
 class ObExprPLSQLCodeSQLErrm;
@@ -51,7 +49,6 @@ class ObExprCollectionConstruct;
 class ObExprObjectConstruct;
 class ObExprCalcPartitionId;
 class ObExprOpSubQueryInPl;
-class ObExprUdtConstruct;
 typedef common::ObSEArray<ObIterExprOperator*, 2> PhyIterExprDesc;
 
 class ObExprGeneratorImpl: public ObExprGenerator, public ObRawExprVisitor
@@ -112,7 +109,6 @@ private:
   inline int visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn *&in_op);
   inline int visit_like_expr(ObOpRawExpr &expr, ObExprLike *&like_op);
   inline int visit_field_expr(ObNonTerminalRawExpr &expr, ObExprField *field_op);
-  inline int visit_decode_expr(ObNonTerminalRawExpr &expr, ObExprOracleDecode *decode_op);
   inline int visit_relational_expr(ObNonTerminalRawExpr &expr, ObRelationalExprOperator *relational_op);
   inline int visit_minmax_expr(ObNonTerminalRawExpr &expr, ObMinMaxExprOperator *minmax_op);
   inline int visit_maybe_row_expr(ObOpRawExpr &expr, ObExprOperator *&op);
@@ -126,7 +122,6 @@ private:
   inline int visit_enum_set_expr(ObNonTerminalRawExpr &expr, ObExprTypeToStr *enum_set_op);
   inline int visit_udf_expr(ObOpRawExpr &expr, ObExprUDF *udf);
   inline int visit_fun_interval(ObNonTerminalRawExpr &expr, ObExprInterval *fun_interval);
-  inline int visit_normal_udf_expr(ObNonTerminalRawExpr &expr, ObExprDllUdf *normal_udf_op);
   inline int visit_pl_integer_checker_expr(ObOpRawExpr &expr, ObExprPLIntegerChecker *checker);
   inline int visit_pl_assoc_index_expr(ObOpRawExpr &expr, ObExprPLAssocIndex *pl_assoc_index);
   inline int visit_pl_sqlcode_sqlerrm_expr(ObRawExpr &expr, ObExprPLSQLCodeSQLErrm *pl_sqlcode_sqlerrm);

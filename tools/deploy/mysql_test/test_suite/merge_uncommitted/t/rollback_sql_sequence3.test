@@ -27,7 +27,7 @@ drop table if exists t1;
 create table t1(c1 int primary key, c2 varchar(50), c3 int, c4 datetime(6), c5 datetime(6)) table_mode = 'queuing';
 
 connection conn0;
-let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_table where table_name= 't1', table_id, 1);
 
 connection conn1;
 #事务开始 插入数据
@@ -45,9 +45,7 @@ while($i < 30)
 --enable_query_log
 
 connection conn0;
-alter system minor freeze tenant = sys;
-alter system minor freeze tenant = all_user;
-alter system minor freeze tenant = all_meta;
+alter system minor freeze;
 --source mysql_test/include/wait_minor_merge.inc
 
 connection conn1;
@@ -61,9 +59,7 @@ insert into t1 value(2, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00
 insert into t1 value(1, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
 
 connection conn0;
-alter system minor freeze tenant = sys;
-alter system minor freeze tenant = all_user;
-alter system minor freeze tenant = all_meta;
+alter system minor freeze;
 --source mysql_test/include/wait_minor_merge.inc
 
 connection conn1;
@@ -89,9 +85,7 @@ while($i < 10)
 --enable_query_log
 
 connection conn0;
-alter system minor freeze tenant = sys;
-alter system minor freeze tenant = all_user;
-alter system minor freeze tenant = all_meta;
+alter system minor freeze;
 --source mysql_test/include/wait_minor_merge.inc
 
 connection conn1;
@@ -117,9 +111,7 @@ while($i < 10)
 update t1 set c3 = c1 * c3;
 
 connection conn0;
-alter system minor freeze tenant = sys;
-alter system minor freeze tenant = all_user;
-alter system minor freeze tenant = all_meta;
+alter system minor freeze;
 --source mysql_test/include/wait_minor_merge.inc
 
 connection conn1;

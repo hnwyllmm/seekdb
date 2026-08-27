@@ -18,10 +18,10 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_PX_TARGET_MONITOR_H_
 
 
-#include "share/ob_virtual_table_scanner_iterator.h"
-#include "share/ob_scanner.h"
+#include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
+#include "sql/ob_scanner.h"
 #include "common/row/ob_row.h"
-#include "sql/engine/px/ob_px_target_mgr.h"
+#include "sql/engine/px/ob_px_target_monitor.h"
 
 namespace oceanbase
 {
@@ -38,26 +38,13 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual int inner_close();
 private:
-  int prepare_start_to_read();
-  int get_next_target_info(ObPxTargetInfo &target_info);
-private:
   enum TARGET_MONITOR_COLUMN
   {
-        IS_LEADER = common::OB_APP_MIN_COLUMN_ID,
-    VERSION,
-    PEER_IP,
-    PEER_PORT,
-    PEER_TARGET,
-    PEER_TARGET_USED,
+    LOCAL_TARGET = common::OB_APP_MIN_COLUMN_ID,
     LOCAL_TARGET_USED,
     LOCAL_PARALLEL_SESSION_COUNT
   };
-  common::ObSEArray<uint64_t, 4> tenand_array_;
-  uint64_t tenant_idx_;
-  common::ObSEArray<ObPxTargetInfo, 10> target_info_array_;
-  uint64_t target_usage_idx_;
-  char svr_ip_buff_[common::OB_IP_PORT_STR_BUFF];
-  char peer_ip_buff_[common::OB_IP_PORT_STR_BUFF];
+  bool row_emitted_;
 }; //class ObAllVirtualPxTargetMonitor
 }//namespace observer
 }//namespace oceanbase

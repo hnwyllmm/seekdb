@@ -18,7 +18,7 @@ drop table if exists t1;
 create table t1(a int);
 
 connection conn0;
-let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_table where table_name= 't1', table_id, 1);
 
 connection conn1;
 # 测试普通标记脏事务
@@ -33,9 +33,7 @@ insert into t1 value(6);
 
 connection conn0;
 set ob_query_timeout=100000000;
-alter system minor freeze tenant = sys;
-alter system minor freeze tenant = all_user;
-alter system minor freeze tenant = all_meta;
+alter system minor freeze;
 --source mysql_test/include/wait_minor_merge.inc
 
 connection conn2;

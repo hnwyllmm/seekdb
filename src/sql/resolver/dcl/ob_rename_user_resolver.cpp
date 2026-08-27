@@ -45,7 +45,7 @@ int ObRenameUserResolver::resolve(const ParseNode &parse_tree)
       LOG_ERROR("Failed to create ObRenameUserStmt", K(ret));
     } else {
       stmt_ = rename_user_stmt;
-      rename_user_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
+      
       for (int i = 0; i < node->num_child_ && OB_SUCCESS == ret; ++i) {
         ParseNode *rename_info = NULL;
         if (OB_ISNULL(rename_info = node->children_[i])) {
@@ -80,10 +80,7 @@ int ObRenameUserResolver::resolve(const ParseNode &parse_tree)
                                                      session_info_->get_priv_user_id(),
                                                      from_user,
                                                      from_host))) {
-            LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
-                     K(ret), K(session_info_->get_user_name()), K(from_user));
           } else if (OB_FAIL(rename_user_stmt->add_rename_info(from_user, from_host, to_user, to_host))) {
-            LOG_WARN("Failed to add user to ObRenameUserStmt", K(ret));
           } else {
             //do nothing
           }

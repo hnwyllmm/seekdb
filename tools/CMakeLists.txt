@@ -1,8 +1,0 @@
-if (BUILD_CDC_ONLY)
-  add_subdirectory(ob_error EXCLUDE_FROM_ALL)
-  add_subdirectory(ob_admin EXCLUDE_FROM_ALL)
-else()
-  add_subdirectory(ob_error)
-  add_subdirectory(ob_admin)
-endif()
-add_subdirectory(upgrade)

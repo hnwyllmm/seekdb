@@ -27,13 +27,11 @@
 
 namespace oceanbase
 {
-namespace obrpc
-{
-class ObCommonRpcProxy;
-}
 namespace common
 {
 class ObString;
+class ObIDebugSyncBroadcaster;
+class ObIDebugSyncBroadcaster;
 typedef common::ObFixedLengthString<32> ObSyncEventName;
 
 struct ObDebugSyncAction
@@ -189,10 +187,10 @@ class ObDebugSync
 public:
   static ObDebugSync &instance();
 
-  void set_rpc_proxy(obrpc::ObCommonRpcProxy *rpc_proxy);
 
   int add_debug_sync(const ObString &str, const bool is_global,
-      ObDSSessionActions &session_actions);
+      ObDSSessionActions &session_actions,
+      ObIDebugSyncBroadcaster *broadcaster);
 
   int set_global_action(const bool reset, const bool clear, const ObDebugSyncAction &action);
 
@@ -208,7 +206,7 @@ public:
   void stop();
 
 private:
-  ObDebugSync() : stop_(false), lock_(ObLatchIds::DEFAULT_SPIN_LOCK), rpc_proxy_(NULL)
+  ObDebugSync() : stop_(false), lock_(ObLatchIds::DEFAULT_SPIN_LOCK)
   {}
 
   int parse_action(const ObString &str, ObDebugSyncAction &action, bool &clear, bool &reset);
@@ -219,7 +217,6 @@ private:
   ObSpinLock lock_; // protect global action access
   ObDSActionArray global_actions_;
   ObDSEventControl event_control_;
-  obrpc::ObCommonRpcProxy *rpc_proxy_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDebugSync);
 };

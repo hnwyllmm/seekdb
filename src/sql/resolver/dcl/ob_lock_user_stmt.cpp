@@ -18,12 +18,12 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 ObLockUserStmt::ObLockUserStmt(common::ObIAllocator *name_pool)
-    : ObDDLStmt(name_pool, stmt::T_LOCK_USER), tenant_id_(OB_INVALID_ID) , locked_(false)
+    : ObDDLStmt(name_pool, stmt::T_LOCK_USER) , locked_(false)
 {
 }
 
 ObLockUserStmt::ObLockUserStmt()
-    : ObDDLStmt(NULL, stmt::T_LOCK_USER), tenant_id_(OB_INVALID_ID) , locked_(false)
+    : ObDDLStmt(NULL, stmt::T_LOCK_USER) , locked_(false)
 {
 }
 
@@ -39,9 +39,7 @@ int ObLockUserStmt::add_user(const ObString &user_name, const common::ObString &
     ret = OB_ERR_NO_PRIVILEGE;
     SQL_RESV_LOG(WARN, "Can not lock root user", K(ret));
   } else if (OB_FAIL(user_.add_string(user_name))) {
-    SQL_RESV_LOG(WARN, "Add user failed", K(user_name), K(ret));
   } else if (OB_FAIL(user_.add_string(host_name))) {
-    SQL_RESV_LOG(WARN, "Add host failed", K(user_name), K(host_name), K(ret));
   } else {
     //do nothing
   }

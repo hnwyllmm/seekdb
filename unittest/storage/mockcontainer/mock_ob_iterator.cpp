@@ -15,10 +15,14 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include <ctime>
 #include <sstream>
+#include <string>
 #define private public
 #define protected public
 #include "mock_ob_iterator.h"
+#undef protected
+#undef private
 
 namespace oceanbase
 {
@@ -27,7 +31,6 @@ namespace common
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::common::hash;
-using namespace oceanbase::share;
 
 int malloc_datum_row(
     ObIAllocator &allocator,
@@ -586,7 +589,6 @@ const char *ObMockIteratorBuilder::STR_MIN = "min";
 const char *ObMockIteratorBuilder::STR_INT32_MIN = "int32_min";
 const char *ObMockIteratorBuilder::STR_MIN_2_TRANS = "min2";
 const char *ObMockIteratorBuilder::STR_MAGIC = "magic";
-const char *ObMockIteratorBuilder::STR_DELETE_INSERT_VERSION = "di_version";
 ObObjMeta ObMockIteratorBuilder::INT_TYPE;
 ObObjMeta ObMockIteratorBuilder::BIGINT_TYPE;
 ObObjMeta ObMockIteratorBuilder::VAR_TYPE;
@@ -771,8 +773,37 @@ int ObMockIteratorBuilder::prepare_parse_timestamp(ObIAllocator *allocator,
   int ret = OB_SUCCESS;
   if (idx >= count) {
     ret = OB_ARRAY_OUT_OF_RANGE;
-  } else if (OB_SUCCESS != (ret = ObTimeUtility2::str_to_usec(word, usec))) {
-    STORAGE_LOG(WARN, "str to microsecond failed", K(word), K(usec), K(ret));
+  } else {
+    std::string timestamp(word.ptr(), word.length());
+    struct tm parsed_time = {};
+    parsed_time.tm_isdst = -1;
+    char *fraction = strptime(
+        timestamp.c_str(), "%Y-%m-%d %H:%M:%S", &parsed_time);
+    if (nullptr == fraction) {
+      ret = OB_INVALID_DATE_FORMAT;
+    } else {
+      int64_t fractional_usec = 0;
+      if ('.' == *fraction) {
+        ++fraction;
+        int64_t digits = 0;
+        while ('0' <= *fraction && *fraction <= '9' && digits < 6) {
+          fractional_usec = fractional_usec * 10 + (*fraction++ - '0');
+          ++digits;
+        }
+        while (digits++ < 6) {
+          fractional_usec *= 10;
+        }
+      }
+      const time_t seconds = mktime(&parsed_time);
+      if (-1 == seconds) {
+        ret = OB_INVALID_DATE_FORMAT;
+      } else {
+        usec = static_cast<int64_t>(seconds) * 1000000L + fractional_usec;
+      }
+    }
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "str to microsecond failed", K(word), K(usec), K(ret));
+    }
   }
   return ret;
 }
@@ -2198,13 +2229,6 @@ int ObMockIteratorBuilder::parse_row(const ObString &str,
             row.row_val_.cells_[idx++].set_int(INT32_MIN);
           }
           break;
-        case EXT_DELETE_INSERT_VERSION:
-          if (ObMockIteratorBuilder::parse_obj_int != fp && ObMockIteratorBuilder::parse_obj_bigint != fp) {
-            row.row_val_.cells_[idx++].set_min_value();
-          } else {
-            row.row_val_.cells_[idx++].set_int(-common::DELETE_INSERT_TRANS_SEQUENCE);
-          }
-          break;
         case EXT_MIN_2_TRANS:
           if (ObMockIteratorBuilder::parse_obj_int != fp && ObMockIteratorBuilder::parse_obj_bigint != fp) {
             row.row_val_.cells_[idx++].set_min_value();
@@ -2319,8 +2343,6 @@ int ObMockIteratorBuilder::get_ext(const common::ObString &word)
     ext = EXT_GHOST;
   } else if (0 == word.case_compare(STR_INT32_MIN)) {
     ext = EXT_INT32_MIN;
-  } else if (0 == word.case_compare(STR_DELETE_INSERT_VERSION)) {
-    ext = EXT_DELETE_INSERT_VERSION;
   } else {
     ext = NOT_EXT;
   }

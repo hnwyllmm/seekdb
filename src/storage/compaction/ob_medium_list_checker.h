@@ -19,6 +19,14 @@
 #include "lib/container/ob_iarray.h"
 namespace oceanbase
 {
+namespace storage
+{
+class ObTenantFreezeInfoMgr;
+}
+namespace share
+{
+struct ObFreezeInfo;
+}
 namespace compaction
 {
 struct ObMediumCompactionInfo;
@@ -33,13 +41,7 @@ public:
     const int64_t last_major_snapshot);
   static int check_next_schedule_medium(
     const ObMediumCompactionInfo &next_schedule_info,
-    const int64_t last_major_snapshot,
-    const bool force_check = true);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int check_next_schedule_medium_for_ss(
-    const ObMediumCompactionInfo &next_schedule_info,
     const int64_t last_major_snapshot);
-#endif
 
 private:
   static int check_continue(
@@ -49,18 +51,14 @@ private:
     const ObExtraMediumInfo &extra_info,
     const MediumInfoArray *medium_info_array,
     const int64_t last_major_snapshot);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int check_continue_for_ss(
-    const MediumInfoArray &medium_info_array,
-    const int64_t start_check_idx = 0);
-  static int inner_check_medium_list_for_ss(
-    const ObExtraMediumInfo &extra_info,
-    const MediumInfoArray *medium_info_array,
-    const int64_t last_major_snapshot);
-#endif
   static int check_extra_info(
     const ObExtraMediumInfo &extra_info,
     const int64_t last_major_snapshot);
+  static int check_next_schedule_medium_with_freeze_infos(
+    const ObMediumCompactionInfo &next_schedule_info,
+    const int64_t last_major_snapshot,
+    const common::ObIArray<share::ObFreezeInfo> *freeze_infos,
+    const bool force_check);
   static int filter_finish_medium_info(
     const MediumInfoArray &medium_info_array,
     const int64_t last_major_snapshot,

@@ -63,9 +63,7 @@ int ObExprJsonSchemaValidationReport::calc_result_type2(ObExprResType &type,
   // 1st param is json schema (also json doc)
   // 2nd param is json schema (also json doc)
   if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type1, 1, N_JSON_SCHEMA_VALID))) {
-    LOG_WARN("wrong type for json doc.", K(ret), K(type1.get_type()));
   } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type2, 2, N_JSON_SCHEMA_VALID))) {
-    LOG_WARN("wrong type for json doc.", K(ret), K(type2.get_type()));
   }
 
   return ret;
@@ -77,7 +75,7 @@ int ObExprJsonSchemaValidationReport::cg_expr(ObExprCGCtx &op_cg_ctx,
 {
   INIT_SUCC(ret);
   const ObRawExpr *schema = raw_expr.get_param_expr(0);
-  if (lib::is_mysql_mode() && OB_JSON_SCHEMA_EXPR_ARG_NUM == rt_expr.arg_cnt_ 
+  if (OB_JSON_SCHEMA_EXPR_ARG_NUM == rt_expr.arg_cnt_
      && OB_NOT_NULL(schema) && (schema->is_const_expr() || schema->is_static_scalar_const_expr())
      && schema->get_expr_type() != T_OP_GET_USER_VAR) {
     ObIAllocator &alloc = *op_cg_ctx.allocator_;
@@ -88,7 +86,6 @@ int ObExprJsonSchemaValidationReport::cg_expr(ObExprCGCtx &op_cg_ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_FAIL(info->init_json_schema_extra_info(alloc, op_cg_ctx, schema, got_data))) {
-      LOG_WARN("allocate memory failed", K(ret));
     } else if (got_data) {
       rt_expr.extra_info_ = info;
     }
@@ -109,21 +106,19 @@ int ObExprJsonSchemaValidationReport::eval_json_schema_validation_report(const O
   ObIJsonBase* j_doc = nullptr;
   bool is_null_result = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
+  
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator());
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr("JSONModule"));
   ObJsonBin j_schema_bin;
   if (OB_ISNULL(info)) {
     // schema is not const
     if (OB_FAIL(ObJsonExprHelper::get_json_schema(expr, ctx, temp_allocator, 0,
                                                   j_schema, is_null_result))) {
-      LOG_WARN("get_json_doc failed", K(ret));
     }
   } else {
     // schema is const
     new (&j_schema_bin) ObJsonBin(info->json_schema_.ptr(), info->json_schema_.length(), &temp_allocator);
     if (OB_FAIL(j_schema_bin.reset_iter())) {
-      LOG_WARN("fail to reset iter for new json bin", K(ret));
     } else {
       // schema validation only seek, do not need reserve parent stack
       j_schema_bin.set_seek_flag(true);
@@ -142,15 +137,11 @@ int ObExprJsonSchemaValidationReport::eval_json_schema_validation_report(const O
     ObIJsonBase* validation_report = nullptr;
     bool is_valid = false;
     if (OB_FAIL(validator.schema_validator(j_doc, is_valid))) {
-      LOG_WARN("failed in validator", K(ret));
     } else if (OB_FAIL(raise_validation_report(temp_allocator, validator, is_valid, validation_report))){
-      LOG_WARN("failed to raise validation report", K(ret));
     } else {
       ObString raw_bin;
       if (OB_FAIL(validation_report->get_raw_binary(raw_bin, &temp_allocator))) {
-        LOG_WARN("failed: json get binary", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
-        LOG_WARN("fail to pack json result", K(ret));
       }
     }
   }
@@ -167,13 +158,12 @@ int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allo
   ObJsonBoolean* schema_result = nullptr;
   if (OB_ISNULL(report_obj = OB_NEWx(ObJsonObject, &allocator, &allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to init schema report.", K(ret));
+    LOG_ERROR("fail to init schema report.", K(ret));
   } else if (OB_FALSE_IT(validation_report = report_obj)) { 
   } else if (OB_ISNULL(schema_result = OB_NEWx(ObJsonBoolean, &allocator, is_valid))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to init schema report result.", K(ret));
+    LOG_ERROR("fail to init schema report result.", K(ret));
   } else if (OB_FAIL(report_obj->add(ObJsonSchemaReportItem::RESULT, schema_result, false, true, false))) {
-    LOG_WARN("fail to add schema result.", K(ret));
   } else if (!is_valid) { // if not valid, need to describe the reason in detail
     // reason
     ObJsonBuffer reason(&allocator);
@@ -184,9 +174,7 @@ int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allo
     ObJsonString* doc_loc_str = nullptr;
     ObJsonString* failed_keyword_str = nullptr;
     if (OB_FAIL(validator.get_json_or_schema_point(json_pointer, false))) {
-      LOG_WARN("fail to get json pointer.", K(ret));
     } else if (OB_FAIL(validator.get_json_or_schema_point(schema_pointer, true))) {
-      LOG_WARN("fail to get schema pointer.", K(ret));
     } else if (OB_FAIL(reason.append(ObJsonSchemaReportItem::REASON_BEGIN))
              || OB_FAIL(reason.append(json_pointer.ptr(), json_pointer.length()))
              || OB_FAIL(reason.append(ObJsonSchemaReportItem::REASON_MID))
@@ -201,13 +189,9 @@ int ObExprJsonSchemaValidationReport::raise_validation_report(ObIAllocator &allo
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to init schema report value.", K(ret));
     } else if (OB_FAIL(report_obj->add(ObJsonSchemaReportItem::REASON, reason_str, false, true, false))) {
-      LOG_WARN("fail to add reason.", K(ret));
     } else if (OB_FAIL(report_obj->add(ObJsonSchemaReportItem::SCHEMA_LOCATION, schema_loc_str, false, true, false))) {
-      LOG_WARN("fail to add schema location.", K(ret));
     } else if (OB_FAIL(report_obj->add(ObJsonSchemaReportItem::DOC_LOCATION, doc_loc_str, false, true, false))) {
-      LOG_WARN("fail to add document location.", K(ret));
     } else if (OB_FAIL(report_obj->add(ObJsonSchemaReportItem::FAILED_KEYWORD, failed_keyword_str, false, true, false))) {
-      LOG_WARN("fail to add document location.", K(ret));
     }
   }
   return ret;  

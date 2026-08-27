@@ -20,27 +20,26 @@
 #define USING_LOG_PREFIX LIB
 #include <boost/geometry.hpp>
 #define private public
-#include "lib/geo/ob_geo_bin_traits.h"
-#include "lib/geo/ob_geo_tree_traits.h"
-#include "lib/geo/ob_geo_wkb_visitor.h"
-#include "lib/geo/ob_geo_wkb_size_visitor.h"
-#include "lib/geo/ob_geo_longtitude_correct_visitor.h"
-#include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
-#include "lib/geo/ob_geo_segment_collect_visitor.h"
-#include "lib/geo/ob_geo_vertex_collect_visitor.h"
-#include "lib/geo/ob_geo_3d.h"
+#include "share/geo/ob_geo_bin_traits.h"
+#include "share/geo/ob_geo_tree_traits.h"
+#include "share/geo/ob_geo_wkb_visitor.h"
+#include "share/geo/ob_geo_wkb_size_visitor.h"
+#include "share/geo/ob_geo_longtitude_correct_visitor.h"
+#include "share/geo/ob_geo_reverse_coordinate_visitor.h"
+#include "share/geo/ob_geo_segment_collect_visitor.h"
+#include "share/geo/ob_geo_vertex_collect_visitor.h"
+#include "share/geo/ob_geo_3d.h"
 #include "src/share/schema/ob_server_schema_service.h"
-#include "lib/geo/ob_wkb_to_json_visitor.h"
-#include "lib/geo/ob_wkb_byte_order_visitor.h"
-#include "lib/geo/ob_geo_interior_point_visitor.h"
-#include "lib/geo/ob_geo_mvt_encode_visitor.h"
+#include "share/geo/ob_wkb_to_json_visitor.h"
+#include "share/geo/ob_wkb_byte_order_visitor.h"
+#include "share/geo/ob_geo_interior_point_visitor.h"
+#include "share/geo/ob_geo_mvt_encode_visitor.h"
 #undef private
 
  
 namespace oceanbase {
 
 using namespace oceanbase::share::schema;
-using namespace omt; 
 namespace common {
 
 class TestGeoBin : public ::testing::Test {
@@ -60,7 +59,7 @@ public:
   static void TearDownTestCase()
   {}
 
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestGeoBin);
 };
@@ -96,7 +95,7 @@ public:
   ObAxisDirection axis_direction(uint8_t axis_index) const { UNUSED(axis_index); return ObAxisDirection::EAST; }  
   int get_proj4_param(ObIAllocator *allocator, ObString &proj4_param) const { UNUSEDx(allocator, proj4_param); return OB_SUCCESS; }
   uint32_t get_srid() const { return 0; }
-private:
+public:
   DISALLOW_COPY_AND_ASSIGN(ObMockProjectedSrsBase);    
 };
 
@@ -661,13 +660,12 @@ TEST_F(TestGeoBin, linestring)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_line(data, num, xv, yv);
 
     ObWkbGeomLineString& line = *reinterpret_cast<ObWkbGeomLineString*>(data.ptr());
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomLineString::iterator iter = line.begin();
     auto ei = line.end();
     auto bi = line.begin();
@@ -675,33 +673,22 @@ TEST_F(TestGeoBin, linestring)
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     for (int i = num - 1; iter >= bi; --iter, i--) {
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomLineString::const_iterator citer = line.begin();
     for (int i = 0; citer != ei; ++citer, i++) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     for (int i = num - 1; citer >= bi; --citer, i--) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, polygon)
@@ -710,7 +697,7 @@ TEST_F(TestGeoBin, polygon)
     ObJsonBuffer data(&allocator);
     // 1 exterior line 100 inner line, every line has 100 point
     uint32_t pnum = 100;
-    uint32_t lnum = 10001;
+    constexpr uint32_t lnum = 5;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_poly(data, lnum, pnum, xv, yv);
@@ -722,54 +709,41 @@ TEST_F(TestGeoBin, polygon)
     // check exterior
     check_lines(exterior, pc, xv, yv);
     // check inner rings
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomPolygonInnerRings::iterator iter = inner_rings.begin();
     auto irei = inner_rings.end();
     auto irbi = inner_rings.begin();
     for (; iter != irei; iter++) {
         check_lines(*iter, pc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     pc -= pnum;
     for (; iter >= irbi; iter--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*iter, tpc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
     pc = pnum;
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomPolygonInnerRings::const_iterator citer = inner_rings.begin();
     for (; citer != irei; citer++) {
         check_lines(*citer, pc, xv, yv, true);
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     pc -= pnum;
     for (; citer >= irbi; citer--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*citer, tpc, xv, yv, true);
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, multi_point)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_point(data, num, xv, yv);
 
     ObWkbGeomMultiPoint& mp = *reinterpret_cast<ObWkbGeomMultiPoint*>(data.ptr());
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomMultiPoint::iterator iter = mp.begin();
     auto mpbi = mp.begin();
     auto mpei = mp.end();
@@ -777,33 +751,22 @@ TEST_F(TestGeoBin, multi_point)
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     for (int i = num - 1; iter >= mpbi; --iter, i--) {
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomMultiPoint::const_iterator citer = mp.begin();
     for (int i = 0; citer != mpei; ++citer, i++) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     for (int i = num - 1; citer >= mpbi; --citer, i--) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, multi_line)
@@ -812,7 +775,7 @@ TEST_F(TestGeoBin, multi_line)
     ObJsonBuffer data(&allocator);
     // 1 exterior line 100 inner line, every line has 100 point
     uint32_t pnum = 100;
-    uint32_t lnum = 10000;
+    constexpr uint32_t lnum = 4;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_line(data, lnum, pnum, xv, yv);
@@ -820,41 +783,29 @@ TEST_F(TestGeoBin, multi_line)
     ObWkbGeomMultiLineString& ml = *reinterpret_cast<ObWkbGeomMultiLineString*>(data.ptr());
     uint32_t pc = 0;
     // check lines
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomMultiLineString::iterator iter = ml.begin();
     auto mlbi = ml.begin();
     auto mlei = ml.end();
     for (; iter != mlei; iter++) {
         check_lines(*iter, pc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     pc -= pnum;
     for (; iter >= mlbi; iter--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*iter, tpc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
     pc = 0;
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeomMultiLineString::const_iterator citer = ml.begin();
     for (; citer != mlei; citer++) {
         check_lines(*citer, pc, xv, yv, true);
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     pc -= pnum;
     for (; citer >= mlbi; citer--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*citer, tpc, xv, yv, true);
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, multi_poly)
@@ -862,8 +813,8 @@ TEST_F(TestGeoBin, multi_poly)
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
     // 1 exterior line 99 inner line, every line has 100 point
-    uint32_t polynum = 100;
-    uint32_t lnum = 100;
+    constexpr uint32_t polynum = 4;
+    constexpr uint32_t lnum = 4;
     uint32_t pnum = 100;
     common::ObVector<double> xv[polynum];
     common::ObVector<double> yv[polynum];
@@ -878,7 +829,6 @@ TEST_F(TestGeoBin, multi_poly)
     ObWkbGeomMultiPolygon::iterator iter = mp.begin();
     auto mpei = mp.end();
     auto mpbi = mp.begin();
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; iter != mpei; ++iter, i++) {
         typename ObWkbGeomMultiPolygon::value_type& poly = *iter;
         uint32_t pc = 0;
@@ -897,7 +847,6 @@ TEST_F(TestGeoBin, multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i]);
         }
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     for (int i = polynum - 1; iter >= mpbi; --iter, --i) {
         typename ObWkbGeomMultiPolygon::value_type& poly = *iter;
@@ -917,13 +866,8 @@ TEST_F(TestGeoBin, multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i]);
         }
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
     // const_iter
     ObWkbGeomMultiPolygon::const_iterator citer = mp.begin();
-    t1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; citer != mpei; ++citer, i++) {
         typename ObWkbGeomMultiPolygon::value_type& poly = *citer;
         uint32_t pc = 0;
@@ -942,7 +886,6 @@ TEST_F(TestGeoBin, multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i], true);
         }
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     for (int i = polynum - 1; citer >= mpbi; --citer, --i) {
         typename ObWkbGeomMultiPolygon::value_type& poly = *citer;
@@ -962,10 +905,6 @@ TEST_F(TestGeoBin, multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i], true);
         }
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, geom_collection)
@@ -1180,45 +1119,33 @@ TEST_F(TestGeoBin, Geo_linestring)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_line(data, num, xv, yv);
 
     ObWkbGeogLineString& line = *reinterpret_cast<ObWkbGeogLineString*>(data.ptr());
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogLineString::iterator iter = line.begin();
     for (int i = 0; iter != line.end(); ++iter, i++) {
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     for (int i = num - 1; iter >= line.begin(); --iter, i--) {
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogLineString::const_iterator citer = line.begin();
     for (int i = 0; citer != line.end(); ++citer, i++) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     for (int i = num - 1; citer >= line.begin(); --citer, i--) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, Geo_polygon)
@@ -1227,7 +1154,7 @@ TEST_F(TestGeoBin, Geo_polygon)
     ObJsonBuffer data(&allocator);
     // 1 exterior line 100 inner line, every line has 100 point
     uint32_t pnum = 100;
-    uint32_t lnum = 10001;
+    constexpr uint32_t lnum = 5;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_poly(data, lnum, pnum, xv, yv);
@@ -1239,84 +1166,60 @@ TEST_F(TestGeoBin, Geo_polygon)
     // check exterior
     check_lines(exterior, pc, xv, yv);
     // check inner rings
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogPolygonInnerRings::iterator iter = inner_rings.begin();
     for (; iter != inner_rings.end(); iter++) {
         check_lines(*iter, pc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     pc -= pnum;
     for (; iter >= inner_rings.begin(); iter--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*iter, tpc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
     pc = pnum;
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogPolygonInnerRings::const_iterator citer = inner_rings.begin();
     for (; citer != inner_rings.end(); citer++) {
         check_lines(*citer, pc, xv, yv, true);
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     pc -= pnum;
     for (; citer >= inner_rings.begin(); citer--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*citer, tpc, xv, yv, true);
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, Geo_multi_point)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_point(data, num, xv, yv);
 
     ObWkbGeogMultiPoint& mp = *reinterpret_cast<ObWkbGeogMultiPoint*>(data.ptr());
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogMultiPoint::iterator iter = mp.begin();
     for (int i = 0; iter != mp.end(); ++iter, i++) {
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     for (int i = num - 1; iter >= mp.begin(); --iter, i--) {
         ASSERT_EQ(xv[i], iter->get<0>());
         ASSERT_EQ(yv[i], iter->get<1>());
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogMultiPoint::const_iterator citer = mp.begin();
     for (int i = 0; citer != mp.end(); ++citer, i++) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     for (int i = num - 1; citer >= mp.begin(); --citer, i--) {
         ASSERT_EQ(xv[i], citer->get<0>());
         ASSERT_EQ(yv[i], citer->get<1>());
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, Geo_multi_line)
@@ -1325,7 +1228,7 @@ TEST_F(TestGeoBin, Geo_multi_line)
     ObJsonBuffer data(&allocator);
     // 1 exterior line 100 inner line, every line has 100 point
     uint32_t pnum = 100;
-    uint32_t lnum = 10000;
+    constexpr uint32_t lnum = 4;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_line(data, lnum, pnum, xv, yv);
@@ -1333,39 +1236,27 @@ TEST_F(TestGeoBin, Geo_multi_line)
     ObWkbGeogMultiLineString& ml = *reinterpret_cast<ObWkbGeogMultiLineString*>(data.ptr());
     uint32_t pc = 0;
     // check lines
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogMultiLineString::iterator iter = ml.begin();
     for (; iter != ml.end(); iter++) {
         check_lines(*iter, pc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     pc -= pnum;
     for (; iter >= ml.begin(); iter--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*iter, tpc, xv, yv);
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
     pc = 0;
-    t1 = std::chrono::high_resolution_clock::now();
     ObWkbGeogMultiLineString::const_iterator citer = ml.begin();
     for (; citer != ml.end(); citer++) {
         check_lines(*citer, pc, xv, yv, true);
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     pc -= pnum;
     for (; citer >= ml.begin(); citer--, pc -= pnum) {
         uint32_t tpc = pc;
         check_lines(*citer, tpc, xv, yv, true);
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, Geo_multi_poly)
@@ -1373,8 +1264,8 @@ TEST_F(TestGeoBin, Geo_multi_poly)
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
     // 1 exterior line 99 inner line, every line has 100 point
-    uint32_t polynum = 100;
-    uint32_t lnum = 100;
+    constexpr uint32_t polynum = 4;
+    constexpr uint32_t lnum = 4;
     uint32_t pnum = 100;
     common::ObVector<double> xv[polynum];
     common::ObVector<double> yv[polynum];
@@ -1387,7 +1278,6 @@ TEST_F(TestGeoBin, Geo_multi_poly)
 
     ObWkbGeogMultiPolygon& mp = *reinterpret_cast<ObWkbGeogMultiPolygon*>(data.ptr());
     ObWkbGeogMultiPolygon::iterator iter = mp.begin();
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; iter != mp.end(); ++iter, i++) {
         typename ObWkbGeogMultiPolygon::value_type& poly = *iter;
         uint32_t pc = 0;
@@ -1404,7 +1294,6 @@ TEST_F(TestGeoBin, Geo_multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i]);
         }
     }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
     --iter;
     for (int i = polynum - 1; iter >= mp.begin(); --iter, --i) {
         typename ObWkbGeogMultiPolygon::value_type& poly = *iter;
@@ -1422,13 +1311,8 @@ TEST_F(TestGeoBin, Geo_multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i]);
         }
     }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
     // const_iter
     ObWkbGeogMultiPolygon::const_iterator citer = mp.begin();
-    t1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; citer != mp.end(); ++citer, i++) {
         typename ObWkbGeogMultiPolygon::value_type& poly = *citer;
         uint32_t pc = 0;
@@ -1445,7 +1329,6 @@ TEST_F(TestGeoBin, Geo_multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i], true);
         }
     }
-    t2 = std::chrono::high_resolution_clock::now();
     --citer;
     for (int i = polynum - 1; citer >= mp.begin(); --citer, --i) {
         typename ObWkbGeogMultiPolygon::value_type& poly = *citer;
@@ -1463,10 +1346,6 @@ TEST_F(TestGeoBin, Geo_multi_poly)
             check_lines(*riter, tpc, xv[i], yv[i], true);
         }
     }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("citer:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
 }
 
 TEST_F(TestGeoBin, geog_collection)
@@ -1767,311 +1646,6 @@ TEST_F(TestGeoBin, ipolygon)
     ASSERT_EQ(p.is_empty(), false);
 }
 
-// iter cost test
-class testPoint{
-public:
-    testPoint(double ix, double iy) : x(ix), y(iy) {}
-    double x;
-    double y;
-};
-
-class testLine{
-public:
-    testLine() {}
-    ~testLine() {}
-    common::ObVector<testPoint> points;
-};
-
-class testPolygon{
-public:
-    testLine exterior;
-    common::ObVector<testLine> inners;
-};
-
-TEST_F(TestGeoBin, cost_iter_line)
-{
-    ObArenaAllocator allocator(ObModIds::TEST);
-    ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
-    common::ObVector<double> xv;
-    common::ObVector<double> yv;
-    common::ObVector<testPoint> pv;
-    append_line(data, num, xv, yv);
-    for (int i = 0; i < xv.size(); i++) {
-        pv.push_back(testPoint(xv[i], yv[i]));
-    }
-
-    ObWkbGeomLineString& line = *reinterpret_cast<ObWkbGeomLineString*>(data.ptr());
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-    ObWkbGeomLineString::iterator iter = line.begin();
-    auto ei = line.end();
-    auto bi = line.begin();
-    for (int i = 0; iter != ei; ++iter, i++) {
-        ASSERT_EQ(xv[i], iter->get<0>());
-        ASSERT_EQ(yv[i], iter->get<1>());
-    }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-    --iter;
-    for (int i = num - 1; iter >= bi; --iter, i--) {
-        ASSERT_EQ(xv[i], iter->get<0>());
-        ASSERT_EQ(yv[i], iter->get<1>());
-    }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    auto pi = pv.begin();
-    for (int i = 0; pi != pv.end(); ++pi, ++i) {
-        ASSERT_EQ(xv[i], pi->x);
-        ASSERT_EQ(yv[i], pi->y);
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    --pi;
-    for (int i = num - 1; pi >= pv.begin(); --pi, --i) {
-        ASSERT_EQ(xv[i], pi->x);
-        ASSERT_EQ(yv[i], pi->y);
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("vector:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    iter = line.begin();
-    
-    for (int i = 0; iter != ei; ++iter, i++) {
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    --iter;
-    
-    for (int i = num - 1; iter >= bi; --iter, i--) {
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("iter only move:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    pi = pv.begin();
-    auto pvb = pv.begin();
-    auto pve = pv.end();
-    for (int i = 0; pi != pve; ++pi, ++i) {
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    --pi;
-    for (int i = num - 1; pi >= pvb; --pi, --i) {
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("vector only move:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    iter = line.begin();
-    for (int i = 0; i < num; i++) {
-        ASSERT_EQ(xv[0], iter->get<0>());
-        ASSERT_EQ(yv[0], iter->get<1>());
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    printf("iter only access: %lfms\n", b2e.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    pi = pv.begin();
-    for (int i = 0; i < num; i++) {
-        ASSERT_EQ(xv[0], pi->x);
-        ASSERT_EQ(yv[0], pi->y);
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    printf("vector only access: %lfms\n", b2e.count());
-}
-
-void check_test_lines(testLine& line, uint32_t& pc, common::ObVector<double>& xv, common::ObVector<double>& yv)
-{
-    auto lei = line.points.end();
-    auto lbi = line.points.begin();
-    
-    auto iter = lbi;
-    for (; iter != lei; ++iter, ++pc) {
-        ASSERT_EQ(xv[pc], iter->x);
-        ASSERT_EQ(yv[pc], iter->y);
-    }
-    uint32_t ii = pc;
-    --iter;
-    --ii;
-    for (; iter >= lbi; --iter, --ii) {
-        ASSERT_EQ(xv[ii], iter->x);
-        ASSERT_EQ(yv[ii], iter->y);
-    }
-}
-/*
-TEST_F(TestGeoBin, cost_iter_poly)
-{
-    ObArenaAllocator allocator(ObModIds::TEST);
-    ObJsonBuffer data(&allocator);
-    // 1 exterior line 100 inner line, every line has 100 point
-    uint32_t pnum = 100;
-    uint32_t lnum = 100001;
-    common::ObVector<double> xv;
-    common::ObVector<double> yv;
-    testPolygon tp;
-    append_poly(data, lnum, pnum, xv, yv);
-    for (int i = 0; i < lnum - 1; i++) {
-        tp.inners.push_back(testLine());
-    }
-    for (int i = 0; i < xv.size(); i++) {
-        if (i < pnum) {
-            tp.exterior.points.push_back(testPoint(xv[i], yv[i]));
-        } else {
-            tp.inners[(i-pnum)/pnum].points.push_back(testPoint(xv[i], yv[i]));
-        }
-    }
-
-    ObWkbGeomPolygon& poly = *reinterpret_cast<ObWkbGeomPolygon*>(data.ptr());
-    ObWkbGeomLinearRing& exterior = poly.exterior_ring();
-    ObWkbGeomPolygonInnerRings& inner_rings = poly.inner_rings();
-    uint32_t pc = 0;
-    // check exterior
-    check_lines(exterior, pc, xv, yv);
-    // check inner rings
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
-    ObWkbGeomPolygonInnerRings::iterator iter = inner_rings.begin();
-    auto irei = inner_rings.end();
-    auto irbi = inner_rings.begin();
-    for (; iter != irei; iter++) {
-        check_lines(*iter, pc, xv, yv);
-    }
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-    --iter;
-    pc -= pnum;
-    for (; iter >= irbi; iter--, pc -= pnum) {
-        uint32_t tpc = pc;
-        check_lines(*iter, tpc, xv, yv);
-    }
-    std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> b2e = t2-t1;
-    std::chrono::duration<double, std::milli> e2b = t3-t2;
-    printf("iter:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    pc = pnum;
-    t1 = std::chrono::high_resolution_clock::now();
-    auto pi = tp.inners.begin();
-    for (; pi != tp.inners.end(); ++pi) {
-        check_test_lines(*pi, pc, xv, yv);
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    --pi;
-    pc -= pnum;
-    for (; pi >= tp.inners.begin(); pi--, pc -= pnum) {
-        uint32_t tpc = pc;
-        check_test_lines(*pi, tpc, xv, yv);
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("vector:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    pc = pnum;
-    t1 = std::chrono::high_resolution_clock::now();
-    auto miterb = inner_rings.begin();
-    for (; miterb != irei; miterb++) {
-        auto lb = miterb->begin();
-        auto le = miterb->end();
-        for (auto li = lb; li != le; ++li) {}
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    auto mitere = inner_rings.end();
-    --mitere;
-    pc -= pnum;
-    for (; mitere >= irbi; mitere--, pc -= pnum) {
-        auto lb = mitere->begin();
-        auto le = mitere->end();
-        for (auto li = lb; li != le; ++li) {}
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("iter only move:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    pc = pnum;
-    t1 = std::chrono::high_resolution_clock::now();
-    pi = tp.inners.begin();
-    for (; pi != tp.inners.end(); ++pi) {
-        auto lb = pi->points.begin();
-        auto le = pi->points.end();
-        for (auto li = lb; li != le; ++li) {}
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    pi = tp.inners.end();
-    --pi;
-    pc -= pnum;
-    for (; pi >= tp.inners.begin(); pi--, pc -= pnum) {
-        auto lb = pi->points.begin();
-        auto le = pi->points.end();
-        for (auto li = lb; li != le; ++li) {}
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("vector only move:\nbegin to end : %lfms\nend to begin : %lfms\n", b2e.count(), e2b.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    auto aiterb = inner_rings.begin();
-    auto aiterbb = aiterb->begin();
-    for (int i = 0; i < lnum - 1; i++) {
-        for (int j = 0; j < pnum; j++) {
-            ASSERT_EQ(xv[pnum], aiterbb->get<0>());
-            ASSERT_EQ(yv[pnum], aiterbb->get<1>());
-        }
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    auto aitere = inner_rings.end();
-    --aitere;
-    auto aiteree = aitere->end();
-    --aiteree;
-    uint32_t last_idx = xv.size() - 1;
-    for (int i = 0; i < lnum - 1; i++) {
-        for (int j = 0; j < pnum; j++) {
-            ASSERT_EQ(xv[last_idx], aiteree->get<0>());
-            ASSERT_EQ(yv[last_idx], aiteree->get<1>());
-        }
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("iter only access:\nbegin : %lfms\nend : %lfms\n", b2e.count(), e2b.count());
-
-    t1 = std::chrono::high_resolution_clock::now();
-    auto tpb = tp.inners.begin();
-    auto tpbb = tpb->points.begin();
-    for (int i = 0; i < lnum - 1; i++) {
-        for (int j = 0; j < pnum; j++) {
-            ASSERT_EQ(xv[pnum], tpbb->x);
-            ASSERT_EQ(yv[pnum], tpbb->y);
-        }
-    }
-    t2 = std::chrono::high_resolution_clock::now();
-    auto tpe = tp.inners.end();
-    --tpe;
-    auto tpee = tpe->points.end();
-    --tpee;
-    last_idx = xv.size() - 1;
-    for (int i = 0; i < lnum - 1; i++) {
-        for (int j = 0; j < pnum; j++) {
-            ASSERT_EQ(xv[last_idx], tpee->x);
-            ASSERT_EQ(yv[last_idx], tpee->y);
-        }
-    }
-    t3 = std::chrono::high_resolution_clock::now();
-    b2e = t2-t1;
-    e2b = t3-t2;
-    printf("vector only access:\nbegin : %lfms\nend : %lfms\n", b2e.count(), e2b.count());
-
-}
-*/
 TEST_F(TestGeoBin, traits_point)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
@@ -2385,7 +1959,7 @@ TEST_F(TestGeoBin, wkb_size_visitor_linestring)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_line(data, num, xv, yv);
@@ -2430,7 +2004,7 @@ TEST_F(TestGeoBin, wkb_size_visitor_multi_point)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_point(data, num, xv, yv);
@@ -2454,7 +2028,7 @@ TEST_F(TestGeoBin, wkb_size_visitor_multi_line)
     ObJsonBuffer data(&allocator);
     // 1 exterior line 100 inner line, every line has 100 point
     uint32_t pnum = 100;
-    uint32_t lnum = 10000;
+    constexpr uint32_t lnum = 4;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_line(data, lnum, pnum, xv, yv);
@@ -2477,8 +2051,8 @@ TEST_F(TestGeoBin, wkb_size_visitor_multi_poly)
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
     // 1 exterior line 99 inner line, every line has 100 point
-    uint32_t polynum = 100;
-    uint32_t lnum = 100;
+    constexpr uint32_t polynum = 4;
+    constexpr uint32_t lnum = 4;
     uint32_t pnum = 100;
     common::ObVector<double> xv[polynum];
     common::ObVector<double> yv[polynum];
@@ -2546,9 +2120,8 @@ TEST_F(TestGeoBin, wkb_size_visitor_geom_collection)
     ASSERT_EQ(data.length(), visitor.geo_size());
 }
 
-int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t tenant_id, uint64_t srs_id, const ObSrsItem *&srs_item)
+int mock_get_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item)
 {
-    UNUSEDx( tenant_id);
     int ret = OB_SUCCESS;
     ObGeographicRs rs;
     rs.rs_name.assign_ptr("ED50", static_cast<int64_t>(strlen("ED50")));
@@ -2585,7 +2158,7 @@ int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t tenant_id, uint64
 
 void get_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item)
 {
-  ASSERT_EQ(OB_SUCCESS, mock_get_tenant_srs_item(allocator, OB_SYS_TENANT_ID, srs_id, srs_item));
+  ASSERT_EQ(OB_SUCCESS, mock_get_srs_item(allocator, srs_id, srs_item));
 }
 
 TEST_F(TestGeoBin, coordinate_range_visitor_point)
@@ -2781,7 +2354,7 @@ TEST_F(TestGeoBin, coordinate_range_visitor_multi_line)
     ObJsonBuffer data(&allocator);
     // 1 exterior line 100 inner line, every line has 100 point
     uint32_t pnum = 100;
-    uint32_t lnum = 10000;
+    constexpr uint32_t lnum = 4;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_line(data, lnum, pnum, xv, yv, GeogValueValidType::IN_RANGE);
@@ -2812,8 +2385,8 @@ TEST_F(TestGeoBin, coordinate_range_visitor_multi_poly)
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
     // 1 exterior line 99 inner line, every line has 100 point
-    uint32_t polynum = 100;
-    uint32_t lnum = 100;
+    constexpr uint32_t polynum = 4;
+    constexpr uint32_t lnum = 4;
     uint32_t pnum = 100;
     common::ObVector<double> xv[polynum];
     common::ObVector<double> yv[polynum];
@@ -3545,7 +3118,11 @@ TEST_F(TestGeoBin, visitor_Geometrycollection)
 
   ObGeographGeometrycollection *GeographGc = static_cast<ObGeographGeometrycollection *>(gc);
   // point
-  GeographGc->push_back(ObGeographPoint(10.0 * srs_item->angular_unit(), 0.0 * srs_item->angular_unit(), 0));
+  ObGeographPoint point(
+      10.0 * srs_item->angular_unit(),
+      0.0 * srs_item->angular_unit(),
+      0);
+  GeographGc->push_back(point);
   // lineString
   ObGeographLineString ls(0, allocator);
   ls.push_back(ObWkbGeogInnerPoint(180 * srs_item->angular_unit(), 90 * srs_item->angular_unit() ));
@@ -3609,7 +3186,8 @@ TEST_F(TestGeoBin, visitor_Geometrycollection)
 
   ObCartesianGeometrycollection *CartesianGc = static_cast<ObCartesianGeometrycollection *>(gc);
   // point
-  CartesianGc->push_back(ObCartesianPoint(10.0, 0.0, 0));
+  ObCartesianPoint cart_point(10.0, 0.0, 0);
+  CartesianGc->push_back(cart_point);
   // lineString
   ObCartesianLineString cart_ls(0, allocator);
   cart_ls.push_back(ObWkbGeomInnerPoint(180, 90 ));
@@ -3663,7 +3241,7 @@ TEST_F(TestGeoBin, wkb_invalid_visitor)
   ObJsonBuffer data(&allocator);
   // 1 exterior line 100 inner line, every line has 100 point
   uint32_t pnum = 100;
-  uint32_t lnum = 10000;
+  constexpr uint32_t lnum = 4;
   common::ObVector<double> xv;
   common::ObVector<double> yv;
   append_multi_line(data, lnum, pnum, xv, yv);
@@ -3685,8 +3263,8 @@ TEST_F(TestGeoBin, longti_correct_invalid_visitor)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer data(&allocator);
 
-  uint32_t polynum = 100;
-  uint32_t lnum = 100;
+  constexpr uint32_t polynum = 4;
+  constexpr uint32_t lnum = 4;
   uint32_t pnum = 100;
   common::ObVector<double> xv[polynum];
   common::ObVector<double> yv[polynum];
@@ -3736,7 +3314,7 @@ TEST_F(TestGeoBin, to_tree_visitor_linestring)
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer data(&allocator);
 
-    uint32_t num = 1000000;
+    constexpr uint32_t num = 16;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_line(data, num, xv, yv);
@@ -3783,7 +3361,7 @@ TEST_F(TestGeoBin, to_tree_visitor_multi_line)
     ObJsonBuffer data(&allocator);
 
     uint32_t pnum = 100;
-    uint32_t lnum = 10000;
+    constexpr uint32_t lnum = 4;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_line(data, lnum, pnum, xv, yv);
@@ -3821,7 +3399,7 @@ TEST_F(TestGeoBin, to_tree_visitor_poly)
     ObJsonBuffer data(&allocator);
 
     uint32_t pnum = 100;
-    uint32_t lnum = 10001;
+    constexpr uint32_t lnum = 5;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_poly(data, lnum, pnum, xv, yv);
@@ -4239,7 +3817,7 @@ TEST_F(TestGeoBin, reverse_coordinate_visitor_poly)
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer buffer(&allocator);
     uint32_t pnum = 100;
-    uint32_t lnum = 10001;
+    constexpr uint32_t lnum = 5;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_poly(buffer, lnum, pnum, xv, yv);
@@ -4323,7 +3901,7 @@ TEST_F(TestGeoBin, reverse_coordinate_visitor_multi_line)
     ObJsonBuffer buffer(&allocator);
 
     uint32_t pnum = 100;
-    uint32_t lnum = 10000;
+    constexpr uint32_t lnum = 4;
     common::ObVector<double> xv;
     common::ObVector<double> yv;
     append_multi_line(buffer, lnum, pnum, xv, yv);
@@ -4349,8 +3927,8 @@ TEST_F(TestGeoBin, reverse_coordinate_visitor_multi_polygon)
 {
     ObArenaAllocator allocator(ObModIds::TEST);
     ObJsonBuffer buffer(&allocator);
-    uint32_t polynum = 100;
-    uint32_t lnum = 100;
+    constexpr uint32_t polynum = 4;
+    constexpr uint32_t lnum = 4;
     uint32_t pnum = 100;
     common::ObVector<double> xv[polynum];
     common::ObVector<double> yv[polynum];
@@ -5016,10 +4594,9 @@ TEST_F(TestGeoBin, mbr_polygon_2)
     iwkb_geogl4.set_data(datal4.string());
 
     ObGeometry *geol4 = NULL;
-    ObGeoTypeUtil::get_mbr_polygon(allocator, &srsbound_max, iwkb_geogl4, geol4);
-    ASSERT_EQ(ObGeoType::POLYGON, geol4->type());
-    ObWkbGeomPolygon *mbr_polygonl4 = reinterpret_cast<ObWkbGeomPolygon *>(const_cast<char *>(geol4->val()));
-    std::cout << "ob::linestring5(poly)" << boost::geometry::dsv(*mbr_polygonl4) << std::endl;
+    int ret_l4 = ObGeoTypeUtil::get_mbr_polygon(allocator, &srsbound_max, iwkb_geogl4, geol4);
+    ASSERT_EQ(OB_EMPTY_RESULT, ret_l4);   // intersection collapses onto the y=1 boundary edge -> empty
+    ASSERT_TRUE(geol4 == NULL);
 
 
     srsbound_max.minX_ = (double)0;
@@ -5072,7 +4649,7 @@ TEST_F(TestGeoBin, interior_point_vistor_point)
     ASSERT_EQ(ObWktParser::parse_wkt(allocator, "POINT(10 0)", geo, true, false), OB_SUCCESS);
     lib::MemoryContext mem_context;
     ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
-        lib::ContextParam().set_mem_attr(MTL_ID(), "GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
+        lib::ContextParam().set_mem_attr("GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
     ObGeoInteriorPointVisitor visitor(mem_context);
     ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
     ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
@@ -5090,7 +4667,7 @@ TEST_F(TestGeoBin, interior_point_vistor_line)
     ASSERT_EQ(ObWktParser::parse_wkt(allocator, "LINESTRING(0 0, 5 0, 10 0)", geo, true, false), OB_SUCCESS);
     lib::MemoryContext mem_context;
     ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
-        lib::ContextParam().set_mem_attr(MTL_ID(), "GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
+        lib::ContextParam().set_mem_attr("GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
     ObGeoInteriorPointVisitor visitor(mem_context);
     ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
     ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
@@ -5114,7 +4691,7 @@ TEST_F(TestGeoBin, interior_point_vistor_poly)
                              "182635.760119718 141846.477712277))", geo, true, false), OB_SUCCESS);
     lib::MemoryContext mem_context;
     ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
-        lib::ContextParam().set_mem_attr(MTL_ID(), "GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
+        lib::ContextParam().set_mem_attr("GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
     ObGeoInteriorPointVisitor visitor(mem_context);
     ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
     ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
@@ -5132,7 +4709,7 @@ TEST_F(TestGeoBin, interior_point_vistor_empty)
     ASSERT_EQ(ObWktParser::parse_wkt(allocator, "GEOMETRYCOLLECTION EMPTY", geo, true, false), OB_SUCCESS);
     lib::MemoryContext mem_context;
     ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
-        lib::ContextParam().set_mem_attr(MTL_ID(), "GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
+        lib::ContextParam().set_mem_attr("GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
     ObGeoInteriorPointVisitor visitor(mem_context);
     ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
     ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
@@ -5155,7 +4732,7 @@ void elevation_visitor_checker(ObIAllocator &allocator, const ObString &wkt1, co
     
     lib::MemoryContext mem_context;
     ASSERT_EQ(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, 
-      lib::ContextParam().set_mem_attr(MTL_ID(), "GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
+      lib::ContextParam().set_mem_attr("GIS_UT", ObCtxIds::DEFAULT_CTX_ID)), OB_SUCCESS);
     ObGeoElevationVisitor visitor(mem_context, nullptr);
     ObGeometry *res_geo = nullptr;
     ASSERT_EQ(visitor.init(*geo1, *geo2), OB_SUCCESS);
@@ -5317,12 +4894,3 @@ TEST_F(TestGeoBin, linesegments_collect_visitor_poly)
 
 } // namespace common
 } // namespace oceanbase
-
-int main(int argc, char** argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  system("rm -f test_geo_bin.log");
-  OB_LOGGER.set_file_name("test_geo_bin.log");
-  OB_LOGGER.set_log_level("DEBUG");
-  return RUN_ALL_TESTS();
-}

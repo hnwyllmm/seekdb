@@ -16,7 +16,7 @@
 
 #ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_OPEN_CURSOR
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_OPEN_CURSOR
-#include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
 #include "sql/session/ob_sql_session_mgr.h"
 
 /* __all_virtual_open_cursor 
@@ -74,11 +74,11 @@ public:
   virtual ~ObVirtualOpenCursorTable();
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  void set_session_mgr(sql::ObSQLSessionMgr *sess_mgr) { session_mgr_ = sess_mgr; }
+  void sesession_pool(sql::ObSQLSessionMgr *sess_mgr) { session_mgr_ = sess_mgr; }
   int set_addr(const common::ObAddr &addr);
   
 private:
-  // https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/V-OPEN_CURSOR.html
+  // V$OPEN_CURSOR-compatible column layout.
   enum {
         SADDR = common::OB_APP_MIN_COLUMN_ID, // session point addr
     SID,                        // session id

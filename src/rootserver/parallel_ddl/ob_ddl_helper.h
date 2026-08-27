@@ -46,25 +46,20 @@ class ObDDLHelperUtils
 {
 public:
   static int gen_task_id_and_schema_versions(share::schema::ObDDLTransController *controller,
-                                             const uint64_t tenant_id,
                                              const uint64_t schema_version_cnt,
                                              int64_t &task_id);
-  static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service, 
-                                      const uint64_t tenant_id,
+  static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service,
                                       ObDDLSQLTransaction &trans);
   static int wait_ddl_trans(share::schema::ObDDLTransController *controller, 
-                            const uint64_t tenant_id, 
                             const int64_t task_id);
   static int end_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
-                           share::schema::ObDDLTransController *ddl_trans_controller,
-                           const uint64_t tenant_id, 
+                           share::schema::ObDDLTransController *ddl_trans_controller, 
                            const int return_ret, 
                            const int64_t task_id, 
                            ObDDLSQLTransaction &trans);
   static int wait_and_end_ddl_trans(const int return_ret,
                                     share::schema::ObMultiVersionSchemaService *schema_service,
                                     share::schema::ObDDLTransController *ddl_trans_controller, 
-                                    const uint64_t tenant_id, 
                                     const int64_t task_id, 
                                     ObDDLSQLTransaction &trans,
                                     bool &need_clean_failed);
@@ -96,7 +91,6 @@ typedef common::hash::ObHashMap<uint64_t, transaction::tablelock::ObTableLockMod
 public:
   ObDDLHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
-    const uint64_t tenant_id,
     const char* parallel_ddl_type,
     ObDDLSQLTransaction *external_trans = nullptr,
     bool enable_ddl_parallel  = true);
@@ -107,18 +101,15 @@ public:
   virtual int execute();
   static int obj_lock_database_name(
              ObDDLSQLTransaction &trans,
-             const uint64_t tenant_id,
              const ObString &name,
              const transaction::tablelock::ObTableLockMode lock_mode);
   static int obj_lock_obj_name(
              ObDDLSQLTransaction &trans,
-             const uint64_t tenant_id,
              const ObString &database_name,
              const ObString &obj_name,
              const transaction::tablelock::ObTableLockMode lock_mode);
   static int obj_lock_obj_id(
              ObDDLSQLTransaction &trans,
-             const uint64_t tenant_id,
              const uint64_t obj_id,
              const transaction::tablelock::ObTableLockMode lock_mode);
 
@@ -141,7 +132,7 @@ protected:
   virtual int calc_schema_version_cnt_() = 0;
   int gen_task_id_and_schema_versions_();
   virtual int operate_schemas_() = 0;
-  int serialize_inc_schema_dict_();
+  int register_ddl_trans_signal_();
   virtual int operation_before_commit_() = 0;
   virtual int clean_on_fail_commit_() = 0;
   virtual int construct_and_adjust_result_(int &return_ret) = 0;
@@ -185,10 +176,6 @@ protected:
   int add_lock_table_udt_id_(const ObTableSchema &table_schema);
   int check_table_udt_exist_(const ObTableSchema &table_schema);
   ObSchemaType transfer_obj_type_to_schema_type_for_dep_(const ObObjectType obj_type);
-  // lock tablegroup name
-  int add_lock_object_by_tablegroup_name_(
-      const ObString &tablegroup_name,
-      const transaction::tablelock::ObTableLockMode lock_mode);
   int get_current_version_(int64_t &version);
 private:
   int add_lock_object_to_map_(
@@ -202,7 +189,6 @@ private:
   static uint64_t cast_obj_name_to_id_(const ObString &database_name, const ObString &obj_name);
   static int obj_lock_with_lock_id_(
              ObDDLSQLTransaction &trans,
-             const uint64_t tenant_id,
              const uint64_t obj_id,
              const transaction::tablelock::ObTableLockMode lock_mode,
              const ObLockOBJType obj_type);
@@ -220,7 +206,6 @@ protected:
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObDDLTransController *ddl_trans_controller_;
 
-  uint64_t tenant_id_;          // normally, ObDDLHelper only deal with ddl in one tenant
   int64_t task_id_;             // allocated by ObDDLTransController
   int64_t schema_version_cnt_;  // used to allocate schema versions for this DDL
   int64_t object_id_cnt_;       // used to allocate object ids for this DDL

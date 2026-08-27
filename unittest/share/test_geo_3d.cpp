@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "lib/geo/ob_geo_3d.h"
+#include "share/geo/ob_geo_3d.h"
 #undef private
 #undef protected
 
@@ -57,7 +57,7 @@ public:
   template<typename T>
   int append_val(ObStringBuffer &buf, T t, ObGeoWkbByteOrder bo);
   int append_pointz(ObStringBuffer &buf, double x, double y, double z, ObGeoWkbByteOrder bo);
-  int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item);
+  int mock_get_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item);
 private:
   ObArenaAllocator allocator_; 
   // disallow copy
@@ -163,7 +163,7 @@ void TestGeo3D::check_reserver_coordinate(ObString &wkt)
 
 }
 
-int TestGeo3D::mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item)
+int TestGeo3D::mock_get_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item)
 {
   int ret = OB_SUCCESS;
   ObGeographicRs rs;
@@ -397,7 +397,7 @@ TEST_F(TestGeo3D, test_coordinate_range)
 {
   const ObSrsItem *srs_item = NULL;
   ObArenaAllocator allocator(ObModIds::TEST);
-  ASSERT_EQ(OB_SUCCESS, mock_get_tenant_srs_item(allocator, 4326, srs_item));
+  ASSERT_EQ(OB_SUCCESS, mock_get_srs_item(allocator, 4326, srs_item));
   ObStringBuffer buf(&allocator);
   ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   ObGeometry3D geo_3d;
@@ -425,12 +425,3 @@ TEST_F(TestGeo3D, test_coordinate_range)
 
 } // namespace common
 } // namespace oceanbase
-
-int main(int argc, char** argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  system("rm -f test_geo_3d.log");
-  OB_LOGGER.set_file_name("test_geo_3d.log");
-  OB_LOGGER.set_log_level("INFO");
-  return RUN_ALL_TESTS();
-}

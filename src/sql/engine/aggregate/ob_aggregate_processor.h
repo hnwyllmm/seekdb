@@ -28,12 +28,10 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/aggregate/ob_exec_hash_struct.h"
 #include "lib/string/ob_fixed_length_string.h"
-#include "share/stat/ob_topk_hist_estimator.h"
+#include "sql/optimizer/stat/ob_topk_hist_estimator.h"
 #include "sql/engine/user_defined_function/ob_pl_user_defined_agg_function.h"
-#include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
-#include "lib/geo/ob_geo_mvt.h"
-#include "lib/roaringbitmap/ob_rb_utils.h"
+#include "share/geo/ob_geo_mvt.h"
 #include "sql/engine/basic/ob_hp_infrastructure_manager.h"
 #include "sql/engine/expand/ob_expand_vec_op.h"
 
@@ -130,7 +128,6 @@ public:
     pl_agg_udf_type_id_(common::OB_INVALID_ID),
     pl_agg_udf_params_type_(),
     pl_result_type_(),
-    dll_udf_(NULL),
     bucket_num_param_expr_(NULL),
     rollup_idx_(INT64_MAX),
     grouping_idxs_(),
@@ -236,7 +233,6 @@ public:
   common::ObFixedArray<ObExprResType, common::ObIAllocator> pl_agg_udf_params_type_;
   ObExprResType pl_result_type_;
 
-  ObAggDllUdfInfo *dll_udf_;
   //used for hybrid_hist
   ObExpr *bucket_num_param_expr_;
 
@@ -251,7 +247,7 @@ public:
   // for example: select group_id() from t1 groupby c1, rollup(c1,c2);  the idx of c1 is in group_idxs_;
   ObFixedArray<int64_t, common::ObIAllocator> group_idxs_;
 
-  //used for json aggregate function in oracle mode
+  // Used for JSON aggregate functions.
   bool format_json_;
   bool strict_json_;
   bool absent_on_null_;
@@ -345,8 +341,7 @@ public:
     virtual ~ExtraResult();
     bool is_inited() const { return is_inited_; }
     virtual void reuse();
-    int init_distinct_set(const uint64_t tenant_id,
-                          const ObAggrInfo &aggr_info,
+    int init_distinct_set(const ObAggrInfo &aggr_info,
                           ObEvalCtx &eval_ctx,
                           const bool need_rewind,
                           ObIOEventObserver *io_event_observer);
@@ -458,7 +453,7 @@ public:
     void reuse_self();
     virtual void reuse() override;
 
-    int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
+    int init(const ObAggrInfo &aggr_info,
              ObEvalCtx &eval_ctx, const bool need_rewind, int64_t dir_id,
              ObIOEventObserver *io_event_observer);
 
@@ -527,7 +522,7 @@ public:
     void reuse_self();
     virtual void reuse() override;
 
-    int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
+    int init(const ObAggrInfo &aggr_info,
              ObEvalCtx &eval_ctx, const bool need_rewind, 
              ObIOEventObserver *io_event_observer,
              ObMonitorNode &op_monitor_info);
@@ -554,19 +549,6 @@ public:
 
     ObSortOpImpl *sort_op_;
     ObMaterialOpImpl *mat_op_;
-  };
-
-  struct DllUdfExtra : public ExtraResult
-  {
-    explicit DllUdfExtra(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
-        : ExtraResult(alloc, op_monitor_info), udf_fun_(NULL)
-    {
-    }
-
-    virtual ~DllUdfExtra();
-
-    ObAggUdfFunction *udf_fun_;
-    ObUdfFunction::ObUdfCtx udf_ctx_;
   };
 
   class AggrCell
@@ -762,8 +744,7 @@ public:
   ObAggregateProcessor(ObEvalCtx &eval_ctx,
                        ObIArray<ObAggrInfo> &aggr_infos,
                        const lib::ObLabel &label,
-                       ObMonitorNode &op_monitor_info,
-                       const int64_t tenant_id);
+                       ObMonitorNode &op_monitor_info);
   ~ObAggregateProcessor() { destroy(); };
 
   int init();
@@ -801,11 +782,6 @@ public:
   // used by ScalarAggregate operator when there's no input rows
   int collect_for_empty_set();
 
-  inline void set_partial_rollup_idx(int64_t start, int64_t end)
-  {
-    start_partial_rollup_idx_ = start;
-    end_partial_rollup_idx_ = end;
-  }
   inline void set_in_window_func() { in_window_func_ = true; }
   inline bool has_distinct() const { return has_distinct_; }
   inline bool has_extra() const { return has_extra_; }
@@ -816,7 +792,7 @@ public:
   inline int64_t get_aggr_used_size() const { return aggr_alloc_.used(); }
   inline int64_t get_aggr_hold_size() const { return aggr_alloc_.total(); }
   inline common::ObIAllocator &get_aggr_alloc() { return aggr_alloc_; }
-  inline void set_tenant_id(const uint64_t tenant_id) { aggr_alloc_.set_tenant_id(tenant_id); }
+  
   int generate_group_row(GroupRow *&new_group_row, const int64_t group_id);
   int fill_group_row(GroupRow *new_group_row, const int64_t group_id);
   int init_one_group(const int64_t group_id = 0, bool fill_pos = false);
@@ -866,13 +842,6 @@ public:
   typedef int (ObAggregateProcessor::*process_fun)(GroupRow &group_row);
   typedef int (ObAggregateProcessor::*collect_fun)(const int64_t group_id, const ObExpr *diff_expr);
 
-  void set_rollup_info(
-    ObRollupStatus rollup_status,
-    ObExpr *rollup_id_expr)
-  {
-    rollup_status_ = rollup_status;
-    rollup_id_expr_ = rollup_id_expr;
-  }
   void set_3stage_info(
     const ObThreeStageAggrStage aggr_stage,
     const int64_t aggr_code_idx,
@@ -1062,19 +1031,12 @@ private:
                          int64_t cur_rollup_group_idx,
                          const int64_t max_group_cnt = INT64_MIN);
   int rollup_distinct(const ObAggrInfo &aggr_info, AggrCell &aggr_cell, AggrCell &rollup_cell);
-  int compare_calc(const ObDatum &left_value,
-                   const ObDatum &right_value,
-                   const ObAggrInfo &aggr_info,
-                   int64_t index,
-                   int &compare_result,
-                   bool &is_asc);
   int check_rows_equal(const ObChunkDatumStore::LastStoredRow &prev_row,
                        const ObChunkDatumStore::StoredRow &cur_row,
                        const ObAggrInfo &aggr_info,
                        bool &is_equal);
   int get_wm_concat_result(const ObAggrInfo &aggr_info,
                            GroupConcatExtraResult *&extra,
-                           bool is_keep_group_concat,
                            ObDatum &concat_result);
   int get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
                             GroupConcatExtraResult *&extra,
@@ -1120,14 +1082,6 @@ private:
                         const ObObj *tmp_obj,
                         uint32_t obj_cnt,
                         mvt_agg_result &mvt_res);
-  int get_rb_build_agg_result(const ObAggrInfo &aggr_info,
-                              GroupConcatExtraResult *&extra,
-                              ObDatum &concat_result);
-  int get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
-                             GroupConcatExtraResult *&extra,
-                             ObDatum &concat_result,
-                             ObRbOperation calc_op,
-                             bool is_cardinality = false);
   int get_array_agg_result(const ObAggrInfo &aggr_info,
                            GroupConcatExtraResult *&extra,
                            ObDatum &concat_result);
@@ -1163,10 +1117,10 @@ private:
  * @param[out] has_null_cell Set to true if any column in the row is NULL
  * @return Calculated hash value, this value is invalid if the output has_null_cell is true
  */
-  static int llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
-                                 const ObIArray<ObExpr *> &param_exprs,
-                                 bool &has_null_cell,
-                                 uint64_t &hash_value);
+  int llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
+                          const ObIArray<ObExpr *> &param_exprs,
+                          bool &has_null_cell,
+                          uint64_t &hash_value);
   static int llc_add(ObDatum &result, const ObDatum &new_value);
   void set_expr_datum_null(ObExpr *expr);
 
@@ -1195,7 +1149,7 @@ public:
  *           d. int256_t [39 - 76] => result P range [61, 98], which can be int256_t or int512_t.
  *           e. int512_t [77 - 154] => decimal int result type only can be int512_t.
  *       So we reserve 3 spaces for each input type, the result type of the first two spaces is
- *       decimal_int, and the last one is number in oracle mode:
+ *       decimal_int, and the last one is number for overflow fallback:
  *           a. int32_t => [int128_t, null, number]
  *           b. int64_t => [int128_t, int256_t, number]
  *           c. int128_t => [int256_t, null, number]
@@ -1232,18 +1186,9 @@ public:
     bool need_id = false;
     switch (type) {
       case T_FUN_GROUP_CONCAT:
-      case T_FUN_GROUP_RANK:
-      case T_FUN_GROUP_DENSE_RANK:
-      case T_FUN_GROUP_PERCENT_RANK:
-      case T_FUN_GROUP_CUME_DIST:
       case T_FUN_MEDIAN:
       case T_FUN_GROUP_PERCENTILE_CONT:
       case T_FUN_GROUP_PERCENTILE_DISC:
-      case T_FUN_KEEP_MAX:
-      case T_FUN_KEEP_MIN:
-      case T_FUN_KEEP_SUM:
-      case T_FUN_KEEP_COUNT:
-      case T_FUN_KEEP_WM_CONCAT:
       case T_FUN_WM_CONCAT:
       case T_FUN_PL_AGG_UDF:
       case T_FUN_JSON_ARRAYAGG:
@@ -1251,12 +1196,7 @@ public:
       case T_FUN_JSON_OBJECTAGG:
       case T_FUN_ORA_JSON_OBJECTAGG: 
       case T_FUN_SYS_ST_ASMVT: 
-      case T_FUN_SYS_RB_BUILD_AGG:
-      case T_FUN_SYS_RB_OR_AGG:
-      case T_FUN_SYS_RB_AND_AGG:
       case T_FUNC_SYS_ARRAY_AGG:
-      case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-      case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
       {
         need_id = true;
         break;
@@ -1329,6 +1269,7 @@ private:
   bool has_extra_;
 
   ObEvalCtx &eval_ctx_;
+  const common::ObDatumAccessContext *datum_access_ctx_;
   common::ObArenaAllocator aggr_alloc_;
   int64_t cur_batch_group_idx_;
   char *cur_batch_group_buf_;
@@ -1348,12 +1289,6 @@ private:
   ObIArray<int64_t> *dist_aggr_group_idxes_;
   ObExpr *aggr_code_expr_;
   ObThreeStageAggrStage aggr_stage_;
-
-  // for Rollup Distributor and Rollup Collector
-  ObRollupStatus rollup_status_;
-  ObExpr *rollup_id_expr_;
-  int64_t start_partial_rollup_idx_; // rollup partial idx
-  int64_t end_partial_rollup_idx_; // rollup partial idx
 
   int64_t dir_id_;
   ObChunkDatumStore::ShadowStoredRow *tmp_store_row_;
@@ -1387,21 +1322,11 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
   bool need_extra = false;
   switch (expr_type) {
     case T_FUN_GROUP_CONCAT:
-    case T_FUN_GROUP_RANK:
-    case T_FUN_GROUP_DENSE_RANK:
-    case T_FUN_GROUP_PERCENT_RANK:
-    case T_FUN_GROUP_CUME_DIST:
     case T_FUN_GROUP_PERCENTILE_CONT:
     case T_FUN_GROUP_PERCENTILE_DISC:
     case T_FUN_MEDIAN:
-    case T_FUN_KEEP_MAX:
-    case T_FUN_KEEP_MIN:
-    case T_FUN_KEEP_SUM:
-    case T_FUN_KEEP_COUNT:
-    case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
-    case T_FUN_AGG_UDF:
     case T_FUN_HYBRID_HIST:
     case T_FUN_TOP_FRE_HIST:
     case T_FUN_JSON_ARRAYAGG:
@@ -1409,12 +1334,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_SYS_ST_ASMVT:
-    case T_FUN_SYS_RB_BUILD_AGG:
-    case T_FUN_SYS_RB_OR_AGG:
-    case T_FUN_SYS_RB_AND_AGG:
     case T_FUNC_SYS_ARRAY_AGG:
-    case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-    case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
     {
       need_extra = true;
       break;
@@ -1468,7 +1388,6 @@ OB_INLINE int ObAggregateProcessor::clone_cell(
           ((int64_t *)buff_ptr)[0] = need_size;
           ((int64_t *)buff_ptr)[1] = STORED_ROW_MAGIC_NUM;
           buf = (char *)((int64_t *)(buff_ptr) + 2);
-          SQL_LOG(DEBUG, "succ to alloc buff", K(need_size), K(target_cell));
         }
       } else {
         buf = (char *)(data_ptr);
@@ -1484,7 +1403,6 @@ OB_INLINE int ObAggregateProcessor::clone_cell(
       ((int64_t *)buff_ptr)[0] = need_size;
       ((int64_t *)buff_ptr)[1] = STORED_ROW_MAGIC_NUM;
       buf = (char *)((int64_t *)(buff_ptr) + 2);
-      SQL_LOG(DEBUG, "succ to alloc buff", K(need_size), K(target_cell));
     }
   }
 
@@ -1505,7 +1423,6 @@ OB_INLINE int ObAggregateProcessor::clone_aggr_cell(AggrCell &aggr_cell, const O
   int64_t need_size = sizeof(int64_t) * 2 +
       (is_number ? number::ObNumber::MAX_BYTE_LEN : src_cell.len_);
   if (OB_FAIL(clone_cell(aggr_cell, need_size, nullptr))) {
-    SQL_LOG(WARN, "failed to clone cell", K(ret));
   } else {
     const char *buf = aggr_cell.get_buf() + 2 * sizeof(int64_t);
     memcpy(const_cast<char *> (buf), src_cell.ptr_, src_cell.len_);
@@ -1525,7 +1442,6 @@ OB_INLINE int ObAggregateProcessor::reuse_group(const int64_t group_id,
   int ret = OB_SUCCESS;
   GroupRow *group_row = NULL;
   if (OB_FAIL(group_rows_.at(group_id, group_row))) {
-    SQL_LOG(WARN, "fail to get stored row", K(ret));
   } else if (OB_ISNULL(group_row)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "stored_row is null", K(group_row));

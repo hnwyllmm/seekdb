@@ -52,7 +52,7 @@ ObMacroInfoIterator::ObMacroInfoIterator()
   : macro_info_(nullptr), block_reader_(), cur_pos_(0), cur_size_(0),
     cur_type_(ObTabletMacroType::INVALID_TYPE),
     target_type_(ObTabletMacroType::INVALID_TYPE), block_info_arr_(),
-    allocator_("MacroInfoIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    allocator_("MacroInfoIter", OB_MALLOC_NORMAL_BLOCK_SIZE),
     is_linked_(false), is_inited_(false)
 {
 }
@@ -86,10 +86,9 @@ int ObMacroInfoIterator::init(const ObTabletMacroType target_type, const ObTable
     LOG_WARN("invalid args", K(ret), K(macro_info));
   } else {
     const MacroBlockId &entry_block = macro_info.entry_block_;
-    ObMemAttr mem_attr(MTL_ID(), "TabletBlockId");
+    ObMemAttr mem_attr("TabletBlockId");
     if (!IS_EMPTY_BLOCK_LIST(entry_block)) {
       if (OB_FAIL(block_reader_.init(entry_block, mem_attr))) {
-        LOG_WARN("fail to init block reader", K(ret), K(entry_block));
       } else {
         is_linked_ = true;
       }
@@ -126,12 +125,11 @@ int ObMacroInfoIterator::reuse()
     if (is_linked_) {
       block_reader_.reset();
       const MacroBlockId &entry_block = macro_info_->entry_block_;
-      ObMemAttr mem_attr(MTL_ID(), "TabletBlockId");
+      ObMemAttr mem_attr("TabletBlockId");
       if (OB_UNLIKELY(!entry_block.is_valid() || IS_EMPTY_BLOCK_LIST(entry_block))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected entry block", K(ret), K(entry_block), K(is_linked_));
       } else if (OB_FAIL(block_reader_.init(entry_block, mem_attr))) {
-        LOG_WARN("fail to init block reader", K(ret), K(entry_block));
       }
     }
   }
@@ -175,7 +173,7 @@ int ObMacroInfoIterator::get_next(ObTabletBlockInfo &block_info)
 int ObMacroInfoIterator::read_from_memory()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DiskMacroIter"));
+  ObArenaAllocator allocator(ObMemAttr("DiskMacroIter"));
   if (OB_ISNULL(macro_info_) || OB_UNLIKELY(ObTabletMacroType::INVALID_TYPE == target_type_
       || ObTabletMacroType::INVALID_TYPE == cur_type_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -192,9 +190,6 @@ int ObMacroInfoIterator::read_from_memory()
         cur_type_ = ObTabletMacroType::DATA_BLOCK;
         break;
       case ObTabletMacroType::DATA_BLOCK:
-        cur_type_ = ObTabletMacroType::SHARED_META_BLOCK;
-        break;
-      case ObTabletMacroType::SHARED_META_BLOCK:
         cur_type_ = ObTabletMacroType::SHARED_DATA_BLOCK;
         break;
       case ObTabletMacroType::SHARED_DATA_BLOCK:
@@ -217,30 +212,17 @@ int ObMacroInfoIterator::read_from_memory()
     switch (cur_type_) {
       case ObTabletMacroType::META_BLOCK:
         if (OB_FAIL(reuse_info_arr(macro_info_->meta_block_info_arr_.cnt_))) {
-          LOG_WARN("fail to reuse block_info_arr_", K(ret), K(macro_info_->meta_block_info_arr_));
         } else if (OB_FAIL(convert_to_block_info(macro_info_->meta_block_info_arr_))) {
-          LOG_WARN("fail to convert to block info", K(ret), K(macro_info_->meta_block_info_arr_));
         }
         break;
       case ObTabletMacroType::DATA_BLOCK:
         if (OB_FAIL(reuse_info_arr(macro_info_->data_block_info_arr_.cnt_))) {
-          LOG_WARN("fail to reuse block_info_arr_", K(ret), K(macro_info_->data_block_info_arr_));
         } else if (OB_FAIL(convert_to_block_info(macro_info_->data_block_info_arr_))) {
-          LOG_WARN("fail to convert to block info", K(ret), K(macro_info_->data_block_info_arr_));
-        }
-        break;
-      case ObTabletMacroType::SHARED_META_BLOCK:
-        if (OB_FAIL(reuse_info_arr(macro_info_->shared_meta_block_info_arr_.cnt_))) {
-          LOG_WARN("fail to reuse block_info_arr_", K(ret), K(macro_info_->shared_meta_block_info_arr_));
-        } else if (OB_FAIL(convert_to_block_info(macro_info_->shared_meta_block_info_arr_))) {
-          LOG_WARN("fail to convert to block info", K(ret), K(macro_info_->shared_meta_block_info_arr_));
         }
         break;
       case ObTabletMacroType::SHARED_DATA_BLOCK:
         if (OB_FAIL(reuse_info_arr(macro_info_->shared_data_block_info_arr_.cnt_))) {
-          LOG_WARN("fail to reuse block_info_arr_", K(ret), K(macro_info_->shared_data_block_info_arr_));
         } else if (OB_FAIL(convert_to_block_info(macro_info_->shared_data_block_info_arr_))) {
-          LOG_WARN("fail to convert to block info", K(ret), K(macro_info_->shared_data_block_info_arr_));
         }
         break;
       default:
@@ -255,7 +237,7 @@ int ObMacroInfoIterator::read_from_memory()
 int ObMacroInfoIterator::read_from_disk()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DiskMacroIter"));
+  ObArenaAllocator allocator(ObMemAttr("DiskMacroIter"));
   char *buf = nullptr;
   int64_t buf_len = 0;
   ObMetaDiskAddr addr;
@@ -269,6 +251,12 @@ int ObMacroInfoIterator::read_from_disk()
   } else if (OB_UNLIKELY(ObTabletMacroType::LINKED_BLOCK == target_type_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("don't support", K(ret));
+  } else if (ObTabletMacroType::SHARED_DATA_BLOCK == cur_type_) {
+    ObTabletMacroInfo::ObBlockInfoArray<ObSharedBlockInfo> tmp_arr;
+    if (OB_FAIL(tmp_arr.deserialize(allocator, buf, buf_len, pos))) {
+    } else if (OB_FAIL(reuse_info_arr(tmp_arr.cnt_))) {
+    } else if (OB_FAIL(convert_to_block_info(tmp_arr))) {
+    }
   } else {
     do {
       pos = 0;
@@ -279,7 +267,6 @@ int ObMacroInfoIterator::read_from_disk()
           LOG_WARN("fail to get next item", K(ret));
         }
       } else if (OB_FAIL(serialization::decode_i16(buf, buf_len, pos, reinterpret_cast<int16_t *>(&cur_type_)))) {
-        LOG_WARN("fail to deserialize macro type", K(ret), K(buf_len), K(pos));
       } else if (OB_UNLIKELY(ObTabletMacroType::INVALID_TYPE == cur_type_ || ObTabletMacroType::MAX == cur_type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid macor type", K(ret));
@@ -291,23 +278,11 @@ int ObMacroInfoIterator::read_from_disk()
   
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (ObTabletMacroType::SHARED_DATA_BLOCK == cur_type_) {
-    ObTabletMacroInfo::ObBlockInfoArray<ObSharedBlockInfo> tmp_arr;
-    if (OB_FAIL(tmp_arr.deserialize(allocator, buf, buf_len, pos))) {
-      LOG_WARN("fail to deserialize block info arr", K(ret), K(buf_len), K(pos));
-    } else if (OB_FAIL(reuse_info_arr(tmp_arr.cnt_))) {
-      LOG_WARN("fail to reuse block_info_arr_", K(ret), K(buf_len), K(pos));
-    } else if (OB_FAIL(convert_to_block_info(tmp_arr))) {
-      LOG_WARN("fail to convert to block info", K(ret), K(tmp_arr));
-    }
   } else {
     ObTabletMacroInfo::ObBlockInfoArray<MacroBlockId> tmp_arr;
     if (OB_FAIL(tmp_arr.deserialize(allocator, buf, buf_len, pos))) {
-      LOG_WARN("fail to deserialize block info arr", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(reuse_info_arr(tmp_arr.cnt_))) {
-      LOG_WARN("fail to reuse block_info_arr_", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(convert_to_block_info(tmp_arr))) {
-      LOG_WARN("fail to convert to block info", K(ret), K(tmp_arr));
     }
   }
   
@@ -317,7 +292,6 @@ int ObMacroInfoIterator::read_from_disk()
     const ObIArray<MacroBlockId> &meta_block_list = block_reader_.get_meta_block_list();
     const int64_t block_cnt = meta_block_list.count();
     if (OB_FAIL(reuse_info_arr(block_cnt))) {
-      LOG_WARN("fail to reuse block_info_arr_", K(ret), K(block_cnt));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < block_cnt; i++) {
       const MacroBlockId &tmp_macro_id = meta_block_list.at(i);
@@ -332,15 +306,17 @@ int ObMacroInfoIterator::read_from_disk()
   return ret;
 }
 
-int ObMacroInfoIterator::convert_to_block_info(const ObTabletMacroInfo::ObBlockInfoArray<ObSharedBlockInfo> &tmp_arr)
+int ObMacroInfoIterator::convert_to_block_info(
+    const ObTabletMacroInfo::ObBlockInfoArray<ObSharedBlockInfo> &tmp_arr)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_arr.cnt_; i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_arr.cnt_; ++i) {
     if (OB_UNLIKELY(!tmp_arr.arr_[i].is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block info is invalid", K(ret), K(tmp_arr.arr_[i]));
     } else {
-      block_info_arr_.arr_[i] = ObTabletBlockInfo(tmp_arr.arr_[i].shared_macro_id_, cur_type_, tmp_arr.arr_[i].occupy_size_);
+      block_info_arr_.arr_[i] = ObTabletBlockInfo(
+          tmp_arr.arr_[i].shared_macro_id_, cur_type_, tmp_arr.arr_[i].occupy_size_);
     }
   }
   return ret;
@@ -369,7 +345,6 @@ int ObMacroInfoIterator::reuse_info_arr(const int64_t cnt)
     block_info_arr_.reset();
     allocator_.reuse();
     if (OB_FAIL(block_info_arr_.reserve(cnt, allocator_))) {
-      LOG_WARN("fail to init block_info_arr_", K(ret), K(cnt));
     }
   }
   return ret;

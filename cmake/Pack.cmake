@@ -4,8 +4,19 @@ set(CPACK_PACKAGE_VENDOR "OceanBase Inc.")
 set(CPACK_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
 set(CPACK_COMPONENTS_ALL server)
 
-set(CPACK_PACKAGE_NAME "seekdb")
-set(CPACK_PACKAGE_VERSION "${OceanBase_VERSION}")
+if(NOT DEFINED SEEKDB_PACKAGE_VERSION OR SEEKDB_PACKAGE_VERSION STREQUAL "")
+  set(SEEKDB_PACKAGE_VERSION "${OceanBase_VERSION}")
+endif()
+if(NOT DEFINED OB_RELEASEID OR OB_RELEASEID STREQUAL "")
+  set(OB_RELEASEID "1")
+endif()
+set(SEEKDB_PACKAGE_NAME "seekdb")
+set(SEEKDB_PACKAGE_RELEASE "${OB_RELEASEID}")
+set(SEEKDB_PACKAGE_PROFILE_DIR "${CMAKE_BINARY_DIR}/package/profile")
+file(MAKE_DIRECTORY "${SEEKDB_PACKAGE_PROFILE_DIR}")
+
+set(CPACK_PACKAGE_NAME "${SEEKDB_PACKAGE_NAME}")
+set(CPACK_PACKAGE_VERSION "${SEEKDB_PACKAGE_VERSION}")
 set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_VERSION_MAJOR}")
 set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_VERSION_PATCH}")
@@ -27,7 +38,7 @@ if(WIN32)
   # Windows install layout:
   #   bin/     - seekdb.exe, observer.exe, ob_admin.exe, runtime DLLs
   #   etc/     - seekdb.cnf, JSON configs
-  #   share/   - admin SQL, timezone, srs, upgrade, help
+  #   share/   - admin SQL, timezone, srs, help
   ##############################################################################
 
   # ── VC++ runtime redistributable (MSVCP140.dll, VCRUNTIME140.dll, etc.) ──
@@ -124,8 +135,6 @@ message(STATUS "Bundled ${_bundled} runtime DLLs into bin/")
   install(FILES
     src/share/parameter/default_parameter.json
     src/share/system_variable/default_system_variable.json
-    tools/upgrade/oceanbase_upgrade_dep.yml
-    tools/upgrade/deps_compat.yml
     ${CMAKE_BINARY_DIR}/src/share/ob_system_variable_init.json
     ${INSTALL_EXTRA_FILES}
     DESTINATION etc
@@ -138,36 +147,16 @@ message(STATUS "Bundled ${_bundled} runtime DLLs into bin/")
     DESTINATION share/admin
     COMPONENT server)
 
-  # Help -> share/help/
-  install(FILES
-    src/sql/fill_help_tables-ob.sql
-    DESTINATION share/help
-    COMPONENT server)
-
   # Timezone -> share/timezone/
   install(FILES
     tools/timezone_V1.log
-    tools/timezone.data
-    tools/timezone_name.data
-    tools/timezone_trans.data
-    tools/timezone_trans_type.data
     DESTINATION share/timezone
     COMPONENT server)
 
   # SRS -> share/srs/
   install(FILES
-    tools/spatial_reference_systems.data
     tools/default_srs_data_mysql.sql
     DESTINATION share/srs
-    COMPONENT server)
-
-  # Upgrade -> share/upgrade/
-  install(FILES
-    tools/upgrade/upgrade_pre.py
-    tools/upgrade/upgrade_post.py
-    tools/upgrade/upgrade_checker.py
-    tools/upgrade/upgrade_health_checker.py
-    DESTINATION share/upgrade
     COMPONENT server)
 
   # Management script -> bin/
@@ -212,12 +201,13 @@ else()
   #   usr/lib/systemd/system/       - seekdb.service
   #   usr/libexec/seekdb/           - python scripts
   #   etc/seekdb/                   - configs
-  #   usr/share/seekdb/             - admin, timezone, srs, upgrade, help
+  #   usr/share/seekdb/             - admin, timezone, srs, help
   ##############################################################################
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh.template
-  ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh
-  @ONLY)
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh.template
+    ${SEEKDB_PACKAGE_PROFILE_DIR}/telemetry.sh
+    @ONLY)
 
   set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
       "/usr" "/usr/lib" "/usr/lib/systemd" "/usr/lib/systemd/system" "/usr/libexec" "/etc"
@@ -229,13 +219,6 @@ else()
     deps/3rd/home/admin/oceanbase/bin/obshell
     DESTINATION usr/bin
     COMPONENT server)
-
-  if (OB_BUILD_STANDALONE)
-    install(PROGRAMS
-    deps/3rd/home/admin/oceanbase/bin/obshell
-    DESTINATION usr/bin
-    COMPONENT server)
-  endif()
 
   # Install systemd service to /usr/lib/systemd/system
   install(FILES
@@ -253,7 +236,7 @@ else()
   install(PROGRAMS
     tools/systemd/profile/seekdb_systemd_start
     tools/systemd/profile/seekdb_systemd_stop
-    tools/systemd/profile/telemetry.sh
+    ${SEEKDB_PACKAGE_PROFILE_DIR}/telemetry.sh
     DESTINATION usr/libexec/seekdb/scripts
     COMPONENT server)
 
@@ -261,8 +244,6 @@ else()
   install(FILES
     src/share/parameter/default_parameter.json
     src/share/system_variable/default_system_variable.json
-    tools/upgrade/oceanbase_upgrade_dep.yml
-    tools/upgrade/deps_compat.yml
     ${CMAKE_BINARY_DIR}/src/share/ob_system_variable_init.json
     ${INSTALL_EXTRA_FILES}
     tools/systemd/profile/seekdb.cnf
@@ -278,63 +259,17 @@ else()
     DESTINATION usr/share/seekdb/admin
     COMPONENT server)
 
-  # Install help files to /usr/share/seekdb/help
-  install(FILES
-    src/sql/fill_help_tables-ob.sql
-    DESTINATION usr/share/seekdb/help
-    COMPONENT server)
-
   # Install timezone files to /usr/share/seekdb/timezone
   install(FILES
     tools/timezone_V1.log
-    tools/timezone.data
-    tools/timezone_name.data
-    tools/timezone_trans.data
-    tools/timezone_trans_type.data
     DESTINATION usr/share/seekdb/timezone
     COMPONENT server)
 
   # Install SRS files to /usr/share/seekdb/srs
   install(FILES
-    tools/spatial_reference_systems.data
     tools/default_srs_data_mysql.sql
     DESTINATION usr/share/seekdb/srs
     COMPONENT server)
-
-  # Install upgrade scripts to /usr/share/seekdb/upgrade
-  install(FILES
-    tools/upgrade/upgrade_pre.py
-    tools/upgrade/upgrade_post.py
-    tools/upgrade/upgrade_checker.py
-    tools/upgrade/upgrade_health_checker.py
-    DESTINATION usr/share/seekdb/upgrade
-    COMPONENT server)
-
-  # Install ocp configuration to /usr/share/seekdb/software_package
-  install(DIRECTORY
-    DESTINATION usr/share/seekdb/software_package
-    COMPONENT server)
-
-  if(OB_BUILD_OBADMIN)
-    if(NOT APPLE)
-      list(APPEND CPACK_COMPONENTS_ALL utils)
-      install(PROGRAMS
-        ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-        ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-        ${DEVTOOLS_DIR}/bin/obstack
-        DESTINATION usr/bin
-        COMPONENT utils
-      )
-    else()
-      list(APPEND CPACK_COMPONENTS_ALL utils)
-      install(PROGRAMS
-        ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-        ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-        DESTINATION usr/bin
-        COMPONENT utils
-      )
-    endif()
-  endif()
 
 endif()
 

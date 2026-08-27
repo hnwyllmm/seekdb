@@ -15,24 +15,12 @@
  */
 
 #define UNITTEST_DEBUG
+#include "common/ob_version_def.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include <gtest/gtest.h>
 
 namespace oceanbase
 {
-namespace transaction
-{
-namespace tablelock
-{
-int ObTableLockOwnerID::get_data_version_(uint64_t &data_version) const
-{
-  int ret = OB_SUCCESS;
-  data_version = DATA_CURRENT_VERSION;
-  return ret;
-}
-}
-}
-
 namespace unittest
 {
 using namespace common;
@@ -135,7 +123,7 @@ bool unlock_req_is_equal(const ObLockRequest &req1, const ObLockRequest &req2)
     case transaction::tablelock::ObLockRequest::ObLockMsgType::UNLOCK_ALONE_TABLET_REQ: {
       const ObUnLockAloneTabletRequest &lock_req1 = static_cast<const ObUnLockAloneTabletRequest &>(req1);
       const ObUnLockAloneTabletRequest &lock_req2 = static_cast<const ObUnLockAloneTabletRequest &>(req2);
-      is_equal = lock_req1.table_id_ == lock_req2.table_id_ && lock_req1.ls_id_ == lock_req2.ls_id_
+      is_equal = lock_req1.table_id_ == lock_req2.table_id_
                  && list_is_equal(lock_req1.tablet_ids_, lock_req1.tablet_ids_);
       TABLELOCK_LOG(INFO, "compare unlock request", K(lock_req1), K(lock_req2), K(is_equal));
       break;
@@ -194,7 +182,6 @@ TEST(ObReplaceLockRequest, test_replace_alone_tablet)
   unlock_req.op_type_ = OUT_TRANS_UNLOCK;
   unlock_req.timeout_us_ = 1000;
   unlock_req.table_id_ = 998;
-  unlock_req.ls_id_ = 1;
   unlock_req.tablet_ids_.push_back(ObTabletID(123));
   unlock_req.tablet_ids_.push_back(ObTabletID(456));
   unlock_req.tablet_ids_.push_back(ObTabletID(789));
@@ -311,15 +298,3 @@ TEST(ObReplaceLockRequest, test_replace_all_locks)
 }
 }  // namespace unittest
 }  // namespace oceanbase
-int main(int argc, char **argv)
-{
-  system("rm -rf test_ob_replace_lock_request.log");
-
-  oceanbase::ObLogger &logger = oceanbase::ObLogger::get_logger();
-  logger.set_file_name("test_ob_replace_lock_request.log", false);
-  logger.set_log_level(OB_LOG_LEVEL_DEBUG);
-
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-  ;
-}

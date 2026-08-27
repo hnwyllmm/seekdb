@@ -18,19 +18,20 @@
 #define OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_
 
 #include "sql/engine/expr/ob_expr_util.h"
+#include "share/object/ob_obj_cast_util.h"  // ObJsonZeroVal moved down to
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/object/ob_obj_cast.h"
-#include "objit/common/ob_item_type.h"
+#include "sql/parser/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/lob/ob_lob_base.h"
-#include "lib/json_type/ob_json_tree.h"
-#include "lib/json_type/ob_json_base.h"
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_parse.h"
-#include "lib/json_type/ob_json_schema.h"
-#include "lib/json_type/ob_json_diff.h"
+#include "common/lob/ob_lob_base.h"
+#include "common/json_type/ob_json_tree.h"
+#include "common/json_type/ob_json_base.h"
+#include "common/json_type/ob_json_bin.h"
+#include "common/json_type/ob_json_parse.h"
+#include "common/json_type/ob_json_schema.h"
+#include "common/json_type/ob_json_diff.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-#include "storage/lob/ob_lob_util.h"
+#include "data_plane/lob/ob_json_lob.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -38,11 +39,6 @@ using namespace oceanbase::common;
 
 namespace oceanbase
 {
-namespace storage
-{
-class ObLobCursor;
-}
-
 namespace sql
 {
 const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
@@ -239,7 +235,7 @@ public:
 
   static int get_partial_json_bin(
       ObIAllocator &allocator,
-      ObILobCursor *cursor,
+      data_plane::ObJsonLobHandle &lob_handle,
       ObJsonBinUpdateCtx *update_ctx, 
       ObIJsonBase *&j_base);
   static int get_json_for_partial_update_with_curosr(
@@ -269,8 +265,11 @@ public:
                           common::ObIAllocator *allocator, uint16_t index,
                           ObIJsonBase*& j_base, bool to_bin = false, bool format_json = false, 
                           uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG);
-  static int get_const_json_schema(const common::ObObj &data, const char* func_name, 
-                                   common::ObIAllocator *allocator, ObIJsonBase*& j_schema);
+  static int get_const_json_schema(const common::ObObj &data,
+                                   const char *func_name,
+                                   ObExecContext &exec_ctx,
+                                   common::ObIAllocator *allocator,
+                                   ObIJsonBase *&j_schema);
 
   /*
   get json value to JsonBase in old_typing_engine
@@ -283,7 +282,7 @@ public:
   @return Returns OB_SUCCESS on success, error code otherwise.
   */
   static int refine_range_json_value_const(
-                          const common::ObObj &data, ObExecContext *ctx,
+                          const common::ObObj &data, ObExecContext &ctx,
                           bool is_bool, common::ObIAllocator *allocator,
                           ObIJsonBase*& j_base, bool to_bin = false);
   static int get_json_val(const common::ObDatum &data, 
@@ -293,9 +292,10 @@ public:
                           ObObjType val_type,
                           ObCollationType &cs_type,
                           ObIJsonBase*& j_base, bool to_bin = false);
-  static int oracle_datum2_json_val(const ObDatum *json_datum,  ObObjMeta& data_meta, common::ObIAllocator *allocator,
-                                    ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
-                                    bool format_json = false, bool is_strict = false, bool is_bin = false);
+  static int datum_to_json_val(const ObDatum *json_datum,  ObObjMeta& data_meta, common::ObIAllocator *allocator,
+                               ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
+                               bool format_json, bool is_strict, bool is_bin,
+                               const common::ObLobReadOptions *lob_options);
   
  
   /*
@@ -367,7 +367,8 @@ public:
                                              common::ObIAllocator *allocator,
                                              ObCollationType cs_type,
                                              ObIJsonBase*& j_base,
-                                             ObConv2JsonParam flags);
+                                             ObConv2JsonParam flags,
+                                             const common::ObLobReadOptions *lob_options);
 
 
   static bool is_convertible_to_json(ObObjType &type);
@@ -392,9 +393,7 @@ public:
     int ret = OB_SUCCESS;
     ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
     if (OB_FAIL(text_result.init(str.length(), allocator))) {
-      LOG_WARN("init lob result failed");
     } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-      LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
     } else {
       text_result.set_result();
     }
@@ -505,14 +504,13 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
 };
 
-class ObJsonDeltaLob : public ObDeltaLob {
+class ObJsonDeltaLob {
 public:
   ObJsonDeltaLob():
     allocator_(nullptr),
     update_ctx_(nullptr),
     j_base_(nullptr),
-    cursor_(nullptr),
-    partial_data_(nullptr),
+    lob_handle_(nullptr),
     query_timeout_ts_(0)
   {}
 
@@ -520,39 +518,20 @@ public:
   int init(ObIAllocator *allocator, ObLobLocatorV2 locator, int64_t query_timeout_ts);
   void reset();
 
-  int64_t get_partial_data_serialize_size() const;
-  int64_t get_lob_diff_serialize_size() const; 
-  uint32_t get_lob_diff_cnt() const;
-
-  int serialize_partial_data(char* buf, const int64_t buf_len, int64_t& pos) const;
-  int deserialize_partial_data(storage::ObLobDiffHeader *diff_header);
-  int serialize_lob_diffs(char* buf, const int64_t buf_len, storage::ObLobDiffHeader *diff_header) const;
-  int deserialize_lob_diffs(char* buf, const int64_t buf_len, storage::ObLobDiffHeader *diff_header);
-
+  int64_t get_serialize_size() const;
+  int serialize(char *buf, int64_t buf_len, int64_t &pos) const;
   int check_binary_diff() const;
   ObIJsonBase* get_json_bin() { return j_base_; }
-  storage::ObLobDiff::DiffType get_diff_type() const { return  storage::ObLobDiff::DiffType::WRITE_DIFF; }
 
 protected:
   ObIAllocator *allocator_;
   ObJsonBinUpdateCtx *update_ctx_;
 
   ObIJsonBase *j_base_;
-  storage::ObLobCursor *cursor_;
-  storage::ObLobPartialData *partial_data_;
+  data_plane::ObJsonLobHandle *lob_handle_;
   int64_t query_timeout_ts_;
 };
 
-struct ObJsonZeroVal
-{
-  static const int32_t OB_JSON_ZERO_VAL_LENGTH = sizeof(ObLobCommon) + 2;
-  ObJsonZeroVal() : header_(), json_bin_() {
-    json_bin_[0] = '\0';
-    json_bin_[1] = '\0';
-  }
-  ObLobCommon header_;
-  char json_bin_[4];
-};
 
 } // sql
 } // oceanbase

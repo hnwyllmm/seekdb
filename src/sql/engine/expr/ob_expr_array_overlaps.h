@@ -18,8 +18,8 @@
 #define OCEANBASE_SQL_OB_EXPR_ARRAY_OVERLAPS
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/udt/ob_array_type.h"
+#include "share/geo/ob_geo_utils.h"
+#include "common/udt/ob_array_type.h"
 
 
 namespace oceanbase
@@ -44,14 +44,9 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const override;
   static int eval_array_overlaps(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_array_overlaps_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
-  static int eval_array_overlaps_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                        const ObBitVector &skip, const EvalBound &bound);
   static int eval_array_relations(const ObExpr &expr, ObEvalCtx &ctx, Relation relation, ObDatum &res);
   static int eval_array_relations_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                                         const int64_t batch_size, Relation relation);
-  static int eval_array_relation_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                        const ObBitVector &skip, const EvalBound &bound,
-                                        Relation relation);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

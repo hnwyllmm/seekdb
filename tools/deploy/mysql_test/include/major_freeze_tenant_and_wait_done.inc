@@ -7,14 +7,13 @@
 connect (obsys_major,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection obsys_major;
 
-eval alter system major freeze tenant $__freeze_tenant_name__;
-
+eval alter system major freeze;
 let $__i__= 600;
 while($__i__ > 0)
 {
   sleep 1;
   dec $__i__;
-  let $__finish_major__= query_get_value(select count(*) as cnt from oceanbase.CDB_OB_MAJOR_COMPACTION where last_finish_time > '$__now_time__', cnt, 1);
+  let $__finish_major__= query_get_value(select count(*) as cnt from oceanbase.DBA_OB_MAJOR_COMPACTION where last_finish_time > '$__now_time__', cnt, 1);
   if ($__finish_major__ == 1)
   {
     let $__i__ = -5;

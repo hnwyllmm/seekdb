@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_SERVER_SCHEMA_SERVICE_H_
 #define OCEANBASE_SERVER_SCHEMA_SERVICE_H_
 
-#include "lib/allocator/ob_mod_define.h"
+#include "lib/utility/ob_mod_define.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/hash/ob_iteratable_hashmap.h" //ObIteratableHashMap
 #include "lib/hash/ob_hashmap.h"
@@ -25,22 +25,16 @@
 #include "lib/container/ob_array_wrap.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_schema_mem_mgr.h"
-#include "share/schema/ob_directory_mgr.h"
-#include "share/schema/ob_location_mgr.h"
 #include "share/schema/ob_outline_mgr.h"
 #include "share/schema/ob_package_mgr.h"
 #include "share/schema/ob_priv_mgr.h"
 #include "share/schema/ob_routine_mgr.h"
 #include "share/schema/ob_schema_mgr.h"
-#include "share/schema/ob_sequence_mgr.h"
 #include "share/schema/ob_sys_variable_mgr.h"
 #include "share/schema/ob_trigger_mgr.h"
-#include "share/schema/ob_udf_mgr.h"
-#include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
-#include "share/schema/ob_catalog_mgr.h"
-#include "share/schema/ob_ccl_rule_mgr.h"
 #include "share/schema/ob_ai_model_mgr.h"
+#include "share/ob_server_status.h"
 
 namespace oceanbase
 {
@@ -55,6 +49,7 @@ class ObTimeoutCtx;
 }
 namespace share
 {
+class ObSchemaStatusProxy;
 typedef int (*schema_create_func)(share::schema::ObTableSchema &table_schema);
 namespace schema
 {
@@ -67,7 +62,7 @@ enum NewVersionType {
 
 struct SchemaKey
 {
-  uint64_t tenant_id_;
+  
   union {
     uint64_t user_id_;
     uint64_t grantee_id_;
@@ -77,34 +72,22 @@ struct SchemaKey
     uint64_t grantor_id_;
   };
   common::ObString database_name_;
-  uint64_t tablegroup_id_;
   union {
     uint64_t table_id_;
     uint64_t outline_id_;
     uint64_t routine_id_;
     uint64_t package_id_;
     uint64_t udt_id_;
-    uint64_t sequence_id_;
     uint64_t trigger_id_;
-    uint64_t dblink_id_;
-    uint64_t directory_id_;
-    uint64_t context_id_;
     uint64_t mock_fk_parent_table_id_;
     uint64_t routine_type_;
     uint64_t column_priv_id_;
-    uint64_t catalog_id_;
-    uint64_t ccl_rule_id_;
     uint64_t ai_model_id_;
-    uint64_t location_id_;
   };
   union {
     common::ObString table_name_;
     common::ObString routine_name_;
-    common::ObString udf_name_;
-    common::ObString sequence_name_;
-    common::ObString context_namespace_;
     common::ObString mock_fk_parent_table_namespace_;
-    common::ObString catalog_name_;
     common::ObString ai_model_name_;
     common::ObString obj_name_;
   };
@@ -112,10 +95,8 @@ struct SchemaKey
   uint64_t col_id_;
   uint64_t obj_type_;
 
-  TO_STRING_KV(K_(tenant_id),
-               K_(user_id),
+  TO_STRING_KV(K_(user_id),
                K_(database_id),
-               K_(tablegroup_id),
                K_(table_id),
                K_(outline_id),
                K_(routine_name),
@@ -125,155 +106,102 @@ struct SchemaKey
                K_(schema_version),
                K_(package_id),
                K_(trigger_id),
-               K_(sequence_id),
-               K_(sequence_name),
-               K_(udf_name),
                K_(udt_id),
                K_(grantee_id),
                K_(grantor_id),
                K_(col_id),
                K_(obj_type),
-               K_(dblink_id),
-               K_(directory_id),
-               K_(context_id),
                K_(mock_fk_parent_table_id),
                K_(routine_type),
                K_(column_priv_id),
-               K_(catalog_id),
-               K_(catalog_name),
-               K_(ccl_rule_id),
                K_(ai_model_id),
-               K_(obj_name),
-               K_(location_id));
+               K_(obj_name));
 
   SchemaKey()
-    : tenant_id_(common::OB_INVALID_ID),
-      user_id_(common::OB_INVALID_ID),
+    : user_id_(common::OB_INVALID_ID),
       database_id_(common::OB_INVALID_ID),
       database_name_(),
-      tablegroup_id_(common::OB_INVALID_ID),
       table_id_(common::OB_INVALID_ID),
       table_name_(),
       schema_version_(common::OB_INVALID_VERSION),
       col_id_(common::OB_INVALID_ID),
       obj_type_(common::OB_INVALID_ID)
   {}
-  static bool cmp_with_tenant_id(const SchemaKey &a, const SchemaKey &b)
+  static bool cmp_with_id(const SchemaKey &a, const SchemaKey &b)
   {
-    return a.tenant_id_ < b.tenant_id_;
+    return false;
   }
-  uint64_t get_tenant_key() const
+  ObUserId get_user_key() const
   {
-    return tenant_id_;
+    return ObUserId(user_id_);
   }
-  ObTenantUserId get_user_key() const
+  ObDatabaseId get_database_key() const
   {
-    return ObTenantUserId(tenant_id_, user_id_);
+    return ObDatabaseId(database_id_);
   }
-  ObTenantDatabaseId get_database_key() const
+  ObTableId get_table_key() const
   {
-    return ObTenantDatabaseId(tenant_id_, database_id_);
+    return ObTableId(table_id_);
   }
-  ObTenantTablegroupId get_tablegroup_key() const
+  ObOutlineId get_outline_key() const
   {
-    return ObTenantTablegroupId(tenant_id_, tablegroup_id_);
+    return ObOutlineId(outline_id_);
   }
-  ObTenantTableId get_table_key() const
+  ObRoutineId get_routine_key() const
   {
-    return ObTenantTableId(tenant_id_, table_id_);
+    return ObRoutineId(routine_id_);
   }
-  ObTenantOutlineId get_outline_key() const
+  ObPackageId get_package_key() const
   {
-    return ObTenantOutlineId(tenant_id_, outline_id_);
+    return ObPackageId(package_id_);
   }
-  ObTenantRoutineId get_routine_key() const
+  ObTriggerId get_trigger_key() const
   {
-    return ObTenantRoutineId(tenant_id_, routine_id_);
-  }
-  ObTenantPackageId get_package_key() const
-  {
-    return ObTenantPackageId(tenant_id_, package_id_);
-  }
-  ObTenantTriggerId get_trigger_key() const
-  {
-    return ObTenantTriggerId(tenant_id_, trigger_id_);
-  }
-  ObTenantSequenceId get_sequence_key() const
-  {
-    return ObTenantSequenceId(tenant_id_, sequence_id_);
+    return ObTriggerId(trigger_id_);
   }
   ObOriginalDBKey get_db_priv_key() const
   {
-    return ObOriginalDBKey(tenant_id_, user_id_, database_name_);
+    return ObOriginalDBKey(user_id_, database_name_);
   }
   ObTablePrivSortKey get_table_priv_key() const
   {
-    return ObTablePrivSortKey(tenant_id_, user_id_, database_name_, table_name_);
+    return ObTablePrivSortKey(user_id_, database_name_, table_name_);
   }
   ObRoutinePrivSortKey get_routine_priv_key() const
   {
-    return ObRoutinePrivSortKey(tenant_id_, user_id_, database_name_, routine_name_, obj_type_);
+    return ObRoutinePrivSortKey(user_id_, database_name_, routine_name_, obj_type_);
   }
   ObObjMysqlPrivSortKey get_obj_mysql_priv_key() const
   {
-    return ObObjMysqlPrivSortKey(tenant_id_, user_id_, obj_name_, obj_type_);
-  }
-  ObTenantLocationId get_location_key() const
-  {
-    return ObTenantLocationId(tenant_id_, location_id_);
-  }
-  ObTenantUDFId get_udf_key() const
-  {
-    return ObTenantUDFId(tenant_id_, udf_name_);
+    return ObObjMysqlPrivSortKey(user_id_, obj_name_, obj_type_);
   }
   uint64_t get_sys_variable_key() const
   {
-    return tenant_id_;
+    return 1;
   }
   ObSysPrivKey get_sys_priv_key() const
   {
-    return ObSysPrivKey(tenant_id_, grantee_id_);
+    return ObSysPrivKey(grantee_id_);
   }
   ObObjPrivSortKey get_obj_priv_key() const
   {
-    return ObObjPrivSortKey(tenant_id_, 
-                            table_id_, 
+    return ObObjPrivSortKey(table_id_, 
                             obj_type_,
                             col_id_,
                             grantor_id_,
                             grantee_id_);
   }
-  ObTenantDirectoryId get_directory_key() const
-  {
-    return ObTenantDirectoryId(tenant_id_, directory_id_);
-  }
-  ObContextKey get_context_key() const
-  {
-    return ObContextKey(tenant_id_, context_id_);
-  }
   ObMockFKParentTableKey get_mock_fk_parent_table_key() const
   {
-    return ObMockFKParentTableKey(tenant_id_, mock_fk_parent_table_id_);
+    return ObMockFKParentTableKey(mock_fk_parent_table_id_);
   }
   ObColumnPrivIdKey get_column_priv_key() const
   {
-    return ObColumnPrivIdKey(tenant_id_, column_priv_id_);
+    return ObColumnPrivIdKey(column_priv_id_);
   }
-  ObTenantCatalogId get_catalog_key() const
+  ObAiModelId get_ai_model_key() const
   {
-    return ObTenantCatalogId(tenant_id_, catalog_id_);
-  }
-  ObCatalogPrivSortKey get_catalog_priv_key() const
-  {
-    return ObCatalogPrivSortKey(tenant_id_, user_id_, catalog_name_);
-  }
-  ObTenantCCLRuleId get_ccl_rule_key() const
-  {
-    return ObTenantCCLRuleId(tenant_id_, ccl_rule_id_);
-  }
-  ObTenantAiModelId get_ai_model_key() const
-  {
-    return ObTenantAiModelId(tenant_id_, ai_model_id_);
+    return ObAiModelId(ai_model_id_);
   }
 };
 
@@ -281,28 +209,22 @@ struct VersionHisKey
 {
   VersionHisKey()
     : schema_type_(OB_MAX_SCHEMA),
-      tenant_id_(common::OB_INVALID_TENANT_ID),
       schema_id_(common::OB_INVALID_ID)
   {}
-  // tenant_id should be OB_SYS_TENANT_ID when schema_type is TENANT_SCHEMA.
   VersionHisKey(const ObSchemaType schema_type,
-                const uint64_t tenant_id,
                 const uint64_t schema_id)
     : schema_type_(schema_type),
-      tenant_id_(tenant_id),
       schema_id_(schema_id)
   {}
   inline bool operator==(const VersionHisKey &other) const
   {
     return schema_type_ == other.schema_type_
-           && tenant_id_ == other.tenant_id_
            && schema_id_ == other.schema_id_;
   }
   inline uint64_t hash() const
   {
     uint64_t hash_code = 0;
     hash_code = common::murmurhash(&schema_type_, sizeof(schema_type_), hash_code);
-    hash_code = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_code);
     hash_code = common::murmurhash(&schema_id_, sizeof(schema_id_), hash_code);
     return hash_code;
   }
@@ -310,13 +232,12 @@ struct VersionHisKey
   inline bool is_valid() const
   {
     return OB_MAX_SCHEMA != schema_type_
-           && common::OB_INVALID_TENANT_ID != tenant_id_
            && common::OB_INVALID_ID != schema_id_;
   }
   ObSchemaType schema_type_;
-  uint64_t tenant_id_;
+  
   int64_t schema_id_;
-  TO_STRING_KV(K_(schema_type), K_(tenant_id), K_(schema_id));
+  TO_STRING_KV(K_(schema_type), K_(schema_id));
 };
 const static int MAX_CACHED_VERSION_CNT = 16;
 struct VersionHisVal
@@ -393,9 +314,7 @@ public:
         return a.SCHEMA##_id_ == b.SCHEMA##_id_; \
       }                             \
     };
-  SCHEMA_KEY_FUNC(tenant);
   SCHEMA_KEY_FUNC(user);
-  SCHEMA_KEY_FUNC(tablegroup);
   SCHEMA_KEY_FUNC(database);
   SCHEMA_KEY_FUNC(table);
   SCHEMA_KEY_FUNC(outline);
@@ -403,63 +322,14 @@ public:
   SCHEMA_KEY_FUNC(routine);
   SCHEMA_KEY_FUNC(trigger);
   SCHEMA_KEY_FUNC(udt);
-  SCHEMA_KEY_FUNC(sequence);
-  SCHEMA_KEY_FUNC(dblink);
-  SCHEMA_KEY_FUNC(directory);
-  SCHEMA_KEY_FUNC(location);
-  SCHEMA_KEY_FUNC(catalog);
-  SCHEMA_KEY_FUNC(ccl_rule);
   SCHEMA_KEY_FUNC(ai_model);
   #undef SCHEMA_KEY_FUNC
-
-  struct udf_key_hash_func {
-    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const {
-      hash_code = common::murmurhash(schema_key.udf_name_.ptr(), schema_key.udf_name_.length(), 0);
-      return OB_SUCCESS;
-    }
-  };
-
-  struct udf_key_equal_to {
-    bool operator()(const SchemaKey &a, const SchemaKey &b) const {
-      return a.udf_name_ == b.udf_name_;
-    }
-  };
-
-  struct catalog_priv_key_hash_func
-  {
-    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
-    {
-      hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
-      hash_code = common::murmurhash(&schema_key.user_id_,
-                                     sizeof(schema_key.user_id_),
-                                     hash_code);
-      hash_code = common::murmurhash(schema_key.catalog_name_.ptr(),
-                                     schema_key.catalog_name_.length(),
-                                     hash_code);
-      return OB_SUCCESS;
-    }
-  };
-  struct catalog_priv_key_equal_to
-  {
-    bool operator()(const SchemaKey &a, const SchemaKey &b) const
-    {
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.user_id_ == b.user_id_ &&
-          a.catalog_name_ == b.catalog_name_;
-    }
-  };
 
   struct db_priv_hash_func
   {
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.user_id_,
                                      sizeof(schema_key.user_id_),
                                      hash_code);
@@ -473,8 +343,7 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.user_id_ == b.user_id_ &&
+      return a.user_id_ == b.user_id_ &&
           a.database_name_ == b.database_name_;
     }
   };
@@ -483,9 +352,6 @@ public:
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.user_id_,
                                      sizeof(schema_key.user_id_),
                                      hash_code);
@@ -502,8 +368,7 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.user_id_ == b.user_id_ &&
+      return a.user_id_ == b.user_id_ &&
           a.database_name_ == b.database_name_ &&
           a.table_name_ == b.table_name_;
     }
@@ -515,9 +380,6 @@ public:
     {
       common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.user_id_,
                                      sizeof(schema_key.user_id_),
                                      hash_code);
@@ -538,9 +400,8 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      ObCompareNameWithTenantID name_cmp(a.tenant_id_);
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.user_id_ == b.user_id_ &&
+      ObSchemaNameComparator name_cmp;
+      return a.user_id_ == b.user_id_ &&
           a.database_name_ == b.database_name_ &&
           0 == name_cmp.compare(a.routine_name_, b.routine_name_) &&
           a.obj_type_ == b.obj_type_;
@@ -552,9 +413,6 @@ public:
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.column_priv_id_,
                                      sizeof(schema_key.column_priv_id_),
                                      hash_code);
@@ -566,8 +424,7 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_ &&
-             a.column_priv_id_ == b.column_priv_id_;
+      return a.column_priv_id_ == b.column_priv_id_;
     }
   };
 
@@ -576,9 +433,6 @@ public:
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.table_id_,
                                      sizeof(schema_key.table_id_),
                                      hash_code);
@@ -601,7 +455,7 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_ 
+      return true 
           && a.table_id_ == b.table_id_ 
           && a.obj_type_ == b.obj_type_ 
           && a.col_id_ == b.col_id_ 
@@ -615,9 +469,6 @@ public:
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.user_id_,
                                      sizeof(schema_key.user_id_),
                                      hash_code);
@@ -634,22 +485,21 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.user_id_ == b.user_id_ &&
+      return a.user_id_ == b.user_id_ &&
           a.obj_name_ == b.obj_name_&&
           a.obj_type_ == b.obj_type_;
     }
   };
   struct sys_variable_key_hash_func {
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const {
-      hash_code = common::murmurhash(&schema_key.tenant_id_, sizeof(schema_key.tenant_id_), 0);
+      hash_code = 0;
       return OB_SUCCESS;
     }
   };
 
   struct sys_variable_key_equal_to {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const {
-      return a.tenant_id_ == b.tenant_id_;
+      return true;
     }
   };
   struct sys_priv_hash_func
@@ -657,9 +507,6 @@ public:
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.grantee_id_,
                                      sizeof(schema_key.grantee_id_),
                                      hash_code);
@@ -670,27 +517,7 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.grantee_id_ == b.grantee_id_ ;
-    }
-  };
-  struct context_key_hash_func
-  {
-    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
-    {
-      hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.context_id_,
-                                     sizeof(schema_key.context_id_),
-                                     hash_code);
-      return OB_SUCCESS;
-    }
-  };
-  struct context_key_equal_to
-  {
-    bool operator()(const SchemaKey &a, const SchemaKey &b) const
-    {
-      return a.tenant_id_ == b.tenant_id_ &&
-          a.context_id_ == b.context_id_ ;
+      return a.grantee_id_ == b.grantee_id_ ;
     }
   };
   struct mock_fk_parent_table_key_hash_func
@@ -698,9 +525,6 @@ public:
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
       hash_code = 0;
-      hash_code = common::murmurhash(&schema_key.tenant_id_,
-                                     sizeof(schema_key.tenant_id_),
-                                     hash_code);
       hash_code = common::murmurhash(&schema_key.database_id_,
                                      sizeof(schema_key.database_id_),
                                      hash_code);
@@ -714,7 +538,7 @@ public:
   {
     bool operator()(const SchemaKey &a, const SchemaKey &b) const
     {
-      return a.tenant_id_ == b.tenant_id_
+      return true
              && a.database_id_ == b.database_id_
              && a.mock_fk_parent_table_id_ == b.mock_fk_parent_table_id_;
     }
@@ -722,26 +546,16 @@ public:
   #define SCHEMA_KEYS_DEF(SCHEMA, SCHEMA_KEYS)                               \
     typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode, \
         SCHEMA##_key_hash_func, SCHEMA##_key_equal_to> SCHEMA_KEYS;
-  SCHEMA_KEYS_DEF(tenant, TenantKeys);
   SCHEMA_KEYS_DEF(user, UserKeys);
   SCHEMA_KEYS_DEF(database, DatabaseKeys);
-  SCHEMA_KEYS_DEF(tablegroup, TablegroupKeys);
   SCHEMA_KEYS_DEF(table, TableKeys);
   SCHEMA_KEYS_DEF(outline, OutlineKeys);
   SCHEMA_KEYS_DEF(routine, RoutineKeys);
   SCHEMA_KEYS_DEF(package, PackageKeys);
   SCHEMA_KEYS_DEF(trigger, TriggerKeys);
-  SCHEMA_KEYS_DEF(udf, UdfKeys);
   SCHEMA_KEYS_DEF(udt, UDTKeys);
-  SCHEMA_KEYS_DEF(sequence, SequenceKeys);
   SCHEMA_KEYS_DEF(sys_variable, SysVariableKeys);
-  SCHEMA_KEYS_DEF(directory, DirectoryKeys);
-  SCHEMA_KEYS_DEF(location, LocationKeys);
-  SCHEMA_KEYS_DEF(context, ContextKeys);
   SCHEMA_KEYS_DEF(mock_fk_parent_table, MockFKParentTableKeys);
-  SCHEMA_KEYS_DEF(catalog, CatalogKeys);
-  SCHEMA_KEYS_DEF(catalog_priv, CatalogPrivKeys);
-  SCHEMA_KEYS_DEF(ccl_rule, CCLRuleKeys);
   SCHEMA_KEYS_DEF(ai_model, AiModelKeys);
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -761,19 +575,12 @@ public:
 
   struct AllSchemaKeys
   {
-    // tenant
-    TenantKeys new_tenant_keys_;
-    TenantKeys alter_tenant_keys_;
-    TenantKeys del_tenant_keys_;
     // user
     UserKeys new_user_keys_;
     UserKeys del_user_keys_;
     // database
     DatabaseKeys new_database_keys_;
     DatabaseKeys del_database_keys_;
-    // tablegroup
-    TablegroupKeys new_tablegroup_keys_;
-    TablegroupKeys del_tablegroup_keys_;
     // table
     TableKeys new_table_keys_;
     TableKeys del_table_keys_;
@@ -803,22 +610,12 @@ public:
     ColumnPrivKeys del_column_priv_keys_;
     // virtual table or sys view
     common::ObArray<uint64_t> non_sys_table_ids_;
-    // udf
-    UdfKeys new_udf_keys_;
-    UdfKeys del_udf_keys_;
     // udt
     UDTKeys new_udt_keys_;
     UDTKeys del_udt_keys_;
-    // sequence
-    SequenceKeys new_sequence_keys_;
-    SequenceKeys del_sequence_keys_;
     // sys_variable
     SysVariableKeys new_sys_variable_keys_;
     SysVariableKeys del_sys_variable_keys_;
-    //drop tenant info
-    TenantKeys add_drop_tenant_keys_;
-    TenantKeys del_drop_tenant_keys_;
-
     // sys_priv
     SysPrivKeys new_sys_priv_keys_;
     SysPrivKeys del_sys_priv_keys_;
@@ -827,33 +624,13 @@ public:
     ObjPrivKeys new_obj_priv_keys_;
     ObjPrivKeys del_obj_priv_keys_;
 
-    // directory
-    DirectoryKeys new_directory_keys_;
-    DirectoryKeys del_directory_keys_;
     // obj_mysql_priv
     ObjMysqlPrivKeys new_obj_mysql_priv_keys_;
     ObjMysqlPrivKeys del_obj_mysql_priv_keys_;
-    // location
-    LocationKeys new_location_keys_;
-    LocationKeys del_location_keys_;
-
-    // context
-    ContextKeys new_context_keys_;
-    ContextKeys del_context_keys_;
 
     // mock_fk_parent_table
     MockFKParentTableKeys new_mock_fk_parent_table_keys_;
     MockFKParentTableKeys del_mock_fk_parent_table_keys_;
-
-    // catalog
-    CatalogKeys new_catalog_keys_;
-    CatalogKeys del_catalog_keys_;
-    CatalogPrivKeys new_catalog_priv_keys_;
-    CatalogPrivKeys del_catalog_priv_keys_;
-
-    //ccl_rule
-    CCLRuleKeys new_ccl_rule_keys_;
-    CCLRuleKeys del_ccl_rule_keys_;
 
     // ai model
     AiModelKeys new_ai_model_keys_;
@@ -861,29 +638,18 @@ public:
 
     int create(int64_t bucket_size);
 
-    bool need_fetch_schemas_for_data_dict() const {
-      return new_tenant_keys_.size() > 0
-             || alter_tenant_keys_.size() > 0
-             || new_table_keys_.size() > 0
-             || new_database_keys_.size() > 0;
-    }
   };
 
   struct AllSimpleIncrementSchema
   {
-    common::ObArray<ObSimpleTenantSchema> simple_tenant_schemas_; //new tenant
-    common::ObArray<ObSimpleTenantSchema> alter_tenant_schemas_;
+    common::ObArray<ObSimpleServerRuntimeSchema> simple_runtime_schemas_;
     common::ObArray<ObSimpleDatabaseSchema> simple_database_schemas_;
     common::ObArray<ObSimpleTableSchemaV2 *> simple_table_schemas_;
-    common::ObArray<ObSimpleTablegroupSchema> simple_tablegroup_schemas_;
     common::ObArray<ObSimpleOutlineSchema> simple_outline_schemas_;
     common::ObArray<ObSimpleRoutineSchema> simple_routine_schemas_;
     common::ObArray<ObSimplePackageSchema> simple_package_schemas_;
     common::ObArray<ObSimpleTriggerSchema> simple_trigger_schemas_;
-    common::ObArray<ObSimpleUDFSchema> simple_udf_schemas_;
-    common::ObArray<ObSequenceSchema> simple_sequence_schemas_;
     common::ObArray<ObSimpleUserSchema> simple_user_schemas_;
-    common::ObArray<ObCatalogPriv> simple_catalog_priv_schemas_;
     common::ObArray<ObDBPriv> simple_db_priv_schemas_;
     common::ObArray<ObTablePriv> simple_table_priv_schemas_;
     common::ObArray<ObRoutinePriv> simple_routine_priv_schemas_;
@@ -892,12 +658,7 @@ public:
     common::ObArray<ObSysPriv> simple_sys_priv_schemas_;
     common::ObArray<ObObjPriv> simple_obj_priv_schemas_;
     common::ObArray<ObObjMysqlPriv> simple_obj_mysql_priv_schemas_;
-    common::ObArray<ObDirectorySchema> simple_directory_schemas_;
-    common::ObArray<ObLocationSchema> simple_location_schemas_;
-    common::ObArray<ObContextSchema> simple_context_schemas_;
     common::ObArray<ObSimpleMockFKParentTableSchema> simple_mock_fk_parent_table_schemas_;
-    common::ObArray<ObCatalogSchema> simple_catalog_schemas_;
-    common::ObArray<ObSimpleCCLRuleSchema> simple_ccl_rule_schemas_;
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArray<ObAiModelSchema> simple_ai_model_schemas_;
     common::ObArenaAllocator allocator_;
@@ -905,18 +666,24 @@ public:
 
 public:
   int init(common::ObMySQLProxy *sql_proxy,
-           const common::ObCommonConfig *config);
+           const common::ObCommonConfig *config,
+           ObSchemaStatusProxy &schema_status_proxy,
+           const ObServiceStatus &service_status,
+           bool &in_bootstrap,
+           ObSchemaService &schema_backend);
   explicit ObServerSchemaService();
   virtual ~ObServerSchemaService();
   //get full schema instead of using patch, we call this automatically and do not expect user to
   //call this(if you really need this , use friend class, such as chunkserver)
   //construct core schema from hard code
-  int fill_all_core_table_schema(const uint64_t tenant_id, ObSchemaMgr &schema_mgr_for_cache);
-  virtual int get_tenant_schema_version(const uint64_t tenant_id, int64_t &schema_version);
+  int fill_all_core_table_schema(ObSchemaMgr &schema_mgr_for_cache);
+  virtual int get_runtime_schema_version(int64_t &schema_version);
   int64_t get_table_count() const;
   //the schema service should be thread safe
   ObSchemaService *get_schema_service(void) const;
   common::ObMySQLProxy *get_sql_proxy(void) const { return sql_proxy_; }
+  ObSchemaStatusProxy *get_schema_status_proxy() const { return schema_status_proxy_; }
+  bool is_in_bootstrap() const { return nullptr != in_bootstrap_ && *in_bootstrap_; }
   void dump_schema_manager() const;
 
   // public utils
@@ -932,18 +699,6 @@ public:
 
   int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
 
-  // Fetch increments schemas in DDL trans. This interface won't return the following increment schemas:
-  // 1. schema which is dropped in DDL trans.
-  // 2. changed inner tables.
-  int get_increment_schemas_for_data_dict(
-      common::ObMySQLTransaction &trans,
-      const uint64_t tenant_id,
-      const int64_t start_version,
-      common::ObIAllocator &allocator,
-      common::ObIArray<const ObTenantSchema *> &tenant_schemas,
-      common::ObIArray<const ObDatabaseSchema *> &database_schemas,
-      common::ObIArray<const ObTableSchema *> &table_schemas);
-
 protected:
   bool check_inner_stat() const;
   int check_stop() const;
@@ -955,19 +710,18 @@ protected:
   int refresh_schema(const ObRefreshSchemaStatus &schema_status,
                      common::ObIArray<share::schema::ObTableSchema> *table_schemas = nullptr);
 
-  virtual int publish_schema(const uint64_t tenant_id) = 0;
-  virtual int init_multi_version_schema_struct(const uint64_t tenant_id) = 0;
+  virtual int publish_schema() = 0;
+  virtual int init_multi_version_schema_struct() = 0;
 
-  int init_schema_struct(const uint64_t tenant_id);
-  int init_tenant_basic_schema(const uint64_t tenant_id);
+  int init_schema_struct();
+  int init_runtime_basic_schema();
 
-  int destroy_schema_struct(uint64_t tenant_id);
+  int destroy_schema_struct();
 
   bool need_construct_aux_infos_(const ObTableSchema &table_schema);
   int construct_aux_infos_(
       common::ObISQLClient &sql_client,
       const share::schema::ObRefreshSchemaStatus &schema_status,
-      const uint64_t tenant_id,
       ObTableSchema &table_schema);
 private:
   virtual int destroy();
@@ -1011,9 +765,7 @@ private:
   int refresh_increment_schema(const ObRefreshSchemaStatus &schema_status);
   int refresh_full_schema(const ObRefreshSchemaStatus &schema_status,
                          common::ObIArray<share::schema::ObTableSchema> *table_schemas = nullptr);
-  int check_need_refresh_increment_sys_schema_(
-      const uint64_t tenant_id,
-      ObISQLClient &sql_client,
+  int check_need_refresh_increment_sys_schema_(ObISQLClient &sql_client,
       const int64_t &local_schema_version,
       int64_t &core_schema_version,
       bool &core_schema_change,
@@ -1036,7 +788,7 @@ private:
       const int64_t &schema_version_in_inner_table,
       const int64_t &local_schema_version,
       ObSchemaMgr *&schema_mgr_for_cache);
-  int refresh_tenant_full_normal_schema(
+  int refresh_runtime_full_schema(
       common::ObISQLClient &sql_client,
       const ObRefreshSchemaStatus &schema_status,
       const int64_t schema_version,
@@ -1053,71 +805,49 @@ private:
   int get_increment_##SCHEMA##_keys_reversely(const ObSchemaMgr &schema_guard,  \
                                               const ObSchemaOperation &schema_operation, \
                                               AllSchemaKeys &schema_ids);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(tenant);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(user);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(database);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(tablegroup);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(table);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(outline);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(db_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(table_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(column_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(synonym);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(package);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(trigger);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(udf);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(udt);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sequence);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sys_variable);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(sys_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(obj_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(obj_mysql_priv);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(dblink);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(directory);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(location);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(context);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(mock_fk_parent_table);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog);
-  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ccl_rule);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ai_model);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
 #define APPLY_SCHEMA_TO_CACHE(SCHEMA, SCHEMA_MGR) \
   int apply_##SCHEMA##_schema_to_cache( \
-      const uint64_t tenant_id, \
       const AllSchemaKeys &all_keys, \
       const AllSimpleIncrementSchema &simple_incre_schemas, \
       SCHEMA_MGR &schema_mgr);
-  APPLY_SCHEMA_TO_CACHE(tenant, ObSchemaMgr);
+  APPLY_SCHEMA_TO_CACHE(runtime, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(sys_variable, ObSysVariableMgr);
   APPLY_SCHEMA_TO_CACHE(user, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(database, ObSchemaMgr);
-  APPLY_SCHEMA_TO_CACHE(tablegroup, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(table, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(outline, ObOutlineMgr);
   APPLY_SCHEMA_TO_CACHE(routine, ObRoutineMgr);
   APPLY_SCHEMA_TO_CACHE(package, ObPackageMgr);
   APPLY_SCHEMA_TO_CACHE(trigger, ObTriggerMgr);
-  APPLY_SCHEMA_TO_CACHE(catalog_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(db_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(table_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(routine_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(column_priv, ObPrivMgr);
-  APPLY_SCHEMA_TO_CACHE(udf, ObUDFMgr);
-  APPLY_SCHEMA_TO_CACHE(sequence, ObSequenceMgr);
   APPLY_SCHEMA_TO_CACHE(sys_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(obj_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(obj_mysql_priv, ObPrivMgr);
-  APPLY_SCHEMA_TO_CACHE(directory, ObDirectoryMgr);
-  APPLY_SCHEMA_TO_CACHE(location, ObSchemaMgr);
-  APPLY_SCHEMA_TO_CACHE(context, ObContextMgr);
   APPLY_SCHEMA_TO_CACHE(mock_fk_parent_table, ObMockFKParentTableMgr);
-  APPLY_SCHEMA_TO_CACHE(catalog, ObSchemaMgr);
-  APPLY_SCHEMA_TO_CACHE(ccl_rule, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(ai_model, ObSchemaMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
@@ -1135,8 +865,6 @@ private:
                         ObSchemaMgr &schema_mgr,
                         const int64_t schema_version,
                         AllSchemaKeys &all_keys);
-  int add_tenant_schemas_to_cache(const TenantKeys &tenant_keys,
-                                  common::ObISQLClient &sql_client);
   int add_sys_variable_schemas_to_cache(
       const SysVariableKeys &sys_variable_keys,
       common::ObISQLClient &sql_client);
@@ -1184,32 +912,25 @@ private:
                                       const int64_t schema_version,
                                       const int64_t new_schema_version,
                                       bool &sys_schema_change);
-  int get_sys_table_ids(
-      const uint64_t tenant_id,
-      common::ObIArray<uint64_t> &table_ids) const;
-  int get_table_ids(const uint64_t tenant_id,
-                    const schema_create_func *schema_creators,
+  int get_sys_table_ids(common::ObIArray<uint64_t> &table_ids) const;
+  int get_table_ids(const schema_create_func *schema_creators,
                     common::ObIArray<uint64_t> &table_ids) const;
-  int add_sys_table_index_ids(const uint64_t tenant_id,
-                              common::ObIArray<uint64_t> &table_ids) const;
-  int add_sys_table_lob_aux_ids(const uint64_t tenant_id,
-                                common::ObIArray<uint64_t> &table_ids) const;
+  int add_sys_table_index_ids(common::ObIArray<uint64_t> &table_ids) const;
+  int add_sys_table_lob_aux_ids(common::ObIArray<uint64_t> &table_ids) const;
   int extract_non_sys_table_ids_(const TableKeys &keys, common::ObIArray<uint64_t> &non_sys_table_ids);
 protected:
   virtual int update_schema_cache(common::ObIArray<ObTableSchema*> &schema_array) = 0;
   virtual int update_schema_cache(common::ObIArray<ObTableSchema> &schema_array) = 0;
-  virtual int update_schema_cache(const common::ObIArray<ObTenantSchema> &schema_array) = 0;
+  virtual int update_schema_cache(const common::ObIArray<ObServerRuntimeSchema> &schema_array) = 0;
   virtual int update_schema_cache(const ObSysVariableSchema &schema) = 0;
   virtual int add_aux_schema_from_mgr(const ObSchemaMgr &mgr,
                                       ObTableSchema &table_schema,
                                       const ObTableType table_type) = 0;
-  int add_tenant_schema_to_cache(common::ObISQLClient &sql_client,
-                                 const uint64_t tenant_id,
+  int add_runtime_schema_to_cache(common::ObISQLClient &sql_client,
                                  const int64_t schema_version);
   int add_sys_variable_schema_to_cache(
       common::ObISQLClient &sql_client,
       const ObRefreshSchemaStatus &schema_status,
-      const uint64_t tenant_id,
       const int64_t schema_version);
   int convert_to_simple_schema(
       common::ObIAllocator &allocator,
@@ -1224,45 +945,9 @@ protected:
       ObSimpleTableSchemaV2 &simple_schema);
 
   template<typename SchemaKeys>
-  int del_operation(const uint64_t tenant_id, SchemaKeys &keys);
-
-  template<typename SchemaKeys>
   int convert_schema_keys_to_array(const SchemaKeys &key_set,
                                    common::ObIArray<SchemaKey> &key_array);
 
-  int del_tenant_operation(const uint64_t tenant_id,
-                           AllSchemaKeys &schema_keys,
-                           const bool new_flag);
-
-  /*-- data dict related --*/
-  int get_increment_schema_keys_for_data_dict_(
-      const ObSchemaService::SchemaOperationSetWithAlloc &schema_operations,
-      AllSchemaKeys &schema_keys);
-  int fetch_increment_schemas_for_data_dict_(
-      common::ObMySQLTransaction &trans,
-      common::ObIAllocator &allocator,
-      const uint64_t tenant_id,
-      const AllSchemaKeys &schema_keys,
-      common::ObIArray<const ObTenantSchema *> &tenant_schemas,
-      common::ObIArray<const ObDatabaseSchema *> &database_schemas,
-      common::ObIArray<const ObTableSchema *> &table_schemas);
-  int fetch_increment_tenant_schemas_for_data_dict_(
-      common::ObMySQLTransaction &trans,
-      common::ObIAllocator &allocator,
-      const AllSchemaKeys &schema_keys,
-      common::ObIArray<const ObTenantSchema *> &tenant_schemas);
-  int fetch_increment_database_schemas_for_data_dict_(
-      common::ObMySQLTransaction &trans,
-      common::ObIAllocator &allocator,
-      const uint64_t tenant_id,
-      const AllSchemaKeys &schema_keys,
-      common::ObIArray<const ObDatabaseSchema *> &database_schemas);
-  int fetch_increment_table_schemas_for_data_dict_(
-      common::ObMySQLTransaction &trans,
-      common::ObIAllocator &allocator,
-      const uint64_t tenant_id,
-      const AllSchemaKeys &schema_keys,
-      common::ObIArray<const ObTableSchema *> &table_schemas);
 protected:
   // core table count
   const static int64_t MIN_TABLE_COUNT = 1;
@@ -1271,10 +956,12 @@ protected:
   static const int64_t DEFAULT_FETCH_SCHEMA_TIMEOUT_US = 2 * 1000 * 1000; // 2s
   static const int64_t MAX_FETCH_SCHEMA_TIMEOUT_US = 60 * 1000 * 1000; // 60s
   common::SpinRWLock schema_manager_rwlock_;
-  mutable lib::ObMutex mem_mgr_for_liboblog_mutex_;
   ObSchemaService *schema_service_;
   common::ObMySQLProxy *sql_proxy_;
   const common::ObCommonConfig *config_;
+  ObSchemaStatusProxy *schema_status_proxy_;
+  const ObServiceStatus *service_status_;
+  bool *in_bootstrap_;
   const static int VERSION_HIS_MAP_BUCKET_NUM_MAX = 16 * 1024;
   const static int VERSION_HIS_MAP_BUCKET_NUM_MIN = 4 * 1024;
   common::hash::ObHashMap<VersionHisKey, VersionHisVal, common::hash::ReadWriteDefendMode> version_his_map_;
@@ -1284,40 +971,18 @@ private:
   // schema_version after bootstrap succeed, it's the min schema_version can be fallbacked
 
 protected:
-  // new schema management by tenant, need protected by lock
-  const static int TENANT_MAP_BUCKET_NUM = 10;
-  common::hash::ObHashMap<uint64_t, bool, common::hash::ReadWriteDefendMode> refresh_full_schema_map_;
-  common::hash::ObHashMap<uint64_t, ObSchemaMgr*, common::hash::ReadWriteDefendMode> schema_mgr_for_cache_map_;
-  common::hash::ObHashMap<uint64_t, ObSchemaMemMgr*, common::hash::ReadWriteDefendMode> mem_mgr_map_;
-  common::hash::ObHashMap<uint64_t, ObSchemaMemMgr*, common::hash::ReadWriteDefendMode> mem_mgr_for_liboblog_map_;
+  // Runtime schema state is protected by schema_manager_rwlock_.
+  bool refresh_full_schema_present_ = false;
+  bool refresh_full_schema_ = false;
+  // schema_mgr_for_cache_ is swapped live in switch_allocator_; keep store-release/load-acquire
+  // (reader-consistent swap) via ATOMIC_STORE/ATOMIC_LOAD instead of the hashmap bucket lock.
+  ObSchemaMgr* schema_mgr_for_cache_ = nullptr;
+  // The collapsed 1-entry map's bucket lock: serializes get_runtime_schema_version's load+deref
+  // against switch_allocator_'s swap so the old mgr cannot be freed mid-deref (UAF). Other
+  // readers used get_refactored (deref outside the bucket) originally and keep ATOMIC_LOAD.
+  common::SpinRWLock schema_mgr_for_cache_rwlock_;
+  ObSchemaMemMgr* mem_mgr_ = nullptr;
 };
-
-template<typename SchemaKeys>
-int ObServerSchemaService::del_operation(const uint64_t tenant_id, SchemaKeys &keys)
-{
-  int ret = common::OB_SUCCESS;
-  if (common::OB_INVALID_ID == tenant_id) {
-    ret = common::OB_INVALID_ARGUMENT;
-    SHARE_SCHEMA_LOG(WARN, "invalid tenant id", KR(ret), K(tenant_id));
-  }
-  common::ObArray<SchemaKey> to_remove;
-  for (typename SchemaKeys::const_iterator it = keys.begin();
-       OB_SUCC(ret) && it != keys.end(); ++it) {
-    if ((it->first).tenant_id_ == tenant_id) {
-      if (OB_FAIL(to_remove.push_back(it->first))) {
-        SHARE_SCHEMA_LOG(WARN, "push_back failed", KR(ret));
-      }
-    }
-  }
-  FOREACH_CNT_X(v, to_remove, OB_SUCC(ret)) {
-    int64_t hash_ret = keys.erase_refactored(*v);
-    if (common::OB_SUCCESS != hash_ret && common::OB_HASH_NOT_EXIST != hash_ret) {
-      ret = common::OB_ERR_UNEXPECTED;
-      SHARE_SCHEMA_LOG(WARN, "erase failed", "value", *v, KR(ret));
-    }
-  }
-  return ret;
-}
 
 template<typename SchemaKeys>
 int ObServerSchemaService::convert_schema_keys_to_array(
@@ -1330,7 +995,6 @@ int ObServerSchemaService::convert_schema_keys_to_array(
        OB_SUCC(ret) && it != key_set.end(); it++) {
     const SchemaKey &key = it->first;
     if (OB_FAIL(key_array.push_back(key))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to push back schema key", KR(ret), K(key));
     }
   }
   return ret;

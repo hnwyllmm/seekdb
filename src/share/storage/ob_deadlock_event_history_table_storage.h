@@ -18,7 +18,6 @@
 
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
-#include "lib/net/ob_addr.h"
 #include "share/storage/ob_sqlite_connection_pool.h"
 #include <functional>
 
@@ -29,9 +28,8 @@ namespace share
 
 struct ObDeadlockEventHistoryEntry
 {
-  int64_t tenant_id_;
+  
   uint64_t event_id_;
-  common::ObAddr svr_addr_;
   uint64_t detector_id_;
   int64_t report_time_;
   int64_t cycle_idx_;
@@ -52,9 +50,7 @@ struct ObDeadlockEventHistoryEntry
   common::ObString extra_value3_;
 
   ObDeadlockEventHistoryEntry()
-    : tenant_id_(0),
-      event_id_(0),
-      svr_addr_(),
+    : event_id_(0),
       detector_id_(0),
       report_time_(0),
       cycle_idx_(0),
@@ -76,9 +72,8 @@ struct ObDeadlockEventHistoryEntry
   {}
 
   void reset() {
-    tenant_id_ = 0;
+    
     event_id_ = 0;
-    svr_addr_.reset();
     detector_id_ = 0;
     report_time_ = 0;
     cycle_idx_ = 0;

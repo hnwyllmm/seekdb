@@ -66,7 +66,7 @@ int ObGlobalVariables::inner_get_next_row(ObNewRow *&row)
       for (int64_t i = 0; OB_SUCC(ret) && i < sys_variable_schema_->get_sysvar_count(); ++i) {
         const ObSysVarSchema *sysvar_schema = sys_variable_schema_->get_sysvar_schema(i);
         if (sysvar_schema != NULL) {
-          ObSysVarClassType var_id = ObSysVarFactory::find_sys_var_id_by_name(sysvar_schema->get_name(), true);
+          ObSysVarClassType var_id = share::ObSysVarMeta::find_sys_var_id_by_name(sysvar_schema->get_name(), true);
           ObBasicSysVar *sysvar = NULL;
           ObObj value;
           const common::ObDataTypeCastParams dtc_params
@@ -77,7 +77,6 @@ int ObGlobalVariables::inner_get_next_row(ObNewRow *&row)
             ret = COVER_SUCC(OB_ERR_UNEXPECTED);
             SERVER_LOG(WARN, "create system variable failed", K(ret), K(var_id));
           } else if (OB_FAIL(sysvar_schema->get_value(allocator_, dtc_params, value))) {
-            SERVER_LOG(WARN, "get value of sysvar schema failed", K(ret));
           } else {
             sysvar->set_value(value);
             sysvar->set_data_type(sysvar_schema->get_data_type());
@@ -89,10 +88,6 @@ int ObGlobalVariables::inner_get_next_row(ObNewRow *&row)
             //is invisible, skip it
           } else if (!sysvar->is_global_scope()) {
             //is global, skip it
-          } else if (sysvar->is_oracle_only() && !session_->is_oracle_compatible()) {
-            //is oracle only, skip it
-          } else if (sysvar->is_mysql_only() && session_->is_oracle_compatible()) {
-            //is mysql only, skip it
           } else {
             uint64_t cell_idx = 0;
             for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
@@ -107,7 +102,6 @@ int ObGlobalVariables::inner_get_next_row(ObNewRow *&row)
                 case OB_APP_MIN_COLUMN_ID + 1: {
                   //deal with read_only
                   if (sysvar->get_type() == SYS_VAR_READ_ONLY) {
-                    //replace with tenant schema
                     if (sys_variable_schema_->is_read_only()) {
                       cells[cell_idx].set_varchar("ON");
                     } else {
@@ -119,7 +113,6 @@ int ObGlobalVariables::inner_get_next_row(ObNewRow *&row)
                   } else {
                     ObString show_str;
                     if (OB_FAIL(sysvar->to_show_str(*allocator_, *session_, show_str))) {
-                      SERVER_LOG(WARN, "convert to show str failed", K(ret));
                     } else {
                       cells[cell_idx].set_varchar(show_str);
                     }

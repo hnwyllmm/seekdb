@@ -42,7 +42,7 @@ int ObExprRandstr::calc_result_type2(ObExprResType &type,
 	int ret = OB_SUCCESS;
 	len.set_calc_type(ObIntType);
   seed.set_calc_type(ObIntType);
-  if (lib::is_mysql_mode()) {
+  {
     int64_t mbmaxlen = 0;
     if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(
                 common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()), mbmaxlen))) {
@@ -57,12 +57,6 @@ int ObExprRandstr::calc_result_type2(ObExprResType &type,
       // otherwise create table as select would fail with randstr() function
       type.set_length(OB_MAX_VARCHAR_LENGTH / mbmaxlen);
     }
-  } else {
-    type.set_collation_type(type_ctx.get_coll_type());
-    type.set_collation_level(CS_LEVEL_IMPLICIT);
-    type.set_length_semantics(LS_CHAR);
-    type.set_type(ObVarcharType);
-    type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
   }
   type.set_collation_level(common::CS_LEVEL_IMPLICIT);
   type.set_collation_type(common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()));
@@ -79,9 +73,7 @@ int ObExprRandstr::calc_random_str(const ObExpr &expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected arg_cnt", K(ret), K(expr.arg_cnt_));
   } else if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("expr.eval_param_value failed", K(ret));
   } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
-    LOG_WARN("get max length failed", K(ret));
   } else {
     int64_t rand_res = 0;
     ObDatum &len = expr.locate_param_datum(ctx, 0);

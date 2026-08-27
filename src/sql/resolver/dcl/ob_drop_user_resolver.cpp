@@ -38,7 +38,6 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
   ParseNode * user_list_node = nullptr;
   ObDropUserStmt *drop_user_stmt = NULL;
   bool if_exists = false;
-  CHECK_COMPATIBILITY_MODE(params_.session_info_);
   if (OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Session info is not inited", K(ret));
@@ -62,7 +61,7 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
     }
   }
   if (OB_SUCC(ret)) {
-    // mysql mode and oracle mode in common
+    // Resolve the drop user statement after validating the parse tree.
     if (OB_ISNULL(drop_user_stmt = create_stmt<ObDropUserStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "Failed to create ObDropUserStmt", K(ret));
@@ -70,20 +69,18 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "user_list_node is null", K(ret));
     } else {
-      uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
+      
       // resolved user_list_node
       for (int i = 0; i < user_list_node->num_child_ && OB_SUCCESS == ret; ++i) {
         ObString user_name;
         ObString host_name;
         if (OB_FAIL(resolve_user_list_node(user_list_node->children_[i], top_node,
                                            user_name, host_name))) {
-          LOG_WARN("fail to resolve user list node", K(ret));
         } else if (OB_FAIL(drop_user_stmt->add_user(user_name, host_name))) {
-          LOG_WARN("Add user error", K(user_name), K(ret));
         }
       }
       if (OB_SUCC(ret)) {
-        drop_user_stmt->set_tenant_id(tenant_id);
+        
         drop_user_stmt->set_if_exists(if_exists);
       }
     }

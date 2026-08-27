@@ -37,7 +37,7 @@ ObStorageLogNopLog::~ObStorageLogNopLog()
   destroy();
 }
 
-int ObStorageLogNopLog::init(const int64_t tenant_id, const int64_t buffer_size)
+int ObStorageLogNopLog::init(const int64_t buffer_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -49,7 +49,7 @@ int ObStorageLogNopLog::init(const int64_t tenant_id, const int64_t buffer_size)
   } else {
     buffer_ = static_cast<char *>(ob_malloc_align(
         ObLogConstants::LOG_FILE_ALIGN_SIZE,
-        buffer_size, ObMemAttr(tenant_id, "SlogNopLog")));
+        buffer_size, ObMemAttr("SlogNopLog")));
     if (OB_ISNULL(buffer_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc nop log buffer", K(ret));
@@ -135,7 +135,6 @@ int64_t ObStorageLogNopLog::get_fixed_serialize_len(const int64_t used_len)
                           dummy_header.get_serialize_size();
   ret_len = ObStorageLogItem::get_align_padding_size(occupied_size,
       ObLogConstants::LOG_FILE_ALIGN_SIZE);
-  LOG_DEBUG("log data len", K(occupied_size));
   return ret_len;
 }
 } // namespace blocksstable

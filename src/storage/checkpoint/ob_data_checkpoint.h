@@ -95,7 +95,6 @@ public:
   // used for virtual table
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
-  int safe_to_destroy(bool &is_safe_destroy);
   ObCheckpointDList* get_checkpoint_list(const ObFreezeCheckpointLocation &location)
   {
     ObCheckpointDList *ret = NULL;
@@ -122,7 +121,7 @@ public:
   share::SCN get_active_rec_scn();
   // if min_rec_scn <= the input rec_scn
   // logstream freeze
-  int flush(share::SCN recycle_scn, int64_t trace_id, bool need_freeze = true);
+  int flush(share::SCN recycle_scn, bool need_freeze = true);
   // if min_rec_scn <= the input rec_scn
   // add ls_freeze task
   // logstream freeze optimization
@@ -147,9 +146,9 @@ public:
 
   bool is_empty();
 
-  static void set_tenant_freeze() { is_tenant_freeze_for_flush_ = true; }
-  static void reset_tenant_freeze() { is_tenant_freeze_for_flush_ = false; }
-  static bool is_tenant_freeze() { return is_tenant_freeze_for_flush_; }
+  static void set_global_freeze() { is_global_freeze_for_flush_ = true; }
+  static void reset_global_freeze() { is_global_freeze_for_flush_ = false; }
+  static bool is_global_freeze() { return is_global_freeze_for_flush_; }
 
   static void set_freeze_source(const ObFreezeSourceFlag source) { freeze_source_ = source; }
   static void reset_freeze_source() { freeze_source_ = ObFreezeSourceFlag::INVALID_SOURCE; }
@@ -186,7 +185,7 @@ private:
   void set_ls_freeze_finished_(bool is_finished);
   int get_need_flush_tablets_(const share::SCN recycle_scn,
                               common::ObIArray<ObTabletID> &flush_tablets);
-  int freeze_base_on_needs_(const int64_t trace_id, share::SCN recycle_scn);
+  int freeze_base_on_needs_(share::SCN recycle_scn);
   int decide_freeze_clock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
 
   static const int64_t LOOP_TRAVERSAL_INTERVAL_US = 1000L * 50;  // 50ms
@@ -223,7 +222,7 @@ private:
 
   bool ls_freeze_finished_;
 
-  static __thread bool is_tenant_freeze_for_flush_;
+  static __thread bool is_global_freeze_for_flush_;
   static __thread ObFreezeSourceFlag freeze_source_;
 };
 

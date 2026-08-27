@@ -42,13 +42,11 @@ EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
 #define OCEANBASE_SQL_OB_EXEC_STAT_H
-#include "lib/stat/ob_diagnose_info.h"
 #include "lib/wait_event/ob_wait_event.h"
-#include "lib/statistic_event/ob_stat_event.h"
+#include "share/scn.h"
 #include "lib/net/ob_addr.h"
 #include "sql/ob_sql_define.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
-#include "lib/stat/ob_diagnostic_info.h"
 namespace oceanbase
 {
 namespace sql
@@ -76,43 +74,8 @@ struct ObExecRecord
 #undef EVENT_INFO
 
 
-#define EVENT_STAT_GET(event_stats_array, stat_no)              \
- ({                                                            \
-   int64_t ret = 0;                                            \
-   oceanbase::common::ObStatEventAddStat *stat = NULL;         \
-   if (NULL != (stat = event_stats_array.get(::oceanbase::common::stat_no))) { \
-     ret = stat->get_stat_value();                             \
-   }                                                           \
-   ret;                                                        \
- })
-
 #define RECORD(se) \
   do { \
-    oceanbase::common::ObDiagnosticInfo *diag_session_info = \
-        oceanbase::common::ObLocalDiagnosticInfo::get(); \
-    if (NULL != diag_session_info) { \
-      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats(); \
-      io_read_count_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT); \
-      block_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::BLOCK_CACHE_HIT); \
-      rpc_packet_out_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::RPC_PACKET_OUT);   \
-      row_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::ROW_CACHE_HIT);     \
-      bloom_filter_filts_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOOM_FILTER_FILTS);            \
-      memstore_read_row_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT);  \
-      ssstore_read_row_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT);    \
-      data_block_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::DATA_BLOCK_READ_CNT);          \
-      data_block_cache_hit_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::DATA_BLOCK_CACHE_HIT);        \
-      index_block_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::INDEX_BLOCK_READ_CNT);        \
-      index_block_cache_hit_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::INDEX_BLOCK_CACHE_HIT);      \
-      blockscan_block_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOCKSCAN_BLOCK_CNT);          \
-      blockscan_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOCKSCAN_ROW_CNT);              \
-      pushdown_storage_filter_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT); \
-      fuse_row_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT);             \
-      user_io_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                   \
-      application_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                     \
-      concurrency_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                     \
-      schedule_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SCHEDULE_WAIT_TIME);                 \
-      network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
-    } \
   } while(0);
 
   #define UPDATE_EVENT(event) \
@@ -155,30 +118,12 @@ struct ObExecRecord
     UPDATE_EVENT(network_wait_time);
   }
 
-  uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
-    oceanbase::common::ObDiagnosticInfo *diag_session_info =
-        (NULL != di) ? di : oceanbase::common::ObLocalDiagnosticInfo::get();
-    uint64_t cur_memstore_read_row_count = 0;
-    if (NULL != diag_session_info) {
-      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
-      cur_memstore_read_row_count = memstore_read_row_count_ +
-                                    (EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT)
-                                    - memstore_read_row_count_start_);
-    }
-    return cur_memstore_read_row_count;
+  uint64_t get_cur_memstore_read_row_count() {
+    return memstore_read_row_count_;
   }
 
-  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
-    oceanbase::common::ObDiagnosticInfo *diag_session_info =
-        (NULL != di) ? di : oceanbase::common::ObLocalDiagnosticInfo::get();
-    uint64_t cur_ssstore_read_row_count = 0;
-    if (NULL != diag_session_info) {
-      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
-      cur_ssstore_read_row_count = ssstore_read_row_count_ +
-                                   (EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT)
-                                   - ssstore_read_row_count_start_);
-    }
-    return cur_ssstore_read_row_count;
+  uint64_t get_cur_ssstore_read_row_count() {
+    return ssstore_read_row_count_;
   }
 };
 
@@ -317,18 +262,15 @@ struct ObAuditRecordData {
     ps_stmt_id_ = OB_INVALID_STMT_ID;
     ps_inner_stmt_id_ = OB_INVALID_STMT_ID;
     trans_id_ = 0;
-    request_type_ = EXECUTE_INVALID;
+    request_type_ = 0;
     is_batched_multi_stmt_ = false;
     plan_hash_ = 0;
     trx_lock_for_read_elapse_ = 0;
     params_value_len_ = 0;
-    partition_hit_ = true;
     is_perf_event_closed_ = false;
     pl_trace_id_.reset();
     stmt_type_ = sql::stmt::T_NONE;
     sql_memory_used_ = nullptr;
-    ccl_rule_id_ = 0;
-    ccl_match_time_ = 0;
   }
 
   int64_t get_elapsed_time() const
@@ -358,7 +300,7 @@ struct ObAuditRecordData {
 
   int64_t get_extra_size() const
   {
-    return sql_len_ + tenant_name_len_ + user_name_len_ + db_name_len_;
+    return sql_len_ + user_name_len_ + db_name_len_;
   }
 
   share::SCN get_snapshot_version() const
@@ -375,9 +317,8 @@ struct ObAuditRecordData {
   int status_; //error code
   common::ObCurTraceId::TraceId trace_id_;
   int64_t request_id_; //set by request_manager automatic when add record
-  int64_t execution_id_;  //used to jion v$sql_plan_monitor
+  int64_t execution_id_;
   uint64_t session_id_;
-  uint64_t proxy_session_id_;
   uint64_t qc_id_;  //px framework id
   int64_t dfo_id_;
   int64_t sqc_id_;
@@ -385,14 +326,12 @@ struct ObAuditRecordData {
   common::ObAddr server_addr_;
   common::ObAddr client_addr_;
   common::ObAddr user_client_addr_;
-  int64_t tenant_id_;
-  int64_t effective_tenant_id_;
-  char *tenant_name_;
-  int64_t tenant_name_len_;
+  
+  
   int64_t user_id_;
   char *user_name_;
   int64_t user_name_len_;
-  int user_group_; // user belongs to cgroup id, only main thread displays
+  int user_group_;
   uint64_t db_id_;
   char *db_name_;
   int64_t db_name_len_;
@@ -436,7 +375,6 @@ struct ObAuditRecordData {
   int64_t seq_num_; // sequence num, for sequencing stmts in transaction
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
   uint64_t txn_free_route_version_; // the version of txn's state
-  bool partition_hit_;// flag for need das partition route or not
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
@@ -449,12 +387,8 @@ struct ObAuditRecordData {
   int64_t *sql_memory_used_;
   int64_t plsql_compile_time_;
   int64_t insert_update_or_replace_duplicate_row_count_;
-  int64_t ccl_rule_id_;
-  int64_t ccl_match_time_;
 };
 
 } //namespace sql
 } //namespace oceanbase
 #endif
-
-

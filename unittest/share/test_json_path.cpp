@@ -16,7 +16,7 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "deps/oblib/src/lib/json_type/ob_json_base.h"
+#include "common/json_type/ob_json_base.h"
 #undef private
 
 using namespace oceanbase::common;
@@ -38,7 +38,7 @@ public:
   static void TearDownTestCase()
   {}
 
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestJsonPath);
 };
@@ -202,7 +202,7 @@ TEST_F(TestJsonPath, test_array_cell_node)
   ObJsonPath test_path("$[last-10]", &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -224,7 +224,7 @@ TEST_F(TestJsonPath, test_array_range_node)
   ObJsonPath test_path("$[1 to 10]", &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -246,7 +246,7 @@ TEST_F(TestJsonPath, test_multi_array_node)
   ObJsonPath test_path("$[last - 10, 1 to 10]", &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -276,7 +276,7 @@ TEST_F(TestJsonPath, test_filter_node)
   ObJsonPath test_path(str1, &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -309,7 +309,7 @@ TEST_F(TestJsonPath, test_filter_node)
 TEST_F(TestJsonPath, test_good_filter_to_string)
 {
   /*
-  The following are path expressions from the oracle documentation example
+  The following are path expressions from the SQL/JSON documentation example
   29. $.friends[3, 8 to 10, 12].cars[0]?(@.year > 2016)
   30. $.friends[3].cars[0]?(@.year.number() > 2016)
   31. $.friends[3].cars[0]?(@.year.numberOnly() > 2016)
@@ -393,7 +393,7 @@ TEST_F(TestJsonPath, test_good_filter_to_string)
   ObJsonPath test_path(str0, &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -569,7 +569,7 @@ TEST_F(TestJsonPath, test_bad_filter_to_string)
   ObJsonPath test_path(str, &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -602,7 +602,7 @@ TEST_F(TestJsonPath, test_func_node)
   ObJsonPath test_path("$.a.type()", &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -621,7 +621,7 @@ TEST_F(TestJsonPath, test_array_wildcard_node)
   ObJsonPath test_path("$[*]", &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -640,7 +640,7 @@ TEST_F(TestJsonPath, test_member_wildcard_node)
   test_path.is_mysql_ = false;
   ret = test_path.parse_path();
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   }
   ASSERT_EQ(OB_SUCCESS, ret);
   // There is only one node
@@ -656,7 +656,7 @@ TEST_F(TestJsonPath, test_member_node)
   ObJsonPath test_path(str_orgin, &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -675,7 +675,6 @@ TEST_F(TestJsonPath, test_member_node)
 TEST_F(TestJsonPath, test_ellipsis_node)
 {
   int ret = OB_SUCCESS;
-  set_compat_mode(oceanbase::lib::Worker::CompatMode::MYSQL);
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path("$**[10]", &allocator);
   ret = test_path.parse_path();
@@ -808,7 +807,7 @@ TEST_F(TestJsonPath, test_path_to_string)
   ObJsonPathBasicNode member_node(&allocator, name);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -893,7 +892,7 @@ TEST_F(TestJsonPath, test_random)
   ObJsonPath test_path(str_origin, &allocator);
   test_path.is_mysql_ = true;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -955,7 +954,7 @@ TEST_F(TestJsonPath, test_good_func_path)
   // Parse
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -1219,7 +1218,7 @@ TEST_F(TestJsonPath, test_bad_func_path)
   ObJsonPath test_path(str, &allocator);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -1236,7 +1235,7 @@ TEST_F(TestJsonPath, test_bad_func_path)
 
 // test good path
 // include parse and to_string
-TEST_F(TestJsonPath, test_oracle_good_path)
+TEST_F(TestJsonPath, test_sql_json_good_path)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
@@ -1255,7 +1254,7 @@ TEST_F(TestJsonPath, test_oracle_good_path)
   // Parse
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -1275,7 +1274,7 @@ TEST_F(TestJsonPath, test_oracle_good_path)
   ASSERT_EQ(str1, str3);
 }
 
-TEST_F(TestJsonPath, test_oracle_bad_path)
+TEST_F(TestJsonPath, test_sql_json_bad_path)
 {
   int ret = OB_SUCCESS;
   ObString str = "$[1,]";
@@ -1314,7 +1313,7 @@ TEST_F(TestJsonPath, test_good_path)
   // Parse
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
-    std::cout<<"oracle"<<std::endl;
+    std::cout<<"sql_json"<<std::endl;
   } else {
     std::cout<<"mysql"<<std::endl;
   }
@@ -1430,16 +1429,4 @@ TEST_F(TestJsonPath, test_pathcache_reset) {
   path_cache.reset();
   ASSERT_EQ(path_cache.path_stat_at(ok_path1_idx), ObPathParseStat::UNINITIALIZED);
   ASSERT_EQ(path_cache.size(), 0);
-}
-
-
-int main(int argc, char** argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  /*
-  system("rm -f test_json_path.log");
-  OB_LOGGER.set_file_name("test_json_path.log");
-  OB_LOGGER.set_log_level("INFO");
-  */
-  return RUN_ALL_TESTS();
 }

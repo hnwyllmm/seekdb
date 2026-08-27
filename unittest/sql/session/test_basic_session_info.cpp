@@ -18,7 +18,9 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "observer/ob_server.h"
+#include "sql/session/ob_sql_session_info.h"
+#undef protected
+#undef private
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -30,19 +32,17 @@ namespace sql
 
 TEST(test_basic_session_info, init_set_get)
 {
-  OBSERVER.init_schema();
-  OBSERVER.init_tz_info_mgr();
   common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
-  ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
+  ObBasicSessionInfo session_info;
   easy_connection_t conn;
   bool autocommit = false;
   bool is_valid  = false;
   ObArenaAllocator calc_buf(ObModIds::OB_SQL_SESSION);
-  ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, &allocator));
+  ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, &allocator));
   {
-    ObString tenant_name = ObString::make_string("yyy");
+    ObString runtime_name = ObString::make_string("yyy");
     ObString user_name = ObString::make_string("aaa");
-    session_info.init_tenant(tenant_name, 1);
+    ASSERT_EQ(OB_SUCCESS, session_info.set_runtime(runtime_name));
     session_info.set_user(user_name, OB_DEFAULT_HOST_NAME, 1);
     ObObj autocommit_obj, min_val, max_val;
     ObObj autocommit_type;
@@ -57,9 +57,9 @@ TEST(test_basic_session_info, init_set_get)
   }
   bool ac = true;
   ASSERT_EQ(OB_SUCCESS, session_info.get_autocommit(ac));
-  ObString tenant_name = ObString::make_string("yyy");
+  ObString runtime_name = ObString::make_string("yyy");
   ObString user_name = ObString::make_string("aaa");
-  ASSERT_EQ(tenant_name, session_info.get_tenant_name());
+  ASSERT_EQ(runtime_name, session_info.get_runtime_name());
   ASSERT_EQ(user_name, session_info.get_user_name());
   ASSERT_EQ(autocommit, ac);
   ASSERT_EQ(is_valid, ac);
@@ -70,19 +70,16 @@ TEST(test_basic_session_info, init_set_get)
   session_info.log_id_level_map_valid_ = true;
   ASSERT_EQ(&session_info.log_id_level_map_, session_info.get_log_id_level_map());
   ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
-  sleep(1);
 }
 
 TEST(test_basic_session_info, load_variables)
 {
   int ret = OB_SUCCESS;
-  OBSERVER.init_schema();
-  OBSERVER.init_tz_info_mgr();
   common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
   SMART_VAR(sql::ObSQLSessionInfo, session_info) {
     ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
     ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
-    ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, 0, &allocator));
+    ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, &allocator));
     if (OB_SUCCESS != (ret = ObPreProcessSysVars::change_initial_value())){
       LOG_ERROR("Change initial value failed !", K(ret));
     }
@@ -211,12 +208,4 @@ TEST(test_basic_session_info, load_variables)
 
 
 }
-}
-
-
-int main(int argc, char **argv)
-{
-  OB_LOGGER.set_log_level("WARN");
-  ::testing::InitGoogleTest(&argc,argv);
-  return RUN_ALL_TESTS();
 }

@@ -18,13 +18,14 @@
 
 #include "sql/monitor/ob_sql_stat_record.h"
 #include "sql/engine/ob_physical_plan.h"
-#include "lib/stat/ob_diagnose_info.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/atomic/ob_atomic.h"
 #include "sql/ob_sql_context.h"
 #include "lib/allocator/page_arena.h"   // ObArenaAllocator
 #include "lib/time/ob_tsc_timestamp.h"
-#include "observer/ob_server.h"
+#include "query/runtime/ob_query_runtime_environment.h"
+#include "query/plan_cache/ob_plan_cache_access_service.h"
+#include "share/ob_server_struct.h"
 
 using namespace oceanbase::common;
 
@@ -37,7 +38,6 @@ int ObSqlStatRecordKey::deep_copy(common::ObIAllocator &allocator, const ObILibC
   UNUSED(allocator);
   int ret = OB_SUCCESS;
   if (OB_FAIL(deep_copy(other))) {
-    LOG_WARN("failed to deep copy sql stat record key", K(ret));
   }
   return ret;
 }
@@ -85,7 +85,6 @@ int ObSqlStatInfo::init(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(key_.deep_copy(key))){
-    LOG_WARN("failed to assign sql stat key", K(ret));
   } else {
     sql_type_ = session_info.get_stmt_type();
     sql_cs_type_ = session_info.get_local_collation_connection();
@@ -144,7 +143,6 @@ int ObSqlStatInfo::assign(const ObSqlStatInfo& other)
   int ret = OB_SUCCESS;
   common::ObArenaAllocator no_use;
   if (OB_FAIL(key_.deep_copy(no_use , other.get_key()))){
-    LOG_WARN("failed to assign sql stat key", K(ret));
   } else {
     plan_id_ = other.get_plan_id();
     plan_type_ = other.get_plan_type();
@@ -162,7 +160,6 @@ int ObSqlStatInfo::assign(const ObSqlStatInfo& other)
 ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 {
   is_in_retry_ = false;
-  is_route_miss_ = false;
   is_plan_cache_hit_ = false;
 #define DEF_SQL_STAT_ITEM_INIT(def_name)           \
   def_name##_start_ = 0;                           \
@@ -188,37 +185,15 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 #undef DEF_SQL_STAT_ITEM_INIT
 }
 
-#define RECORD_ITEM(se, di)                                                                        \
+#define RECORD_ITEM(se, di, runtime_environment)                                                   \
   do {                                                                                             \
-    elapsed_time_##se##_ = rdtsc() * 1000 / OBSERVER.get_cpu_frequency_khz();                      \
-    if (OB_NOT_NULL(di)) {                                                                         \
-      ObStatEventAddStatArray &arr = di->get_add_stat_stats();                                     \
-      disk_reads_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                     \
-      buffer_gets_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::ROW_CACHE_HIT) * 2 +               \
-                            EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT) * 2 +          \
-                            EVENT_STAT_GET(arr, ObStatEventIds::BLOOM_FILTER_FILTS) * 2 +          \
-                            EVENT_STAT_GET(arr, ObStatEventIds::BLOCK_CACHE_HIT) +                 \
-                            disk_reads_##se##_;                                                    \
-      cpu_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SYS_TIME_MODEL_DB_CPU);               \
-      ccwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                           \
-      userio_wait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                \
-      apwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                           \
-      physical_read_requests_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);         \
-      physical_read_bytes_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_BYTES);            \
-      write_throttle_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::STORAGE_WRITING_THROTTLE_TIME); \
-      memstore_read_rows_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT);   \
-      minor_ssstore_read_rows_##se##_ =                                                            \
-          EVENT_STAT_GET(arr, ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT);                       \
-      major_ssstore_read_rows_##se##_ =                                                            \
-          EVENT_STAT_GET(arr, ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT);                       \
-      rpc_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::RPC_PACKET_OUT);                           \
-    }                                                                                              \
+    elapsed_time_##se##_ = rdtsc() * 1000 /                                                        \
+        query::query_cpu_frequency_khz(runtime_environment);                                       \
   } while (0);
 
 void ObExecutingSqlStatRecord::reset()
 {
   is_in_retry_ = false;
-  is_route_miss_ = false;
   is_plan_cache_hit_ = false;
 #define DEF_SQL_STAT_ITEM_INIT(def_name)           \
   def_name##_start_ = 0;                             \
@@ -247,7 +222,6 @@ void ObExecutingSqlStatRecord::reset()
 int ObExecutingSqlStatRecord::assign(const ObExecutingSqlStatRecord& other)
 {
   is_in_retry_ = other.get_is_in_retry();
-  is_route_miss_ = other.is_route_miss();
   is_plan_cache_hit_ = other.is_plan_cache_hit();
 #define DEF_SQL_STAT_ITEM_COPY(def_name)           \
   def_name##_start_ = other.def_name##_start_;     \
@@ -274,21 +248,22 @@ int ObExecutingSqlStatRecord::assign(const ObExecutingSqlStatRecord& other)
   return OB_SUCCESS;
 }
 
-int ObExecutingSqlStatRecord::record_sqlstat_start_value()
+int ObExecutingSqlStatRecord::record_sqlstat_start_value(
+    query::ObIQueryRuntimeEnvironment &runtime_environment)
 {
 
-  ObDiagnosticInfo *di_info = ObLocalDiagnosticInfo::get();
-  RECORD_ITEM(start, di_info);
+  RECORD_ITEM(start, nullptr, runtime_environment);
   return OB_SUCCESS;
 }
 
-int ObExecutingSqlStatRecord::record_sqlstat_end_value(ObDiagnoseSessionInfo* di /*= nullptr*/)
+int ObExecutingSqlStatRecord::record_sqlstat_end_value(
+    query::ObIQueryRuntimeEnvironment &runtime_environment,
+    ObDiagnoseSessionInfo* di /*= nullptr*/)
 {
   if (OB_NOT_NULL(di)) {
-    RECORD_ITEM(end, di);
+    RECORD_ITEM(end, di, runtime_environment);
   } else {
-    ObDiagnosticInfo *di_info = ObLocalDiagnosticInfo::get();
-    RECORD_ITEM(end, di_info);
+    RECORD_ITEM(end, nullptr, runtime_environment);
   }
   return OB_SUCCESS;
 }
@@ -297,32 +272,29 @@ int ObExecutingSqlStatRecord::record_sqlstat_end_value(ObDiagnoseSessionInfo* di
 
 int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
   ObSQLSessionInfo &session_info,
+  ObPlanCache &plan_cache,
+  query::ObIPlanCacheAccessService &access_service,
   ObString &cur_sql,
-  const ObPhysicalPlan *plan /*= nullptr*/,
-  const bool is_px_remote_exec /*= false*/)
+  const ObPhysicalPlan *plan /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   // 1. init key
   ObSqlStatRecordKey key;
   session_info.get_cur_sql_id(key.sql_id_, sizeof(key.sql_id_));
   key.set_plan_hash(plan== nullptr? session_info.get_current_plan_hash(): plan->get_plan_hash_value());
-  if (is_px_remote_exec) {
-    key.set_source_addr(session_info.get_peer_addr());
-  }
-  LOG_DEBUG("view sqlstat cache key and query_sql", K(ret), K(key), K(cur_sql));
 
   if (key.is_valid()) {
     if (OB_ISNULL(plan)) {
       ObCacheObjGuard guard;
-      guard.init(sql::CacheRefHandleID::SQL_STAT_NODE_HANDLE);
       bool is_use_cache = true;
-      if (OB_FAIL(ObSqlStatRecordUtil::get_cache_obj(key, guard))) {
+      if (OB_FAIL(ObSqlStatRecordUtil::get_cache_obj(
+          plan_cache, access_service, key, guard))) {
         if (ret == OB_SQL_PC_NOT_EXIST) {
           // not found, need create 
           ret =OB_SUCCESS;
           is_use_cache = false;
-          if (OB_FAIL(ObSqlStatRecordUtil::create_cache_obj(key, guard))) {
-            LOG_WARN("failed to create cache obj", K(ret));
+          if (OB_FAIL(ObSqlStatRecordUtil::create_cache_obj(
+              plan_cache, access_service, key, guard))) {
           }
         } else {
           LOG_WARN("failed to get cache obj", K(ret));
@@ -338,13 +310,11 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
           ObExecutedSqlStatRecord *sql_stat_value = cache_obj->get_record_value();
           if (!is_use_cache) {
             if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
-              LOG_WARN("failed to init sql stat info", K(ret));
             } 
           }
 
           if (OB_SUCC(ret)) {
             if (OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
-              LOG_WARN("sql_stat_value sum value failed", KR(ret));
             }
           }
         }
@@ -357,7 +327,6 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
       } else {
         if (!sql_stat_value->get_key().is_valid()) {
           if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
-            LOG_WARN("failed to init sql stat info", K(ret));
           } 
         }
 
@@ -368,49 +337,6 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
     }
   } else {
     LOG_WARN("the key is not valid which at plan cache mgr", KR(ret));
-  }
-  return ret;
-}
-
-
-int ObExecutingSqlStatRecord::move_to_sqlstat_cache(ObSqlStatRecordKey& key)
-{
-  int ret = OB_SUCCESS;
-  if (key.is_valid()) {
-    ObCacheObjGuard guard;
-    guard.init(sql::CacheRefHandleID::SQL_STAT_NODE_HANDLE);
-    bool is_use_cache = true;
-    if (OB_FAIL(ObSqlStatRecordUtil::get_cache_obj(key, guard))) {
-      if (ret == OB_SQL_PC_NOT_EXIST) {
-        // not found, need create 
-        ret =OB_SUCCESS;
-        is_use_cache = false;
-        if (OB_FAIL(ObSqlStatRecordUtil::create_cache_obj(key, guard))) {
-          LOG_WARN("failed to create cache obj", K(ret));
-        }
-      } else {
-        LOG_WARN("failed to get cache obj", K(ret));
-      }
-    }
-      
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(guard.get_cache_obj())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cache obj is NULL", KR(ret));
-      } else {
-        ObSqlStatRecordObj *cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj());
-        ObExecutedSqlStatRecord *sql_stat_value = cache_obj->get_record_value();
-        if (!is_use_cache) {
-          sql_stat_value->get_sql_stat_info().set_key(key);
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
-            LOG_WARN("sql_stat_value sum value failed", KR(ret));
-          }
-        }
-      }
-    }
   }
   return ret;
 }
@@ -440,7 +366,6 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutingSqlStatRecord& executing_
   (void)ATOMIC_AAF(&fetches_total_, executing_record.get_fetches_delta());
   (void)ATOMIC_AAF(&partition_total_, executing_record.get_partition_delta());
   (void)ATOMIC_AAF(&nested_sql_total_, executing_record.get_nested_sql_delta());
-  (void)ATOMIC_AAF(&route_miss_total_, executing_record.is_route_miss()? 1:0);
   (void)ATOMIC_AAF(&plan_cache_hit_total_, executing_record.is_plan_cache_hit());
   return OB_SUCCESS;
 }
@@ -469,14 +394,12 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutedSqlStatRecord& executed_re
   (void)ATOMIC_AAF(&fetches_total_, executed_record.get_fetches_total());
   (void)ATOMIC_AAF(&partition_total_, executed_record.get_partition_total());
   (void)ATOMIC_AAF(&nested_sql_total_, executed_record.get_nested_sql_total());
-  (void)ATOMIC_AAF(&route_miss_total_, executed_record.get_route_miss_total());
   return OB_SUCCESS;
 }
 int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sql_stat_info_.assign(other.get_sql_stat_info()))){
-    LOG_WARN("failed to assign sql stat info", K(ret));
   } else {
 #define DEF_ASSIGN_FUNC(def_name)                                           \
     def_name##_total_ = other.get_##def_name##_total();                     \
@@ -501,7 +424,6 @@ int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
     DEF_ASSIGN_FUNC(retry);
     DEF_ASSIGN_FUNC(partition);
     DEF_ASSIGN_FUNC(nested_sql);
-    DEF_ASSIGN_FUNC(route_miss);
     DEF_ASSIGN_FUNC(plan_cache_hit);
 #undef DEF_ASSIGN_FUNC
   }
@@ -535,7 +457,6 @@ int ObExecutedSqlStatRecord::reset()
     DEF_RESET_FUNC(retry);
     DEF_RESET_FUNC(partition);
     DEF_RESET_FUNC(nested_sql);
-    DEF_RESET_FUNC(route_miss);
     DEF_RESET_FUNC(plan_cache_hit);
 #undef DEF_RESET_FUNC
 
@@ -567,7 +488,6 @@ int ObExecutedSqlStatRecord::update_last_snap_record_value()
     DEF_UPDATE_LAST_SNAP_FUNC(retry);
     DEF_UPDATE_LAST_SNAP_FUNC(partition);
     DEF_UPDATE_LAST_SNAP_FUNC(nested_sql);
-    DEF_UPDATE_LAST_SNAP_FUNC(route_miss);
     DEF_UPDATE_LAST_SNAP_FUNC(plan_cache_hit);
   #undef DEF_UPDATE_LAST_SNAP_FUNC
   return ret;
@@ -606,19 +526,16 @@ int ObSqlStatRecordNode::inner_add_cache_obj(ObILibCacheCtx &ctx,
   return ret;
 }
 
-int ObSqlStatRecordUtil::get_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard& guard)
+int ObSqlStatRecordUtil::get_cache_obj(
+    ObPlanCache &plan_cache,
+    query::ObIPlanCacheAccessService &access_service,
+    ObSqlStatRecordKey &key,
+    ObCacheObjGuard &guard)
 {
   int ret = OB_SUCCESS;
   sql::ObILibCacheCtx cache_ctx;
-  ObPlanCache* lib_cache = nullptr;
-  observer::ObReqTimeGuard req_timeinfo_guard;
-  if (OB_ISNULL(GCTX.omt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get multi tenant from GCTX", K(ret));
-  } else if (OB_ISNULL(lib_cache = MTL(ObPlanCache*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get plan cache", K(ret));
-  } else if (OB_FAIL(lib_cache->get_cache_obj(cache_ctx, &key, guard))) {
+  query::ObPlanCacheAccessGuard req_timeinfo_guard(access_service);
+  if (OB_FAIL(plan_cache.get_cache_obj(cache_ctx, &key, guard))) {
     if (ret == OB_SQL_PC_NOT_EXIST) {
       LOG_INFO("sql stat record not found",K(ret), K(key));
     } else {
@@ -628,28 +545,22 @@ int ObSqlStatRecordUtil::get_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard&
   return ret;
 }
 
-int ObSqlStatRecordUtil::create_cache_obj(ObSqlStatRecordKey &key, ObCacheObjGuard& guard)
+int ObSqlStatRecordUtil::create_cache_obj(
+    ObPlanCache &plan_cache,
+    query::ObIPlanCacheAccessService &access_service,
+    ObSqlStatRecordKey &key,
+    ObCacheObjGuard &guard)
 {
   int ret = OB_SUCCESS;
   sql::ObILibCacheCtx cache_ctx;
-  ObPlanCache* lib_cache = nullptr;
   ObSqlStatRecordObj *cache_obj = nullptr;
-  observer::ObReqTimeGuard req_timeinfo_guard;
-  if (OB_ISNULL(GCTX.omt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get multi tenant from GCTX", K(ret));
-  } else if (OB_ISNULL(lib_cache = MTL(ObPlanCache*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get plan cache", K(ret));
-  } else if (OB_FAIL(ObCacheObjectFactory::alloc(guard,
-                                                 ObLibCacheNameSpace::NS_SQLSTAT,
-                                                 lib_cache->get_tenant_id()))) {
-    LOG_WARN("fail to alloc new cache obj", K(ret));
+  query::ObPlanCacheAccessGuard req_timeinfo_guard(access_service);
+  if (OB_FAIL(ObCacheObjectFactory::alloc(
+      plan_cache, guard, ObLibCacheNameSpace::NS_SQLSTAT))) {
   } else if (OB_ISNULL(cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get cache obj", K(ret));
-  } else if (OB_FAIL(lib_cache->add_cache_obj(cache_ctx, &key, cache_obj))) {
-    LOG_WARN( "fail to add cache obj to lib cache", K(ret), K(key));
+  } else if (OB_FAIL(plan_cache.add_cache_obj(cache_ctx, &key, cache_obj))) {
   }
   return ret;
 }

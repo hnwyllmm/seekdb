@@ -17,7 +17,7 @@
 #ifndef _OCEABASE_COMMON_OBSM_ROW_H_
 #define _OCEABASE_COMMON_OBSM_ROW_H_
 
-#include "lib/timezone/ob_time_convert.h"
+#include "common/timezone/ob_time_convert.h"
 #include "rpc/obmysql/ob_mysql_row.h"
 #include "common/row/ob_row.h"
 #include "common/ob_field.h"
@@ -36,7 +36,7 @@ class ObSchemaGetterGuard;
 namespace common
 {
 
-class ObSMRow
+class ObSMRow final
     : public obmysql::ObMySQLRow
 {
 public:
@@ -45,29 +45,28 @@ public:
           const ObDataTypeCastParams &dtc_params,
           const sql::ObSQLSessionInfo &session,
           const ColumnsFieldIArray *fields = NULL,
-          share::schema::ObSchemaGetterGuard *schema_guard = NULL,
-          uint64_t tenant = common::OB_INVALID_ID);
+          share::schema::ObSchemaGetterGuard *schema_guard = NULL);
 
   virtual ~ObSMRow() {}
 
+  int build_cell_value(int64_t idx, ObIAllocator &scratch_allocator,
+                       obmysql::ObMySQLCellValue &out) const override;
+  int get_packed_row_blob(const char *&data, int64_t &len) const override;
+
 protected:
-  virtual int64_t get_cells_cnt() const
+  int64_t get_cells_cnt() const override
   {
     return NULL == obrow_.projector_
         ? obrow_.count_
         : obrow_.projector_size_;
   }
-  virtual int encode_cell(
-      int64_t idx, char *buf,
-      int64_t len, int64_t &pos, char *bitmap) const;
 
 private:
   const ObNewRow &obrow_;
-  const ObDataTypeCastParams dtc_params_;
+  const ObDataTypeCastParams &dtc_params_;
   const sql::ObSQLSessionInfo &session_;
   const ColumnsFieldIArray *fields_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
-  uint64_t tenant_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ObSMRow);
 }; // end of class OBMP

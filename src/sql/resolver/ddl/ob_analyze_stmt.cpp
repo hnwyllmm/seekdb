@@ -16,7 +16,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_analyze_stmt.h"
-#include "pl/sys_package/ob_dbms_stats.h"
+#include "sql/pl/sys_package/ob_dbms_stats.h"
 
 namespace oceanbase
 {
@@ -57,24 +57,17 @@ int ObAnalyzeTableInfo::assign(const ObAnalyzeTableInfo &other)
   gather_subpart_hist_ = other.gather_subpart_hist_;
   is_sepcify_subpart_ = other.is_sepcify_subpart_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpartition_infos_.assign(other.subpartition_infos_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_group_params_.assign(other.column_group_params_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(all_partition_infos_.assign(other.all_partition_infos_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(all_subpartition_infos_.assign(other.all_subpartition_infos_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
   return ret;
 }
 
 ObAnalyzeStmt::ObAnalyzeStmt()
   : ObStmt(NULL, stmt::T_ANALYZE),
-    tenant_id_(common::OB_INVALID_ID),
     statistic_type_(InvalidStatistics),
     sample_info_(),
     parallel_degree_(1),
@@ -102,14 +95,12 @@ int ObAnalyzeStmt::fill_table_stat_params(ObExecContext &ctx, ObIArray<common::O
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(params.prepare_allocate(tables_.count()))) {
-    LOG_WARN("prepare allocate failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tables_.count(); ++i) {
-    params.at(i).tenant_id_ = tenant_id_;
+    
     params.at(i).sample_info_ = sample_info_;
     params.at(i).degree_ = parallel_degree_;
     if (OB_FAIL(tables_.at(i).fill_table_stat_param(ctx, params.at(i)))) {
-      LOG_WARN("fill table stat param failed", K(ret));
     }
   }
   return ret;
@@ -138,7 +129,7 @@ int ObAnalyzeTableInfo::fill_table_stat_param(ObExecContext &ctx, common::ObTabl
   OZ (param.all_subpart_infos_.assign(all_subpartition_infos_));
 
   if (OB_SUCC(ret)) {
-    //analyze stmt default use granularity is based partition type(oracle 12c),maybe refine it later
+    // Analyze stmt default granularity is based on partition type.
     param.global_stat_param_.need_modify_ = partition_name_.empty();
     param.part_stat_param_.need_modify_ = !partition_infos_.empty() && !is_sepcify_subpart_;
     param.subpart_stat_param_.need_modify_ = !subpartition_infos_.empty() && (partition_name_.empty() || is_sepcify_subpart_);
@@ -149,13 +140,8 @@ int ObAnalyzeTableInfo::fill_table_stat_param(ObExecContext &ctx, common::ObTabl
     if (param.part_stat_param_.need_modify_ && param.subpart_stat_param_.need_modify_) {
       param.part_stat_param_.can_use_approx_ = true;
     }
-    bool no_estimate_block = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
-    if (no_estimate_block) {
-      param.need_estimate_block_ = false;
-    }
   }
 
-  LOG_TRACE("link bug", K(param));
   return ret;
 }
 
@@ -187,13 +173,11 @@ int ObAnalyzeStmt::add_table(const ObString database_name,
 {
   int ret = OB_SUCCESS;
   ObAnalyzeTableInfo table;
-  if (is_mysql_mode()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables_.count(); ++i) {
-      if (tables_.at(i).get_table_id() == table_id
-          && tables_.at(i).get_database_id() == database_id) {
-        ret = OB_ERR_NONUNIQ_TABLE;
-        LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_name.length(), table_name.ptr());
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables_.count(); ++i) {
+    if (tables_.at(i).get_table_id() == table_id
+        && tables_.at(i).get_database_id() == database_id) {
+      ret = OB_ERR_NONUNIQ_TABLE;
+      LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_name.length(), table_name.ptr());
     }
   }
   if (OB_SUCC(ret)) {

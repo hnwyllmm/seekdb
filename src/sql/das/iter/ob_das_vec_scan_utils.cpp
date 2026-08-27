@@ -26,9 +26,7 @@ int ObDasVecScanUtils::set_lookup_key(ObRowkey &rowkey, ObTableScanParam &scan_p
   int ret = OB_SUCCESS;
   ObNewRange look_range;
   if (OB_FAIL(look_range.build_range(table_id, rowkey))) {
-    LOG_WARN("build lookup range failed", K(ret));
   } else if (OB_FAIL(scan_param.key_ranges_.push_back(look_range))) {
-    LOG_WARN("store lookup key range failed", K(ret));
   }
   return ret;
 }
@@ -37,7 +35,6 @@ int ObDasVecScanUtils::set_lookup_range(const ObNewRange &look_range, ObTableSca
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(scan_param.key_ranges_.push_back(look_range))) {
-    LOG_WARN("store lookup key range failed", K(ret));
   }
   return ret;
 }
@@ -77,13 +74,13 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
     case T_FUN_SYS_COSINE_DISTANCE:
       dis_type = ObExprVectorDistance::ObVecDisType::COSINE;
       break;
-    default:
+    default: 
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support vector sort expr", K(ret), K(expr.type_));
       break;
   }
 
-  if (OB_SUCC(ret) && ObExprVectorDistance::DisFunc<float>::distance_funcs[dis_type] == nullptr) {
+  if (OB_SUCC(ret) && ObExprVectorDistance::DisFunc<float>::distance_funcs[static_cast<int64_t>(dis_type)] == nullptr) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support dis_type", K(ret), K(dis_type));
   }
@@ -91,21 +88,21 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
   return ret;
 }
 
-int ObDasVecScanUtils::get_distance_threshold_hnsw(ObExpr &expr,
-                                                   float &similarity_threshold,
+int ObDasVecScanUtils::get_distance_threshold_hnsw(ObExpr &expr, 
+                                                   float &similarity_threshold, 
                                                    float &distance_threshold)
 {
   int ret = OB_SUCCESS;
 
   switch (expr.type_) {
-    case T_FUN_SYS_L2_DISTANCE:
+    case T_FUN_SYS_L2_DISTANCE: 
       // l2_similarity = 1 / (1 + l2_square_distance), vsag l2_distance is l2_square_distance
       distance_threshold = 1 / similarity_threshold - 1;
       break;
     // currently we don't support ip similarity
     // case T_FUN_SYS_INNER_PRODUCT:
-    // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
-
+    // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT: 
+    
     case T_FUN_SYS_COSINE_DISTANCE:
       // cosine_similarity = (1 + cosine) / 2, vsag cosine_distance = 1 - cosine
       distance_threshold = 2 - 2 * similarity_threshold;
@@ -121,13 +118,13 @@ int ObDasVecScanUtils::get_distance_threshold_hnsw(ObExpr &expr,
 int ObDasVecScanUtils::check_ivf_support_similarity_threshold(ObExpr &expr)
 {
   int ret = OB_SUCCESS;
-
+  
   switch (expr.type_) {
-    case T_FUN_SYS_L2_DISTANCE:
+    case T_FUN_SYS_L2_DISTANCE: 
       break;
     // currently we don't support ip similarity
     // case T_FUN_SYS_INNER_PRODUCT:
-    // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
+    // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT: 
     case T_FUN_SYS_COSINE_DISTANCE:
       break;
     default:
@@ -146,11 +143,13 @@ int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
   int ret = OB_SUCCESS;
 
   ObDatum *search_vec_datum = NULL;
-  if (OB_ISNULL(sort_rtdef) || OB_ISNULL(origin_vec)) {
+  const ObDatumAccessContext *access_ctx = nullptr;
+  if (OB_ISNULL(sort_rtdef) || OB_ISNULL(sort_rtdef->eval_ctx_)
+      || OB_ISNULL(origin_vec)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", K(ret), K(sort_rtdef), K(origin_vec));
   } else if (OB_FAIL(origin_vec->eval(*(sort_rtdef->eval_ctx_), search_vec_datum))) {
-    LOG_WARN("eval vec arg failed", K(ret));
+  } else if (OB_FAIL(sort_rtdef->eval_ctx_->get_datum_access_ctx(access_ctx))) {
   } else if (search_vec_datum->is_null()) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("search vector is null", K(ret));
@@ -158,12 +157,13 @@ int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
   } else if (0 == real_search_vec.length()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("search vector is empty string", K(ret));
-  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator,
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                                                               *access_ctx->lob_read_options_,
+                                                               &allocator,
                                                                ObLongTextType,
                                                                CS_TYPE_BINARY,
                                                                origin_vec->obj_meta_.has_lob_header(),
                                                                real_search_vec))) {
-    LOG_WARN("failed to get real data.", K(ret));
   } else if (OB_ISNULL(real_search_vec.ptr())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null pointer", K(ret), KP(real_search_vec.ptr()));
@@ -211,7 +211,6 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
     } else if (nullptr != sort_ctdef->limit_expr_) {
       ObDatum *limit_datum = nullptr;
       if (OB_FAIL(sort_ctdef->limit_expr_->eval(*sort_rtdef->eval_ctx_, limit_datum))) {
-        LOG_WARN("failed to eval limit expr", K(ret));
       } else if (limit_datum->is_null()) {
         is_null = true;
         limit_param.limit_ = 0;
@@ -223,7 +222,6 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
     if (OB_SUCC(ret) && !is_null && nullptr != sort_ctdef->offset_expr_) {
       ObDatum *offset_datum = nullptr;
       if (OB_FAIL(sort_ctdef->offset_expr_->eval(*sort_rtdef->eval_ctx_, offset_datum))) {
-        LOG_WARN("failed to eval offset expr", K(ret));
       } else if (offset_datum->is_null()) {
         limit_param.offset_ = 0;
       } else {
@@ -280,15 +278,12 @@ int ObDasVecScanUtils::init_sort_of_hybrid_index(ObIAllocator &allocator,
           LOG_WARN("semantic_distance expr args are not string type", K(ret), KPC(expr->args_[ARGS_IDX_ZERO]), KPC(expr->args_[ARGS_IDX_ONE]));
         } else if (FALSE_IT(query_str_expr = expr->args_[ARGS_IDX_ZERO]->is_const_expr() ? expr->args_[ARGS_IDX_ZERO] : expr->args_[ARGS_IDX_ONE])) {
         } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(allocator, sort_rtdef, query_str_expr, query_str))) {
-          LOG_WARN("failed to get real search vec", K(ret));
         } else {
           if (expr->is_semantic_vector_distance_expr()) {
             if (OB_FAIL(ObVectorIndexUtil::get_vector_from_vector_array_string(allocator, query_str, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
-              LOG_WARN("failed to get vector from query text", K(ret), KPC(expr));
             }
           } else {
             if (OB_FAIL(ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator, query_str, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
-              LOG_WARN("failed to get vector from query text", K(ret), KPC(expr));
             }
           }
         }
@@ -333,8 +328,7 @@ int ObDasVecScanUtils::init_sort(const ObDASVecAuxScanCtDef *ir_ctdef,
   return ret;
 }
 
-int ObDasVecScanUtils::reuse_iter(const share::ObLSID &ls_id,
-                                  ObDASScanIter *iter,
+int ObDasVecScanUtils::reuse_iter(ObDASScanIter *iter,
                                   ObTableScanParam &scan_param,
                                   const ObTabletID tablet_id)
 {
@@ -344,7 +338,6 @@ int ObDasVecScanUtils::reuse_iter(const share::ObLSID &ls_id,
   scan_param.need_switch_param_ =
       scan_param.need_switch_param_ || (scan_tablet_id.is_valid() && (tablet_id != scan_tablet_id));
   scan_param.tablet_id_ = tablet_id;
-  scan_param.ls_id_ = ls_id;
 
   if (OB_NOT_NULL(iter) && OB_FAIL(iter->reuse())) {
     LOG_WARN("reuse iter failed", K(ret));
@@ -353,8 +346,7 @@ int ObDasVecScanUtils::reuse_iter(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
-                                       const common::ObTabletID &tablet_id,
+int ObDasVecScanUtils::init_scan_param(const common::ObTabletID &tablet_id,
                                        const ObDASScanCtDef *ctdef,
                                        ObDASScanRtDef *rtdef,
                                        transaction::ObTxDesc *tx_desc,
@@ -368,7 +360,7 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctdef), K(rtdef));
   } else {
-    scan_param.tenant_id_ = MTL_ID();
+    
     scan_param.tx_lock_timeout_ = rtdef->tx_lock_timeout_;
     scan_param.index_id_ = ctdef->ref_table_id_;
     scan_param.is_get_ = is_get;
@@ -380,40 +372,34 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
     scan_param.scan_allocator_ = scan_allocator == nullptr ? &rtdef->scan_allocator_ : scan_allocator;
     scan_param.sql_mode_ = rtdef->sql_mode_;
     scan_param.frozen_version_ = rtdef->frozen_version_;
-    scan_param.force_refresh_lc_ = rtdef->force_refresh_lc_;
     scan_param.output_exprs_ = &(ctdef->pd_expr_spec_.access_exprs_);
-    scan_param.ext_file_column_exprs_ = &(ctdef->pd_expr_spec_.ext_file_column_exprs_);
-    scan_param.ext_column_convert_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
     scan_param.calc_exprs_ = &(ctdef->pd_expr_spec_.calc_exprs_);
     scan_param.aggregate_exprs_ = &(ctdef->pd_expr_spec_.pd_storage_aggregate_output_);
     scan_param.table_param_ = &(ctdef->table_param_);
     scan_param.op_ = rtdef->p_pd_expr_op_;
     scan_param.row2exprs_projector_ = rtdef->p_row2exprs_projector_;
     scan_param.schema_version_ = ctdef->schema_version_;
-    scan_param.tenant_schema_version_ = rtdef->tenant_schema_version_;
+    scan_param.runtime_schema_version_ = rtdef->runtime_schema_version_;
     scan_param.limit_param_ = rtdef->limit_param_;
     scan_param.need_scn_ = rtdef->need_scn_;
     scan_param.pd_storage_flag_ = ctdef->pd_expr_spec_.pd_storage_flag_.pd_flag_;
     scan_param.fb_snapshot_ = rtdef->fb_snapshot_;
-    scan_param.fb_read_tx_uncommitted_ = rtdef->fb_read_tx_uncommitted_;
     if (rtdef->is_for_foreign_check_) {
       scan_param.trans_desc_ = tx_desc;
     }
-    scan_param.ls_id_ = ls_id;
     scan_param.tablet_id_ = tablet_id;
     if (rtdef->sample_info_ != nullptr) {
       scan_param.sample_info_ = *rtdef->sample_info_;
     }
     if (OB_NOT_NULL(snapshot)) {
       if (OB_FAIL(scan_param.snapshot_.assign(*snapshot))) {
-        LOG_WARN("assign snapshot fail", K(ret));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("snapshot is null", K(ret));
     }
     if (OB_NOT_NULL(tx_desc)) {
-      scan_param.tx_id_ = tx_desc->get_tx_id();
+      scan_param.tx_id_ = data_plane::tx_desc_id(tx_desc);
     } else {
       scan_param.tx_id_.reset();
     }
@@ -423,29 +409,12 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
     scan_param.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(scan_param.column_ids_.assign(ctdef->access_column_ids_))) {
-      LOG_WARN("init column ids failed", K(ret));
-    }
-    // external table scan params
-    if (OB_SUCC(ret) && ctdef->is_external_table_) {
-      scan_param.external_file_access_info_ = ctdef->external_file_access_info_.str_;
-      scan_param.external_file_location_ = ctdef->external_file_location_.str_;
-      if (OB_FAIL(scan_param.external_file_format_.load_from_string(ctdef->external_file_format_str_.str_,
-                                                                    *scan_param.allocator_))) {
-        LOG_WARN("fail to load from string", K(ret));
-      } else {
-        uint64_t max_idx = 0;
-        for (int i = 0; i < scan_param.ext_file_column_exprs_->count(); i++) {
-          max_idx = std::max(max_idx, scan_param.ext_file_column_exprs_->at(i)->extra_);
-        }
-        scan_param.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
-      }
     }
   }
   return ret;
 }
 
-int ObDasVecScanUtils::init_vec_aux_scan_param(const share::ObLSID &ls_id,
-                                               const common::ObTabletID &tablet_id,
+int ObDasVecScanUtils::init_vec_aux_scan_param(const common::ObTabletID &tablet_id,
                                                const sql::ObDASScanCtDef *ctdef,
                                                sql::ObDASScanRtDef *rtdef,
                                                transaction::ObTxDesc *tx_desc,
@@ -457,8 +426,7 @@ int ObDasVecScanUtils::init_vec_aux_scan_param(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(
-          ObDasVecScanUtils::init_scan_param(ls_id, tablet_id, ctdef, rtdef, tx_desc, snapshot, scan_param, is_get, scan_allocator))) {
-    LOG_WARN("failed to generate init vec aux scan param", K(ret));
+          ObDasVecScanUtils::init_scan_param(tablet_id, ctdef, rtdef, tx_desc, snapshot, scan_param, is_get, scan_allocator))) {
   } else {
     scan_param.is_for_foreign_check_ = false;
     scan_param.op_ = nullptr;
@@ -501,9 +469,7 @@ int ObDasVecScanUtils::get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get col datum null", K(ret));
       } else if (OB_FAIL(datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
-        LOG_WARN("convert datum to obj failed", K(ret));
       } else if (OB_FAIL(ob_write_obj(allocator, tmp_obj, obj_ptr[i]))) {
-        LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
       }
     }
 

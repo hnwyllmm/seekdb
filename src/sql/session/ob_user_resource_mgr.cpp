@@ -36,8 +36,8 @@ void ObConnectResAlloc::free_value(ObConnectResource* tz_info)
 
 ObConnectResHashNode* ObConnectResAlloc::alloc_node(ObConnectResource* value)
 {
-  int64_t tenant_id = OB_ISNULL(value) ? OB_SERVER_TENANT_ID : value->tenant_id_;
-  ObMemAttr attr(tenant_id, MEMORY_LABEL);
+  
+  ObMemAttr attr(MEMORY_LABEL);
   return OB_NEW(ObConnectResHashNode, attr);
 }
 
@@ -50,7 +50,8 @@ void ObConnectResAlloc::free_node(ObConnectResHashNode* node)
 }
 
 ObConnectResourceMgr::ObConnectResourceMgr()
-: inited_(false), user_res_map_(), tenant_res_map_(), schema_service_(nullptr),
+: inited_(false), user_res_map_(), server_res_inited_(false), schema_service_(nullptr),
+  timer_(nullptr),
   cleanup_task_(*this)
 {
 }
@@ -58,153 +59,72 @@ ObConnectResourceMgr::ObConnectResourceMgr()
 ObConnectResourceMgr::~ObConnectResourceMgr()
 {}
 
-int ObConnectResourceMgr::init(ObMultiVersionSchemaService &schema_service)
+int ObConnectResourceMgr::init(ObMultiVersionSchemaService &schema_service, common::ObTimer &timer)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (OB_FAIL(user_res_map_.init("UserResCtrl"))) {
-    LOG_WARN("fail to init user resource map", K(ret));
-  } else if (OB_FAIL(tenant_res_map_.init("TenantResCtrl"))) {
-    LOG_WARN("fail to init tenant resource map", K(ret));
   } else {
     schema_service_ = &schema_service;
+    timer_ = &timer;
     inited_ = true;
     const int64_t delay = ConnResourceCleanUpTask::SLEEP_USECONDS;
     const bool repeat = false;
-    if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, cleanup_task_, delay, repeat))) {
-      LOG_WARN("schedual connect resource mgr failed", K(ret));
+    if (OB_FAIL(timer_->schedule(cleanup_task_, delay, repeat))) {
     }
   }
   return ret;
 }
 
-int ObConnectResourceMgr::apply_for_tenant_conn_resource(const uint64_t tenant_id,
-                                         const ObPrivSet &priv,
-                                         const uint64_t max_tenant_connections)
+int ObConnectResourceMgr::apply_for_server_conn_resource(const ObPrivSet &priv,
+                                                         const uint64_t max_connections)
 {
   int ret = OB_SUCCESS;
-  ObConnectResource *tenant_res = NULL;
-  ObTenantUserKey tenant_key(tenant_id, 0);
-  if (OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      // not exist, alloc and insert
-      ObMemAttr attr(tenant_id, MEMORY_LABEL);
-      if (OB_ISNULL(tenant_res = OB_NEW(ObConnectResource, attr))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate tenant resource failed", K(ret));
-      } else {
-        tenant_res->cur_connections_ = 0;
-        tenant_res->tenant_id_ = tenant_id;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(tenant_res_map_.insert_and_get(tenant_key, tenant_res))) {
-        LOG_WARN("insert and get failed", K(ret));
-        OB_DELETE(ObConnectResource, MEMORY_LABEL, tenant_res);
-        tenant_res = NULL;
-        // 1. tenant resouce already exist because of concurrent insert, just get it.
-        // 2. may also fail because of oom.
-        if (OB_ENTRY_EXIST == ret && OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
-          // may happen with very very little probability: insert failed and then tenant is dropped
-          // and value in the map is deleted by periodly task.
-          LOG_WARN("get tenant conn res map failed", K(ret), K(tenant_id));
-        }
-      }
-    } else {
-      LOG_WARN("get tenant resource failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(tenant_res)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant resource is null", K(ret));
-    } else {
-      // check and update cur_connections.
-      ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
-      if (tenant_res->cur_connections_ < max_tenant_connections
-          || (max_tenant_connections == tenant_res->cur_connections_
-              && OB_PRIV_HAS_ANY(priv, OB_PRIV_SUPER))) {
-        // only user with super privilege is permitted to connect when reach max tenant connections.
-        tenant_res->cur_connections_++;
-      } else {
-        ret = OB_ERR_CON_COUNT_ERROR;;
-        LOG_WARN("too many connections", K(ret), K(tenant_res->cur_connections_),
-          K(max_tenant_connections));
-      }
-    }
-  }
-  if (OB_NOT_NULL(tenant_res)) {
-    tenant_res_map_.revert(tenant_res);
-  }
-  return ret;
-}
-
-void ObConnectResourceMgr::release_tenant_conn_resource(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObTenantUserKey tenant_key(tenant_id, 0);
-  ObConnectResource *tenant_res = NULL;
-  bool has_insert = false;
-  if (OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
-    LOG_WARN("get tenant res map failed", K(ret));
+  ObLatchWGuard wr_guard(server_res_.rwlock_, ObLatchIds::DEFAULT_MUTEX);
+  server_res_inited_ = true;
+  if (server_res_.cur_connections_ < max_connections
+      || (max_connections == server_res_.cur_connections_
+          && OB_PRIV_HAS_ANY(priv, OB_PRIV_SUPER))) {
+    // A user with SUPER privilege may connect when the server reaches max_connections.
+    server_res_.cur_connections_++;
   } else {
-    ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
-    if (OB_UNLIKELY(0 == tenant_res->cur_connections_)) {
-      LOG_ERROR("tenant current connections is zero when release resource", K(tenant_id));
-    } else {
-      tenant_res->cur_connections_--;
-    }
-    tenant_res_map_.revert(tenant_res);
-  }
-}
-
-int ObConnectResourceMgr::get_tenant_cur_connections(const uint64_t tenant_id,
-                                                     bool &tenant_exists,
-                                                     uint64_t &cur_connections)
-{
-  int ret = OB_SUCCESS;
-  tenant_exists = false;
-  cur_connections = 0;
-  ObTenantUserKey tenant_key(tenant_id, 0);
-  ObConnectResource *tenant_res = NULL;
-  if (OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("get tenant resource failed", K(ret));
-    }
-  } else {
-    tenant_exists = true;
-  }
-  if (OB_SUCC(ret) && tenant_exists) {
-    if (OB_ISNULL(tenant_res)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant resource is null", K(ret));
-    } else {
-      cur_connections = tenant_res->cur_connections_;
-      tenant_res_map_.revert(tenant_res);
-    }
+    ret = OB_ERR_CON_COUNT_ERROR;
+    LOG_WARN("too many connections", K(ret), K(server_res_.cur_connections_),
+      K(max_connections));
   }
   return ret;
+}
+
+void ObConnectResourceMgr::release_server_conn_resource()
+{
+  int ret = OB_SUCCESS;
+  ObLatchWGuard wr_guard(server_res_.rwlock_, ObLatchIds::DEFAULT_MUTEX);
+  if (OB_UNLIKELY(!server_res_inited_)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("release server connection resource before any apply", K(ret));
+  } else if (OB_UNLIKELY(0 == server_res_.cur_connections_)) {
+    LOG_ERROR("server current connections is zero when releasing resource");
+  } else {
+    server_res_.cur_connections_--;
+  }
 }
 
 // get user resource from hash map, insert if not exist.
-int ObConnectResourceMgr::get_or_insert_user_resource(const uint64_t tenant_id,
-      const uint64_t user_id,
+int ObConnectResourceMgr::get_or_insert_user_resource(const uint64_t user_id,
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
       ObConnectResource *&user_res)
 {
   int ret = OB_SUCCESS;
   user_res = NULL;
-  ObTenantUserKey user_key(tenant_id, user_id);
+  ObUserKey user_key(user_id);
   if (OB_FAIL(user_res_map_.get(user_key, user_res))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       // not exist, alloc and insert
-      ObMemAttr attr(tenant_id, MEMORY_LABEL);
+      ObMemAttr attr(MEMORY_LABEL);
       if (OB_ISNULL(user_res = OB_NEW(ObConnectResource, attr))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate user resource failed", K(ret));
@@ -212,7 +132,7 @@ int ObConnectResourceMgr::get_or_insert_user_resource(const uint64_t tenant_id,
         user_res->cur_connections_ = 0;
         user_res->history_connections_ = 0;
         user_res->start_time_ = 0;
-        user_res->tenant_id_ = tenant_id;
+        
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(user_res_map_.insert_and_get(user_key, user_res))) {
@@ -282,27 +202,22 @@ int ObConnectResourceMgr::increase_user_connections_count(
 // max_user_connections: max concurrent connections.
 // 0 means no limit.
 int ObConnectResourceMgr::on_user_connect(
-      const uint64_t tenant_id,
       const uint64_t user_id,
       const ObPrivSet &priv,
       const ObString &user_name,
       const uint64_t max_connections_per_hour,
       const uint64_t max_user_connections,
-      const uint64_t max_tenant_connections,
+      const uint64_t max_server_connections,
       ObSQLSessionInfo& session)
 {
   int ret = OB_SUCCESS;
-  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::ORACLE;
   if (!session.is_user_session()) {
     // do not limit connection count for inner sesion.
-  } else if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
-    LOG_WARN("get tenant mode failed", K(ret), K(tenant_id));
-  } else if (compat_mode == lib::Worker::CompatMode::MYSQL) {
-    if (!session.has_got_tenant_conn_res()) {
-      if (OB_FAIL(apply_for_tenant_conn_resource(tenant_id, priv, max_tenant_connections))) {
-        LOG_WARN("reach teannt max connections", K(ret));
+  } else {
+    if (!session.has_got_server_conn_res()) {
+      if (OB_FAIL(apply_for_server_conn_resource(priv, max_server_connections))) {
       } else {
-        session.set_got_tenant_conn_res(true);
+        session.set_got_server_conn_res(true);
       }
     }
     if (OB_FAIL(ret)) {
@@ -315,12 +230,10 @@ int ObConnectResourceMgr::on_user_connect(
       // only record history_connections_ if max_connections_per_hour is not zero.
       ObConnectResource *user_res = NULL;
       bool user_conn_increased = false;
-      if (OB_FAIL(get_or_insert_user_resource(tenant_id, user_id, max_user_connections,
+      if (OB_FAIL(get_or_insert_user_resource( user_id, max_user_connections,
                                               max_connections_per_hour, user_res))) {
-        LOG_WARN("get or insert user resource failed", K(ret));
       } else if (OB_FAIL(increase_user_connections_count(max_user_connections, max_connections_per_hour,
             user_name, user_res, user_conn_increased))) {
-        LOG_WARN("increase user connection count failed", K(ret));
       }
       if (user_conn_increased) {
         session.set_got_user_conn_res(true);
@@ -329,14 +242,6 @@ int ObConnectResourceMgr::on_user_connect(
       if (OB_NOT_NULL(user_res)) {
         user_res_map_.revert(user_res);
         user_res = NULL;
-      }
-    }
-  } else {
-    if (!session.has_got_tenant_conn_res()) {
-      if (OB_FAIL(apply_for_tenant_conn_resource(tenant_id, priv, UINT64_MAX))) {
-        LOG_WARN("reach teannt max connections", K(ret));
-      } else {
-        session.set_got_tenant_conn_res(true);
       }
     }
   }
@@ -352,20 +257,20 @@ int ObConnectResourceMgr::on_user_disconnect(ObSQLSessionInfo &session)
   int ret = OB_SUCCESS;
   if (!session.is_user_session()) {
     // do not limit connection count for inner sesion.
-    if (OB_UNLIKELY(session.has_got_tenant_conn_res() || session.has_got_user_conn_res())) {
+    if (OB_UNLIKELY(session.has_got_server_conn_res() || session.has_got_user_conn_res())) {
       LOG_ERROR("inner session expect no connection resource", K(session.get_conn_res_user_id()),
-                K(session.has_got_tenant_conn_res()));
+                K(session.has_got_server_conn_res()));
     }
   } else {
-    uint64_t tenant_id = session.get_login_tenant_id();
-    if (session.has_got_tenant_conn_res()) {
-      release_tenant_conn_resource(tenant_id);
-      session.set_got_tenant_conn_res(false);
+    
+    if (session.has_got_server_conn_res()) {
+      release_server_conn_resource();
+      session.set_got_server_conn_res(false);
     }
     if (session.has_got_user_conn_res()) {
       uint64_t user_id = session.get_conn_res_user_id();
       ObConnectResource *user_res = NULL;
-      ObTenantUserKey user_key(tenant_id, user_id);
+      ObUserKey user_key(user_id);
       if (OB_FAIL(user_res_map_.get(user_key, user_res))) {
         // maybe already dropped.
         ret = OB_SUCCESS;
@@ -387,28 +292,8 @@ int ObConnectResourceMgr::on_user_disconnect(ObSQLSessionInfo &session)
   return ret;
 }
 
-int ObConnectResourceMgr::erase_tenant_conn_res_map(int64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  EraseTenantMapFunc func(tenant_id);
-  int64_t erase_user_cnt = 0;
-  int64_t erase_tenant_cnt = 0;
-  if (OB_FAIL(user_res_map_.remove_if(func))) {
-    LOG_WARN("remove_if failed", K(ret), K(tenant_id));
-  } else if (FALSE_IT(erase_user_cnt = func.erase_cnt_)) {
-  } else if (OB_FAIL(tenant_res_map_.remove_if(func))) {
-    LOG_WARN("remove_if failed", K(ret), K(tenant_id));
-  } else {
-    erase_tenant_cnt = func.erase_cnt_ - erase_user_cnt;
-    user_res_map_.purge();
-    tenant_res_map_.purge();
-  }
-  LOG_INFO("erase tenant conn result map", K(tenant_id), K(erase_tenant_cnt), K(erase_user_cnt));
-  return ret;
-}
-
 bool ObConnectResourceMgr::CleanUpConnResourceFunc::operator() (
-    ObTenantUserKey key, ObConnectResource *conn_res)
+    ObUserKey key, ObConnectResource *conn_res)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(conn_res)) {
@@ -416,9 +301,9 @@ bool ObConnectResourceMgr::CleanUpConnResourceFunc::operator() (
     LOG_WARN("user res is NULL", K(ret), K(conn_res));
   } else {
     const ObUserInfo *user_info = NULL;
-    if (OB_FAIL(schema_guard_.get_user_info(key.tenant_id_, key.user_id_, user_info))) {
-      if (OB_TENANT_NOT_EXIST != ret) {
-        LOG_ERROR("get user info failed", K(ret), K(key.tenant_id_), K(key.user_id_));
+    if (OB_FAIL(schema_guard_.get_user_info(key.user_id_, user_info))) {
+      if (OB_RUNTIME_SCHEMA_NOT_READY != ret) {
+        LOG_ERROR("get user info failed", K(ret), K(key.user_id_));
       } else {
         ret = OB_SUCCESS;
         conn_res_map_.del(key);
@@ -430,7 +315,7 @@ bool ObConnectResourceMgr::CleanUpConnResourceFunc::operator() (
   return OB_SUCCESS == ret;
 }
 
-// task for cleanup periodly. Remove dropped tenant and user from tenant_res_map_ and user_res_map_.
+// task for cleanup periodly. Remove dropped user from user_res_map_.
 void ObConnectResourceMgr::ConnResourceCleanUpTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
@@ -438,21 +323,20 @@ void ObConnectResourceMgr::ConnResourceCleanUpTask::runTimerTask()
   if (OB_ISNULL(conn_res_mgr_.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("schema service is null", K(ret));
-  //FIXME: Here, key may confict when tenant_id is removed from used_id.
-  //       This logic should execute by tenant and don't use get_cluster_schema_guard() again.
-  } else if (OB_FAIL(conn_res_mgr_.schema_service_->get_cluster_schema_guard(schema_guard))) {
-    LOG_WARN("get sys tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(conn_res_mgr_.schema_service_->get_runtime_schema_guard(schema_guard))) {
   } else {
-    LOG_INFO("clean up connection resource", K(schema_guard.get_tenant_id()),
-              K(conn_res_mgr_.user_res_map_.size()), K(conn_res_mgr_.tenant_res_map_.size()));
+    LOG_INFO("clean up connection resource",
+              K(conn_res_mgr_.user_res_map_.size()), K(conn_res_mgr_.server_res_inited_));
     CleanUpConnResourceFunc user_func(schema_guard, conn_res_mgr_.user_res_map_);
     if (OB_FAIL(conn_res_mgr_.user_res_map_.for_each(user_func))) {
-      LOG_WARN("cleanup dropped user failed", K(ret));
     }
   }
   const int64_t delay = SLEEP_USECONDS;
   const bool repeat = false;
-  if (OB_SUCC(ret) && OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, *this, delay, repeat))) {
+  if (OB_SUCC(ret) && OB_ISNULL(conn_res_mgr_.timer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("connect resource cleanup timer is null", K(ret));
+  } else if (OB_SUCC(ret) && OB_FAIL(conn_res_mgr_.timer_->schedule(*this, delay, repeat))) {
     LOG_ERROR("schedule connect resource cleanup task failed", K(ret));
   }
 }

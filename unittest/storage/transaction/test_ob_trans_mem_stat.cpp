@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "lib/ob_name_id_def.h"
+#include "lib/json/ob_yson.h"
 #include "storage/tx/ob_trans_memory_stat.h"
 #include <gtest/gtest.h>
 
@@ -62,14 +64,3 @@ TEST_F(TestObTransMemStat, init_reset)
 
 using namespace oceanbase;
 using namespace oceanbase::common;
-
-int main(int argc, char **argv)
-{
-  int ret = 1;
-  ObLogger &logger = ObLogger::get_logger();
-  logger.set_file_name("test_ob_trans_mem_stat.log", true);
-  logger.set_log_level(OB_LOG_LEVEL_INFO);
-  testing::InitGoogleTest(&argc, argv);
-  ret = RUN_ALL_TESTS();
-  return ret;
-}

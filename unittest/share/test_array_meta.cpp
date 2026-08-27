@@ -18,8 +18,8 @@
 #define private public
 #define protected public
 #include "lib/hash/ob_hashset.h"
-#include "lib/udt/ob_array_utils.h"
-#include "sql/engine/expr/ob_array_cast.h"
+#include "common/udt/ob_array_utils.h"
+#include "share/object/ob_array_cast.h"
 #undef private
 #undef protected
 
@@ -36,7 +36,7 @@ public:
   ~TestArrayMeta()
   {}
 
-private:
+public:
   ObArenaAllocator allocator_; 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestArrayMeta);
@@ -1108,12 +1108,3 @@ TEST_F(TestArrayMeta, nested_array_remove)
 
 } // namespace common
 } // namespace oceanbase
-
-int main(int argc, char** argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  // system("rm -f test_array_meta.log");
-  // OB_LOGGER.set_file_name("test_array_meta.log");
-  // OB_LOGGER.set_log_level("DEBUG");
-  return RUN_ALL_TESTS();
-}

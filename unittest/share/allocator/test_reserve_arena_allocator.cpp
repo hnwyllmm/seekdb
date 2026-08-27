@@ -18,7 +18,7 @@
 #define protected public
 #define private public
 #include "share/allocator/ob_reserve_arena.h"
-#include "share/rc/ob_tenant_base.h"
+#include "share/rc/ob_server_runtime.h"
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))
 
@@ -40,7 +40,7 @@ public:
   ObReserveArenaAllocator<1024> test_allocator_;
 };
 TestReserveArenaAllocator::TestReserveArenaAllocator():
-  test_allocator_(ObMemAttr(500, ObModIds::OB_STORE_ROW_EXISTER), OB_MALLOC_NORMAL_BLOCK_SIZE)
+  test_allocator_(ObMemAttr(ObModIds::OB_STORE_ROW_EXISTER), OB_MALLOC_NORMAL_BLOCK_SIZE)
 {
 }
 
@@ -147,12 +147,3 @@ TEST_F(TestReserveArenaAllocator, test_reuse)
 
 }//end namespace unittest
 }//end namespace oceanbase
-int main(int argc, char **argv)
-{
-  system("rm -f test_reserve_arena_allocator.log*");
-  oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  OB_LOGGER.set_file_name("test_reserve_arena_allocator.log", true);
-  srand(time(NULL));
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

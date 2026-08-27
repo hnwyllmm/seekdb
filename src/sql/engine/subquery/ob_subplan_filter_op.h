@@ -76,10 +76,10 @@ public:
   int init_mem_entity();
   int init_hashmap(const int64_t param_num)
   {
-    int64_t tenant_id = op_.get_exec_ctx().get_my_session()->get_effective_tenant_id();
+    
     return hashmap_.create(param_num * 2,
-                           ObMemAttr(tenant_id, "SqlSQIterBKT", ObCtxIds::DEFAULT_CTX_ID),
-                           ObMemAttr(tenant_id, "SqlSQIterND", ObCtxIds::DEFAULT_CTX_ID));
+                           ObMemAttr("SqlSQIterBKT", ObCtxIds::DEFAULT_CTX_ID),
+                           ObMemAttr("SqlSQIterND", ObCtxIds::DEFAULT_CTX_ID));
   }
   bool has_hashmap() const { return hashmap_.created(); }
   int init_probe_row(const int64_t cnt);
@@ -120,7 +120,6 @@ private:
 
   int get_next_row_from_child();
   int get_next_row_vecrorizely();
-  int cast_vector_format();
   // for das batch spf
   int alloc_das_batch_store();
   // for das batch spf end
@@ -173,7 +172,7 @@ public:
   // update set (, ,) = (subquery)
   ExprFixedArray update_set_;
   common::ObFixedArray<ObFixedArray<ObExpr *, common::ObIAllocator>, common::ObIAllocator> exec_param_array_;
-  bool exec_param_idxs_inited_;
+  bool enable_subquery_result_cache_;
   // Mark each subquery whether it can do px batch rescan
   common::ObFixedArray<bool, common::ObIAllocator> enable_px_batch_rescans_;
   bool enable_das_group_rescan_;

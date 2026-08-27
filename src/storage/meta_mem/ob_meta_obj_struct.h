@@ -18,10 +18,12 @@
 #define OCEANBASE_STORAGE_OB_META_OBJ_STRUCT_H_
 
 #include "common/log/ob_log_constants.h"
-#include "common/ob_clock_generator.h"
+#include "lib/time/ob_clock_generator.h"
+#include "share/rc/ob_server_runtime.h"
 #include "share/ob_define.h"
-#include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
+#include "storage/meta_mem/ob_storage_meta_obj_pool.h"
 #include "storage/blocksstable/ob_macro_block_handle.h"
+#include "storage/meta_mem/ob_i_storage_meta_obj.h"  // interfaces have been made layer-neutral(conf L2), backfill
 
 namespace oceanbase
 {
@@ -72,8 +74,10 @@ public:
   OB_INLINE void inc_seq() { seq_++; }
   OB_INLINE blocksstable::MacroBlockId block_id() const
   {
-    blocksstable::MacroBlockId id(first_id_, second_id_, third_id_, fifth_id_);
-    id.set_version_v2();
+    blocksstable::MacroBlockId id;
+    id.set_first_id(first_id_);
+    id.set_second_id(second_id_);
+    id.set_third_id(third_id_);
     return id;
   }
 
@@ -100,9 +104,6 @@ public:
   int set_mem_addr(
       const int64_t offset,
       const int64_t size);
-
-  // just for compatibility, the old version ObMetaDiskAddr is serialized directly by memcpy in some scenarios
-  int memcpy_deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 
   OB_UNIS_VERSION(1);
 private:
@@ -131,11 +132,8 @@ private:
       uint64_t type_   : FOURTH_ID_BIT_TYPE;
     };
   };
-  union {
-    int64_t fifth_id_;  // for the fourth_id_ of MacroBlockId
-  };
   union { // doesn't serialize
-    int64_t sixth_id_;
+    int64_t volatile_state_;
     uint64_t seq_;
   };
 };
@@ -151,10 +149,10 @@ public:
   TO_STRING_KV(KP_(pool), KP_(allocator), KP_(ptr), KP_(t3m));
 
 public:
-  ObITenantMetaObjPool *pool_;
+  ObIStorageMetaObjPool *pool_;
   common::ObIAllocator *allocator_;
   T *ptr_;
-  ObTenantMetaMemMgr *t3m_;
+  ObStorageMetaMemMgr *t3m_;
 };
 
 template <typename T>
@@ -168,7 +166,7 @@ public:
   virtual void reset();
 
   virtual void set_obj(ObMetaObj<T> &obj);
-  virtual void set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m);
+  virtual void set_obj(T *obj, common::ObIAllocator *allocator, ObStorageMetaMemMgr *t3m);
 
   OB_INLINE virtual T *get_obj();
   OB_INLINE virtual T *get_obj() const;
@@ -191,27 +189,19 @@ protected:
 
 protected:
   T *obj_;
-  ObITenantMetaObjPool *obj_pool_;
+  ObIStorageMetaObjPool *obj_pool_;
   common::ObIAllocator *allocator_;
   int64_t hold_start_time_;
-  ObTenantMetaMemMgr *t3m_;
+  ObStorageMetaMemMgr *t3m_;
 };
 
-class ObIStorageMetaObj
-{
-public:
-  ObIStorageMetaObj() = default;
-  virtual ~ObIStorageMetaObj() = default;
-  virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const = 0;
-  virtual int64_t get_deep_copy_size() const = 0;
-};
 
 template <typename T>
 ObMetaObj<T>::ObMetaObj()
   : pool_(nullptr),
     allocator_(nullptr),
     ptr_(nullptr),
-    t3m_(MTL(ObTenantMetaMemMgr*))
+    t3m_(::oceanbase::share::server_service<::oceanbase::storage::ObStorageMetaMemMgr>())
 {
 }
 
@@ -271,7 +261,7 @@ void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
 }
 
 template <typename T>
-void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m)
+void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator, ObStorageMetaMemMgr *t3m)
 {
   reset();
   allocator_ = allocator;
@@ -380,7 +370,6 @@ void ObMetaObjGuard<T>::reset_obj()
         if (nullptr != obj_pool_) {
           obj_pool_->free_obj(obj_);
         } else {
-          STORAGE_LOG(DEBUG, "release obj from allocator", KP(obj_), KP(allocator_));
           obj_->reset();
           obj_->~T();
           allocator_->free(obj_);

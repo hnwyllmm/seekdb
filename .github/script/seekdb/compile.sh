@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# Compile: 步骤与 .github/workflows/buildbase 一致（init → build.sh $TARGET → cd build_* && make）。
+# Compile: initialize and build the Bazel release Unity target.
 # Required env: GITHUB_WORKSPACE, SEEKDB_TASK_DIR
-# Optional: RELEASE_MODE, FORWARDING_HOST, MAKE, MAKE_ARGS
-set -e
+# Optional: FORWARDING_HOST, MAKE_ARGS
+
+if [[ -f ~/.bashrc ]]; then
+  source ~/.bashrc
+fi
+
+set -euo pipefail
 
 WORKSPACE="${GITHUB_WORKSPACE:?}"
 TASK_DIR="${SEEKDB_TASK_DIR:?}"
 
-# 调试：便于排查 k8s/container 下 No build.sh
+# Diagnostics for container/workspace path issues.
 echo "[compile.sh] WORKSPACE=$WORKSPACE"
 echo "[compile.sh] pwd=$(pwd)"
 ls -la "$WORKSPACE/" 2>/dev/null | head -20 || true
@@ -46,8 +51,8 @@ else
   set -e
 fi
 
-# 产物落到 build_*，打包 observer/obproxy 为 zst 并拷贝到任务目录
-for binary in observer obproxy; do
+# 产物落到 build_*，打包 observer 为 zst 并拷贝到任务目录
+for binary in observer; do
   for base in . build_debug build_release build; do
     if [[ -f "$WORKSPACE/$base/$binary" ]]; then
       cp -f "$WORKSPACE/$base/$binary" "$WORKSPACE/$binary" 2>/dev/null || true

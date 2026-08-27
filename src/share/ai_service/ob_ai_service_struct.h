@@ -19,73 +19,16 @@
 
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
-#include "lib/json_type/ob_json_base.h"
+#include "common/json_type/ob_json_base.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/ai_service/ob_ai_model_info.h"
 
 namespace oceanbase
 {
 namespace share
 {
 
-struct EndpointType final
-{
-  enum TYPE : uint8_t
-  {
-    INVALID_TYPE = 0,
-    DENSE_EMBEDDING = 1,
-    SPARSE_EMBEDDING = 2,
-    COMPLETION = 3,
-    RERANK = 4,
-    // add new endpoint type before this line
-    // also remember to add ENDPOINT_TYPE_STR
-    MAX_TYPE
-  };
-  static EndpointType::TYPE str_to_endpoint_type(const ObString &type_str);
-  static EndpointType::TYPE convert_type_from_int(const int64_t type)
-  {
-
-    EndpointType::TYPE endpoint_type = EndpointType::INVALID_TYPE;
-    if (type >= static_cast<int64_t>(EndpointType::INVALID_TYPE) && type <= static_cast<int64_t>(EndpointType::MAX_TYPE)) {
-      endpoint_type = static_cast<EndpointType::TYPE>(type);
-    }
-    return endpoint_type;
-  }
-private:
-  static const char *ENDPOINT_TYPE_STR[];
-};
-
-class ObAiServiceModelInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObAiServiceModelInfo() { reset(); }
-  ~ObAiServiceModelInfo() = default;
-
-  void reset()
-  {
-    name_.reset();
-    type_ = EndpointType::MAX_TYPE;
-    model_name_.reset();
-  }
-
-  int parse_from_json_base(const ObString &name, const common::ObIJsonBase &params_jbase);
-  int check_valid() const;
-
-  const ObString &get_name() const { return name_; }
-  EndpointType::TYPE get_type() const { return type_; }
-  const ObString &get_model_name() const { return model_name_; }
-
-  TO_STRING_KV(K_(name),
-               K_(type),
-               K_(model_name));
-private:
-  ObString name_;
-  EndpointType::TYPE type_;
-  ObString model_name_;
-};
-
-
-// ai service endpoint info from user side
+// Layer-neutral AI service endpoint info from user side.
 class ObAiModelEndpointInfo
 {
   friend class ObAiServiceProxy;
@@ -110,6 +53,7 @@ public:
 
   int parse_from_json_base(common::ObArenaAllocator &allocator,const ObString &name, const common::ObIJsonBase &params_jbase);
   int merge_delta_endpoint(common::ObArenaAllocator &allocator, const ObIJsonBase &delta_endpoint);
+  int deep_copy(common::ObIAllocator &allocator, const ObAiModelEndpointInfo &other);
   int check_valid() const;
 
   const ObString &get_name() const { return name_; }
@@ -140,7 +84,6 @@ public:
 private:
   static const ObString DEFAULT_SCOPE;
   static bool is_valid_provider(const ObString &provider);
-  static bool is_valid_ai_model_name(const ObString &ai_model_name);
   int encrypt_access_key_(common::ObIAllocator &allocator, const ObString &access_key, ObString &encrypted_access_key);
   int decrypt_access_key_(common::ObIAllocator &allocator, const ObString &encrypted_access_key, ObString &unencrypted_access_key) const;
 private:

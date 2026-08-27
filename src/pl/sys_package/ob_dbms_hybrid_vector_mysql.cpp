@@ -16,7 +16,8 @@
 
 #define USING_LOG_PREFIX PL
 #include "ob_dbms_hybrid_vector_mysql.h"
-#include "src/share/hybrid_search/ob_hybrid_search_executor.h"
+#include "share/ob_lob_access_utils.h"
+#include "sql/hybrid_search/ob_hybrid_search_executor.h"
 
 namespace oceanbase {
 namespace pl {
@@ -28,7 +29,7 @@ FUNCTION SEARCH (IN table_name VARCHAR(65535),
                  IN search_params LONGTEXT)
 RETURN JSON;
 */
-int ObDBMSHybridVectorMySql::search(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+int ObDBMSHybridVectorMySql::search(ObPLExecCtx &ctx, ParamStore &params, ObObj &result) 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(params.count() != 2) || !params.at(0).is_varchar() ||
@@ -39,7 +40,6 @@ int ObDBMSHybridVectorMySql::search(ObPLExecCtx &ctx, ParamStore &params, ObObj 
     ObString table_name = params.at(0).get_varchar();
     ObString search_params_str;
     if (OB_FAIL(params.at(1).get_string(search_params_str))) {
-      LOG_WARN("fail to get search_params_str", K(ret));
     } else {
       oceanbase::share::ObHybridSearchExecutor executor;
       oceanbase::share::ObHybridSearchArg search_arg;
@@ -47,10 +47,8 @@ int ObDBMSHybridVectorMySql::search(ObPLExecCtx &ctx, ParamStore &params, ObObj 
       search_arg.search_params_ = search_params_str;
       search_arg.search_type_ = oceanbase::share::ObHybridSearchArg::SearchType::SEARCH;
       if (OB_FAIL(executor.init(ctx, search_arg))) {
-        LOG_WARN("fail to init search arg", K(ret));
       } else {
         if (OB_FAIL(executor.execute_search(result))) {
-          LOG_WARN("fail to execute hybrid search", K(ret), K(search_arg));
         }
       }
     }
@@ -63,7 +61,7 @@ FUNCTION GET_SQL (IN table_name VARCHAR(65535),
                    IN search_params LONGTEXT)
 RETURN LONGTEXT;
 */
-int ObDBMSHybridVectorMySql::get_sql(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+int ObDBMSHybridVectorMySql::get_sql(ObPLExecCtx &ctx, ParamStore &params, ObObj &result) 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(params.count() != 2) || !params.at(0).is_varchar() ||
@@ -74,7 +72,6 @@ int ObDBMSHybridVectorMySql::get_sql(ObPLExecCtx &ctx, ParamStore &params, ObObj
     ObString table_name = params.at(0).get_varchar();
     ObString search_params_str;
     if (OB_FAIL(params.at(1).get_string(search_params_str))) {
-      LOG_WARN("fail to get search_params_str", K(ret));
     } else {
       oceanbase::share::ObHybridSearchExecutor executor;
       oceanbase::share::ObHybridSearchArg arg;
@@ -82,17 +79,13 @@ int ObDBMSHybridVectorMySql::get_sql(ObPLExecCtx &ctx, ParamStore &params, ObObj
       arg.search_params_ = search_params_str;
       arg.search_type_ = oceanbase::share::ObHybridSearchArg::SearchType::GET_SQL;
       if (OB_FAIL(executor.init(ctx, arg))) {
-        LOG_WARN("fail to init executor", K(ret));
       } else {
         ObString sql_result;
         if (OB_FAIL(executor.execute_get_sql(sql_result))) {
-          LOG_WARN("fail to execute hybrid get_sql", K(ret), K(arg));
         } else {
           ObTextStringResult text_res(ObLongTextType, true, ctx.allocator_);
           if (OB_FAIL(text_res.init(sql_result.length()))) {
-            LOG_WARN("Failed to init text res", K(ret), K(sql_result.length()));
           } else if (OB_FAIL(text_res.append(sql_result))) {
-            LOG_WARN("Failed to append str to text res", K(ret), K(text_res));
           } else {
             ObString lob_str;
             text_res.get_result_buffer(lob_str);

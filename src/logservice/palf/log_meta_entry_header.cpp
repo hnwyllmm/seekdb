@@ -16,6 +16,7 @@
 
 #include "log_meta_entry_header.h"
 #include "lib/utility/utility.h"          // FALSE_IT
+#include "lib/checksum/ob_crc64.h"         // ob_crc64
 
 namespace oceanbase
 {
@@ -125,7 +126,6 @@ DEFINE_SERIALIZE(LogMetaEntryHeader)
     PALF_LOG(ERROR, "LogMetaEntryHeader serialize failed", K(ret), K(new_pos));
   } else {
     pos = new_pos;
-    PALF_LOG(TRACE, "LogMetaEntryHeader serialize", KP(buf), K(*this), K(pos));
   }
   return ret;
 }
@@ -146,7 +146,6 @@ DEFINE_DESERIALIZE(LogMetaEntryHeader)
   } else if (false == check_header_integrity()) {
     ret = OB_INVALID_DATA;
   } else {
-    PALF_LOG(TRACE, "LogMetaEntryHeader deserialize", K(*this), K(buf), K(buf+pos), K(pos), K(new_pos));
     pos = new_pos;
   }
   return ret;

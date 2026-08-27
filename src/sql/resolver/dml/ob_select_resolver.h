@@ -21,7 +21,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_standard_group_checker.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
-#include "common/ob_smart_call.h"
+#include "lib/utility/ob_smart_call.h"
 
 # define SYNTHETIC_FIELD_NAME "Name_exp_"
 
@@ -152,10 +152,10 @@ protected:
                                  bool &has_explicit_dir);
   int resolve_for_update_clause(const ParseNode *node);
   int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked);
-  int set_for_update_oracle(ObSelectStmt &stmt,
-                            const int64_t wait_us,
-                            bool skip_locked,
-                            ObColumnRefRawExpr *col = NULL);
+  int set_for_update_recursive(ObSelectStmt &stmt,
+                               const int64_t wait_us,
+                               bool skip_locked,
+                               ObColumnRefRawExpr *col = NULL);
   int resolve_for_update_clause_mysql(const ParseNode &node);
   int resolve_all_fake_cte_table_columns(const TableItem &table_item, common::ObIArray<ColumnItem> *column_items);
 
@@ -169,11 +169,10 @@ protected:
   int resolve_into_line_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_variable_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_file_node(const ParseNode *node, ObSelectIntoItem &into_item);
-  int resolve_file_partition_node(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_outfile_without_format(const ParseNode *node, ObSelectIntoItem &into_item);
   int resolve_into_outfile_with_format(const ParseNode *node, ObSelectIntoItem &into_item);
   // resolve_star related functions
-  int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
+  int resolve_star_for_table_groups();
   int find_joined_table_group_for_table(const uint64_t table_id, int64_t &jt_idx);
   int find_select_columns_for_join_group(const int64_t jt_idx, common::ObArray<SelectItem> *sorted_select_items);
   int find_select_columns_for_joined_table_recursive(const JoinedTable *jt,
@@ -219,14 +218,12 @@ protected:
   virtual int resolve_column_ref_for_subquery(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int check_column_ref_in_group_by_or_field_list(const ObRawExpr *column_ref) const;
   int wrap_alias_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
-  virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;
   virtual int check_in_sysview(bool &in_sysview) const override;
   int check_group_by();
   int check_order_by();
   int check_grouping_columns();
   int check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&expr);
   int check_window_exprs();
-  int check_sequence_exprs();
   int check_udt_set_query();
   int check_win_func_arg_valid(ObSelectStmt *select_stmt,
                                const ObItemType func_type,
@@ -238,7 +235,6 @@ protected:
   int resolve_fetch_clause(const ParseNode *node);
   int resolve_check_option_clause(const ParseNode *node);
   int check_set_child_stmt_pullup(const ObSelectStmt &child_stmt, bool &enable_pullup);
-  int transfer_rb_iterate_items();
   int check_set_child_into_pullup(ObSelectStmt &select_stmt, ObSelectStmt &child_stmt, bool is_first_child);
 private:
   int parameterize_fields_name(const ParseNode *project_node,
@@ -332,7 +328,7 @@ protected:
   bool has_top_limit_;
   // Used to identify whether the current query is the left or right branch of a set query (UNION/INTERSECT/EXCEPT)
   bool in_set_query_;
-  // Used to indicate whether the current query is a sub query, used for sequence validity check etc.
+  // Used to indicate whether the current query is a subquery.
   bool is_sub_stmt_;
   // query is subquery in exists
   bool in_exists_subquery_;

@@ -35,7 +35,7 @@ public:
   ObTabletIDSet(const ObTabletIDSet&) = delete;
   ObTabletIDSet &operator=(const ObTabletIDSet&) = delete;
 public:
-  int init(const uint64_t bucket_lock_bucket_cnt, const uint64_t tenant_id);
+  int init(const uint64_t bucket_lock_bucket_cnt);
   int set(const common::ObTabletID &tablet_id);
   int exist(const common::ObTabletID &tablet_id);
   int erase(const common::ObTabletID &tablet_id);
@@ -61,7 +61,6 @@ public:
         for (; OB_SUCC(ret) && iter != id_set_.end(); ++iter) {
           const ObTabletID &tablet_id = iter->first;
           if (OB_FAIL(op(tablet_id))) {
-            STORAGE_LOG(WARN, "fail to do operator", K(ret), K(tablet_id));
           }
         }
       }

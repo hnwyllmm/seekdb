@@ -104,14 +104,12 @@ public:
     } else {
       iter_.reset();
       if (OB_FAIL(iter_.init(&datum_store_))) {
-        SQL_ENG_LOG(WARN, "fail to init iter", K(ret));
       }
     }
     return ret;
   }
 
   int init(const int64_t mem_limit,
-           const uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
            const int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID,
            const char *label = common::ObModIds::OB_SQL_ROW_STORE,
            const bool enable_dump = true,
@@ -122,10 +120,10 @@ public:
   {
     int ret = OB_SUCCESS;
     if (is_compact_) {
-      ret = compact_store_.init(mem_limit, tenant_id, mem_ctx_id, label, enable_dump, row_extra_size,
+      ret = compact_store_.init(mem_limit, mem_ctx_id, label, enable_dump, row_extra_size,
                           enable_truncate, compress_type, exprs);
     } else {
-      ret = datum_store_.init(mem_limit, tenant_id, mem_ctx_id, label, enable_dump, row_extra_size);
+      ret = datum_store_.init(mem_limit, mem_ctx_id, label, enable_dump, row_extra_size);
     }
     return ret;
   }
@@ -257,8 +255,7 @@ public:
   virtual ~ObSortOpImpl();
 
   // if rewind id not needed, we will release the resource after iterate end.
-  int init(const uint64_t tenant_id,
-      const ObIArray<ObSortFieldCollation> *sort_collations,
+  int init(const ObIArray<ObSortFieldCollation> *sort_collations,
       const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
       ObEvalCtx *eval_ctx,
       ObExecContext *exec_ctx,
@@ -291,7 +288,6 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(add_row(expr, store_row))) {
-      SQL_ENG_LOG(WARN, "failed to add row", K(ret));
     } else if (use_heap_sort_ || use_partition_topn_sort_) {
       sort_need_dump = false;
     } else {
@@ -325,7 +321,6 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(add_batch(exprs, skip, batch_size, start_pos, append_row_count))) {
-      SQL_ENG_LOG(WARN, "failed to add batch", K(ret));
     } else if (use_heap_sort_ || use_partition_topn_sort_) {
       sort_need_dump = false;
     } else {
@@ -480,6 +475,7 @@ public:
     const ObIArray<ObSortFieldCollation> *sort_collations_;
     const ObIArray<ObSortCmpFunc> *sort_cmp_funs_;
     ObExecContext *exec_ctx_;
+    const common::ObDatumAccessContext *access_ctx_;
     bool enable_encode_sortkey_;
     int64_t cmp_count_;
     int64_t cmp_start_;
@@ -672,7 +668,6 @@ protected:
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "unexpected status: store row is null", K(ret));
     } else if (OB_FAIL(sr->to_expr(exprs, *eval_ctx_))) {
-      SQL_ENG_LOG(WARN, "convert store row to expr value failed", K(ret), KPC(sr));
     }
     return ret;
   }
@@ -829,10 +824,11 @@ protected:
   ModulePageAllocator page_allocator_;
   lib::MemoryContext mem_context_;
   MemEntifyFreeGuard mem_entify_guard_;
-  int64_t tenant_id_;
+  
   const ObIArray<ObSortFieldCollation> *sort_collations_;
   const ObIArray<ObSortCmpFunc> *sort_cmp_funs_;
   ObEvalCtx *eval_ctx_;
+  const common::ObDatumAccessContext *datum_access_ctx_;
   Compare comp_;
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator iter_;
@@ -898,8 +894,7 @@ public:
     reset();
   }
   // init && start fetch %op rows
-  int init(const int64_t tenant_id,
-      const int64_t prefix_pos,
+  int init(const int64_t prefix_pos,
       const common::ObIArray<ObExpr *> &all_exprs,
       const ObIArray<ObSortFieldCollation> *sort_collations,
       const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
@@ -985,16 +980,14 @@ public:
     free_prev_row();
   }
 
-  int init(const uint64_t tenant_id,
-      const ObIArray<ObSortFieldCollation> *sort_collations,
+  int init(const ObIArray<ObSortFieldCollation> *sort_collations,
       const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
       ObEvalCtx *eval_ctx,
       ObExecContext *exec_ctx,
       const bool need_rewind,
       const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE)
   {
-    return ObSortOpImpl::init(tenant_id,
-        sort_collations,
+    return ObSortOpImpl::init(sort_collations,
         sort_cmp_funs,
         eval_ctx,
         exec_ctx,

@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_SHOW_PROCESSLIST_
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_SHOW_PROCESSLIST_
 
-#include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
 #include "sql/session/ob_sql_session_mgr.h"
 namespace oceanbase
 {
@@ -37,14 +37,13 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator
 public:
   ObShowProcesslist();
   virtual ~ObShowProcesslist();
-  inline void set_session_mgr(sql::ObSQLSessionMgr *session_mgr) { session_mgr_ = session_mgr; }
+  inline void sesession_pool(sql::ObSQLSessionMgr *session_mgr) { session_mgr_ = session_mgr; }
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 private:
   enum SESSION_INFO_COLUMN {
     ID = OB_APP_MIN_COLUMN_ID,
     USER,
-    TENANT,
     HOST,
     DB_NAME,
     COMMAND,
@@ -52,7 +51,6 @@ private:
     TIME,
     STATE,
     INFO,
-    PROXY_SESSID,
     MASTER_SESSID,
     USER_CLIENT_IP,
     USER_HOST,
@@ -69,17 +67,12 @@ private:
     CLIENT_INFO,
     SQL_TRACE,
     PLAN_ID,
-    EFFECTIVE_TENANT_ID,
     LEVEL,
     SAMPLE_PERCENTAGE,
     RECORD_POLICY,
-    VID,
-    VIP,
-    VPORT,
     IN_BYTES,
     OUT_BYTES,
     USER_CLIENT_PORT,
-    SERVICE_NAME,
     TOTAL_CPU_TIME,
     TOP_INFO,
     MEMORY_USAGE
@@ -108,8 +101,6 @@ private:
              share::schema::ObSchemaGetterGuard* schema_guard,
              const share::schema::ObTableSchema *table_schema);
     inline void reset();
-  public:
-    bool has_process_privilege();
   private:
       ObIAllocator *allocator_;
       common::ObScanner *scanner_;

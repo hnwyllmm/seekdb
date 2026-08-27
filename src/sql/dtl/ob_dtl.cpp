@@ -16,7 +16,6 @@
 
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl.h"
-#include "sql/dtl/ob_dtl_rpc_channel.h"
 #include "sql/dtl/ob_dtl_local_channel.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
 
@@ -62,7 +61,6 @@ int ObDtlChannelManager::foreach_refactored(int64_t interval, std::function<int(
   ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
   for (int64_t i = idx_; i < bucket_num && OB_SUCC(ret); i += interval) {
     if (OB_FAIL(hash_table_.foreach_refactored(i, op))) {
-      LOG_WARN("failed to refactor all channels", K(ret), K(i), K(interval));
     }
   }
   return ret;
@@ -89,12 +87,11 @@ int ObDtlHashTable::init(int64_t bucket_num)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect bukcet number", K(bucket_num));
   } else {
-    ObMemAttr attr(OB_SERVER_TENANT_ID, "SqlDtlMgr");
+    ObMemAttr attr("SqlDtlMgr");
     if (OB_FAIL(allocator_.init(
         lib::ObMallocAllocator::get_instance(),
         OB_MALLOC_NORMAL_BLOCK_SIZE,
         attr))) {
-      LOG_WARN("failed to init allocator", K(ret));
     } else {
       allocator_.set_label("SqlDtlMgr");
       bucket_cells_ = reinterpret_cast<ObDtlHashTableCell*>(allocator_.alloc(bucket_num * sizeof(ObDtlHashTableCell)));
@@ -164,7 +161,6 @@ int ObDtlHashTable::foreach_refactored(int64_t nth_cell, std::function<int(ObDtl
     LOG_WARN("invalid cell idx", K(ret), K(nth_cell));
   } else {
     if (OB_FAIL(bucket_cells_[nth_cell].foreach_refactored(op))) {
-      LOG_WARN("failed to refactor all channels", K(ret));
     }
   }
   return ret;
@@ -177,7 +173,6 @@ int ObDtlHashTableCell::foreach_refactored(std::function<int(ObDtlChannel *ch)> 
   if (0 < chan_list_.get_size()) {
     DLIST_FOREACH_X(node, chan_list_, OB_SUCC(ret)) {
       if (OB_FAIL(op(node))) {
-        LOG_WARN("failed to refactor channel", K(ret));
       }
     }
   }
@@ -252,12 +247,10 @@ int ObDtlHashTableCell::get_channel(uint64_t chid, ObDtlChannel *&ch)
 ObDtl::ObDtl()
     : is_inited_(false),
       allocator_("SqlDtlMgr"),
-      rpc_proxy_(),
       dfc_server_(),
       hash_table_(),
       ch_mgrs_(nullptr)
 {
-  rpc_proxy_.set_tenant(OB_DTL_TENANT_ID);
 }
 
 ObDtl::~ObDtl()
@@ -272,14 +265,12 @@ int ObDtl::init()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dfc_server_.init())) {
-    LOG_WARN("failed to init flow control server", K(ret));
   } else {
     ch_mgrs_ = reinterpret_cast<ObDtlChannelManager*>(allocator_.alloc(sizeof(ObDtlChannelManager) * HASH_CNT));
     if (OB_ISNULL(ch_mgrs_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("channel manager is null", K(ret));
     } else if (OB_FAIL(hash_table_.init(BUCKET_NUM))) {
-      LOG_WARN("failed init hash table", K(ret));
     } else {
       char *buf = reinterpret_cast<char*>(ch_mgrs_);
       for (int64_t i = 0; i < HASH_CNT && OB_SUCC(ret); ++i) {
@@ -292,9 +283,7 @@ int ObDtl::init()
   }
   return ret;
 }
-// Directly remove the channel from hash_table according to the channel id, and destruct it
-// With remove channel different, remove channel only removes from hash_table
-// Currently mainly used in rpc channel handling method
+// Remove the channel from the registry by id and destroy it after readers release their pins.
 int ObDtl::destroy_channel(uint64_t chid)
 {
   int ret = OB_SUCCESS;
@@ -305,7 +294,6 @@ int ObDtl::destroy_channel(uint64_t chid)
     uint64_t hash_val = get_hash_value(chid);
     ObDtlChannelManager *ch_mgr = nullptr;
     if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-      LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
     } else if (nullptr == ch_mgr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("channel manager is null", K(ret));
@@ -340,11 +328,8 @@ int ObDtl::destroy_channel(uint64_t chid)
   }
   return ret;
 }
-// Here will split the channel release logic into 2 steps
-// First step: Remove from hash_table to avoid subsequent rpcs from getting the channel
-// Second step: wait for rpc unpin, then perform subsequent dfc (flow control) processing on the channel
-// Finally destruct the channel object
-// Mainly used for data channel destruction processing, because data channel requires some special handling of dfc
+// Data-channel release is split in two: detach it from the registry, then wait
+// for local readers to release their pins before DFC cleanup and destruction.
 int ObDtl::remove_channel(uint64_t chid, ObDtlChannel *&ch)
 {
   int ret = OB_SUCCESS;
@@ -356,7 +341,6 @@ int ObDtl::remove_channel(uint64_t chid, ObDtlChannel *&ch)
     uint64_t hash_val = get_hash_value(chid);
     ObDtlChannelManager *ch_mgr = nullptr;
     if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-      LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
     } else if (nullptr == ch_mgr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("channel manager is null", K(ret));
@@ -366,7 +350,7 @@ int ObDtl::remove_channel(uint64_t chid, ObDtlChannel *&ch)
       // spin until there's no reference of this channel.
       while (chan->get_pins() != 0) {
       }
-      // Indicates that data dtl cleanup operations, such as dfc processing, only start after the rpc thread has finished processing
+      // DFC cleanup starts only after all local channel users release their pins.
       ch = chan;
       if (nullptr != ch->get_msg_watcher()) {
         ch->get_msg_watcher()->remove_data_list(ch, true);
@@ -385,7 +369,6 @@ int ObDtl::get_channel(uint64_t chid, ObDtlChannel *&chan)
     uint64_t hash_val = get_hash_value(chid);
     ObDtlChannelManager *ch_mgr = nullptr;
     if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-      LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
     } else if (nullptr == ch_mgr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("channel manager is null", K(ret));
@@ -406,63 +389,34 @@ int ObDtl::release_channel(ObDtlChannel *chan)
   return ret;
 }
 
-int ObDtl::create_rpc_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
-    ObDtlChannel *&chan, ObDtlFlowControl *dfc)
+int ObDtl::create_local_channel(uint64_t chid, ObDtlChannel *&chan, ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
   // if nullptr != chan, batch free chans until link_ch_sets
   const bool need_free_chan = (nullptr == chan);
-  if (nullptr == chan
-      && OB_FAIL(new_channel(tenant_id, chid, peer, chan, false))) {
-    LOG_WARN("create rpc channel fail", K(tenant_id), KP(chid), K(ret));
+  if (nullptr == chan && OB_FAIL(new_channel(chid, chan))) {
+    LOG_WARN("create local channel fail", KP(chid), K(ret));
   } else if (nullptr == chan) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
-  } else if (OB_FAIL(init_channel(tenant_id, chid, peer, chan, dfc, need_free_chan))) {
-    LOG_WARN("failed to init channel", K(tenant_id), KP(chid), K(ret), K(chan));
+    LOG_WARN("channel is null", KP(chid), K(ret));
+  } else if (OB_FAIL(init_channel(chid, chan, dfc, need_free_chan))) {
   }
   return ret;
 }
 
-int ObDtl::create_local_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
-    ObDtlChannel *&chan, ObDtlFlowControl *dfc)
-{
-  int ret = OB_SUCCESS;
-  // if nullptr != chan, batch free chans until link_ch_sets
-  const bool need_free_chan = (nullptr == chan);
-  if (nullptr == chan
-      && OB_FAIL(new_channel(tenant_id, chid, peer, chan, true))) {
-    LOG_WARN("create rpc channel fail", K(tenant_id), KP(chid), K(ret));
-  } else if (nullptr == chan) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
-  } else if (OB_FAIL(init_channel(tenant_id, chid, peer, chan, dfc, need_free_chan))) {
-    LOG_WARN("failed to init channel", K(ret), K(tenant_id), KP(chid), K(chan));
-  }
-  return ret;
-}
-
-int ObDtl::new_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
-    ObDtlChannel *&chan, bool is_local)
+int ObDtl::new_channel(uint64_t chid, ObDtlChannel *&chan)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
-    if (is_local) {
-      chan = static_cast<ObDtlChannel *> (ob_malloc(sizeof(ObDtlLocalChannel), ObMemAttr(tenant_id, "SqlDtlChan")));
-      if (nullptr != chan) {
-        new (chan) ObDtlLocalChannel(tenant_id, chid, peer, ObDtlChannel::DtlChannelType::LOCAL_CHANNEL);
-      }
-    } else {
-      chan = static_cast<ObDtlChannel *> (ob_malloc(sizeof(ObDtlRpcChannel), ObMemAttr(tenant_id, "SqlDtlChan")));
-      if (nullptr != chan) {
-        new (chan) ObDtlRpcChannel(tenant_id, chid, peer, ObDtlChannel::DtlChannelType::RPC_CHANNEL);
-      }
+    chan = static_cast<ObDtlChannel *> (ob_malloc(sizeof(ObDtlLocalChannel), ObMemAttr("SqlDtlChan")));
+    if (nullptr != chan) {
+      new (chan) ObDtlLocalChannel(chid);
     }
     if (nullptr == chan) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("create local channel fail", K(tenant_id), KP(chid), K(ret));
+      LOG_WARN("create local channel fail", KP(chid), K(ret));
     }
   }
   return ret;
@@ -481,22 +435,19 @@ int ObDtl::get_dtl_channel_manager(uint64_t hash_val, ObDtlChannelManager *&ch_m
   return ret;
 }
 
-int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
-    ObDtlChannel *&chan, ObDtlFlowControl *dfc, const bool need_free_chan)
+int ObDtl::init_channel(uint64_t chid, ObDtlChannel *&chan,
+                        ObDtlFlowControl *dfc, const bool need_free_chan)
 {
   int ret = OB_SUCCESS;
-  UNUSED(peer);
   if (nullptr == chan) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
+    LOG_WARN("channel is null", KP(chid), K(ret));
   } else if (OB_FAIL(chan->init())) {
-    LOG_WARN("init channel fail", K(tenant_id), KP(chid), K(ret));
   } else {
     if (nullptr != dfc) {
-      // If there is dfc, it must be established together with the channel, otherwise, after the channel is created, there is an rpc processor thread handling
-      // This way, setting the dfc of the channel to lag will result in this line's processing not having dfc
+      // Register DFC before publishing the channel so every local user observes
+      // the channel and its flow-control state atomically.
       if (OB_FAIL(dfc_server_.register_dfc_channel(*dfc, chan))) {
-        LOG_WARN("failed to register channel to dfc", K(tenant_id), KP(chid), K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -504,7 +455,6 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
       uint64_t hash_val = get_hash_value(chid);
       ObDtlChannelManager *ch_mgr = nullptr;
       if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-        LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
       } else if (nullptr == ch_mgr) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("channel manager is null", K(ret));
@@ -513,14 +463,14 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
     }
   }
   if (OB_FAIL(ret) && nullptr != chan) {
-    LOG_WARN("failed to create channel", K(tenant_id), KP(chid), K(ret), K(chan), KP(chan->get_id()));
+    LOG_WARN("failed to create channel", KP(chid), K(ret), K(chan), KP(chan->get_id()));
     if (nullptr != dfc) {
       // Note error codes are not overwritten
       int tmp_ret = OB_SUCCESS;
       // If registered to dfc before, must unregister, otherwise the channel in dfc will be an invalid address
       if (OB_SUCCESS != (tmp_ret = dfc_server_.unregister_dfc_channel(*dfc, chan))) {
         ret = tmp_ret;
-        LOG_WARN("failed to register channel to dfc", K(tenant_id), KP(chid), K(ret), KP(chan->get_id()));
+        LOG_WARN("failed to register channel to dfc", KP(chid), K(ret), KP(chan->get_id()));
       }
     }
     if (need_free_chan) {
@@ -536,7 +486,6 @@ int ObDtl::foreach_refactored(std::function<int(ObDtlChannel *ch)> op)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < HASH_CNT && OB_SUCC(ret); ++i) {
     if (OB_FAIL(ch_mgrs_[i].foreach_refactored(HASH_CNT, op))) {
-      LOG_WARN("failed to refactor all channels", K(i));
     }
   }
   return ret;
@@ -546,7 +495,7 @@ ObDtl *ObDtl::instance()
 {
   static ObDtl *instance_ = nullptr;
   if (nullptr == instance_) {
-    instance_ = static_cast<ObDtl *> (ob_malloc(sizeof(ObDtl), ObMemAttr(OB_SERVER_TENANT_ID, "SqlDtlMgr")));
+    instance_ = static_cast<ObDtl *> (ob_malloc(sizeof(ObDtl), ObMemAttr("SqlDtlMgr")));
     if (nullptr != instance_) {
       new (instance_) ObDtl();
     }

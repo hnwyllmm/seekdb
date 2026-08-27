@@ -35,7 +35,6 @@ public:
     int cmp_ret = 0;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(cmp_func_.compare(left, right, cmp_ret))) {
-      LOG_WARN("Failed to compare", K(ret), K(left), K(right));
     }
     return cmp_ret < 0;
   }
@@ -59,7 +58,6 @@ public:
       const ObStoreCmpFuncs &cmp_funcs = datum_utils_.get_cmp_funcs();
       for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt_ && 0 == cmp_ret; ++i) {
         if (OB_FAIL(cmp_funcs.at(i).compare(left.rowkey_vector_->columns_[i].datums_[left.row_idx_], right.datums_[i], cmp_ret))) {
-          LOG_WARN("Failed to compare key", K(ret), K(i), K(left), K(right));
         }
       }
       if (OB_SUCC(ret) && 0 == cmp_ret) {
@@ -78,7 +76,6 @@ public:
       const ObStoreCmpFuncs &cmp_funcs = datum_utils_.get_cmp_funcs();
       for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt_ && 0 == cmp_ret; ++i) {
         if (OB_FAIL(cmp_funcs.at(i).compare(right.rowkey_vector_->columns_[i].datums_[right.row_idx_], left.datums_[i], cmp_ret))) {
-          LOG_WARN("Failed to compare key", K(ret), K(i), K(left), K(right));
         }
       }
       if (OB_SUCC(ret) && 0 == cmp_ret) {
@@ -99,8 +96,7 @@ int ObColumnVector::inner_locate_key<ObStorageDatum>(
     int64_t &begin,
     int64_t &end,
     const ObStorageDatum &key,
-    const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode) const
+    const ObStorageDatumCmpFunc &cmp_func) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(begin >= end)) {
@@ -112,14 +108,12 @@ int ObColumnVector::inner_locate_key<ObStorageDatum>(
     const ObStorageDatum *last = datums_ + end;
     const ObStorageDatum *lb = std::lower_bound(first, last, key, compactor);
     if (OB_FAIL(ret)) {
-      LOG_WARN("Failed to locate key", K(ret), K(key));
     } else if (lb == last) {
       begin = end;
     } else if (FALSE_IT(begin = lb - datums_)) {
     } else if (need_upper_bound) {
       int cmp_ret = 0;
       if (OB_FAIL(cmp_func.compare(*lb, key, cmp_ret))) {
-        LOG_WARN("Failed to compare", K(ret));
       } else if (OB_UNLIKELY(cmp_ret < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected cmp ret", K(ret), K(cmp_ret), K(*lb), K(key), K(begin), K(end));
@@ -145,25 +139,17 @@ int ObColumnVector::inner_locate_key<int64_t>(
     int64_t &begin,
     int64_t &end,
     const ObStorageDatum &key,
-    const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode) const
+    const ObStorageDatumCmpFunc &cmp_func) const
 {
   int ret = OB_SUCCESS;
   if (has_null_) {
     ObRVIntegerCell<int64_t> cell(key.is_null() ? 0 : key.get_int(), key.is_null());
-    if (OB_FAIL(locate_integer_key_with_null(need_upper_bound, begin, end, signed_ints_, cell, is_oracle_mode))) {
-      LOG_WARN("Failed to locate integer key", K(ret), K(need_upper_bound),
-               K(begin), K(end), K(key));
+    if (OB_FAIL(locate_integer_key_with_null(need_upper_bound, begin, end, signed_ints_, cell))) {
     }
   } else if (key.is_null()) {
-    if (is_oracle_mode) {
-      begin = end;
-    } else {
-      end = begin;
-    }
+    // MySQL mode: null first
+    end = begin;
   } else if (OB_FAIL(locate_integer_key(need_upper_bound, begin, end, signed_ints_, key.get_int()))) {
-    LOG_WARN("Failed to locate integer key", K(ret), K(need_upper_bound),
-             K(begin), K(end), K(key));
   }
   return ret;
 }
@@ -174,23 +160,17 @@ int ObColumnVector::inner_locate_key<uint64_t>(
     int64_t &begin,
     int64_t &end,
     const ObStorageDatum &key,
-    const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode) const
+    const ObStorageDatumCmpFunc &cmp_func) const
 {
   int ret = OB_SUCCESS;
   if (has_null_) {
     ObRVIntegerCell<uint64_t> cell(key.is_null() ? 0 : key.get_uint(), key.is_null());
-    if (OB_FAIL(locate_integer_key_with_null(need_upper_bound, begin, end, unsigned_ints_, cell, is_oracle_mode))) {
-      LOG_WARN("Failed to locate integer key", K(ret), K(need_upper_bound), K(begin), K(end), K(key));
+    if (OB_FAIL(locate_integer_key_with_null(need_upper_bound, begin, end, unsigned_ints_, cell))) {
     }
   } else if (key.is_null()) {
-    if (is_oracle_mode) {
-      begin = end;
-    } else {
-      end = begin;
-    }
+    // MySQL mode: null first
+    end = begin;
   } else if (OB_FAIL(locate_integer_key(need_upper_bound, begin, end, unsigned_ints_, key.get_uint()))) {
-    LOG_WARN("Failed to locate integer key", K(ret), K(need_upper_bound), K(begin), K(end), K(key));
   }
   return ret;
 }
@@ -200,8 +180,7 @@ typedef int (ObColumnVector::*locate_key_func)(
     int64_t &begin,
     int64_t &end,
     const ObStorageDatum &key,
-    const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode) const;
+    const ObStorageDatumCmpFunc &cmp_func) const;
 static locate_key_func LOCATE_KEY_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] = 
 {
   &ObColumnVector::inner_locate_key<ObStorageDatum>,
@@ -214,8 +193,7 @@ int ObColumnVector::locate_key(
     int64_t &begin,
     int64_t &end,
     const ObStorageDatum &key,
-    const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode) const
+    const ObStorageDatumCmpFunc &cmp_func) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_vector_type(type_) || key.is_ext())) {
@@ -223,8 +201,7 @@ int ObColumnVector::locate_key(
     LOG_WARN("Invalid row idx", K(ret), K(type_), K(key));
   } else {
     locate_key_func func = LOCATE_KEY_FUNCS[(int8_t) type_];
-    if (OB_FAIL((this->*func)(need_upper_bound, begin, end, key, cmp_func, is_oracle_mode))) {
-      LOG_WARN("Failed to locate key", K(ret), K(begin), K(end), K(key));
+    if (OB_FAIL((this->*func)(need_upper_bound, begin, end, key, cmp_func))) {
     }
   }
   return ret;
@@ -243,7 +220,6 @@ int ObColumnVector::fill_column_datum(
     LOG_WARN("Invalid row idx", K(ret), K(type_), K(row_idx), K(row_cnt_), K(datum));
   } else if (ObColumnVectorType::DATUM_TYPE == type_) {
     if (OB_FAIL(datums_[row_idx].deep_copy(datum, buf, buf_size, pos))) {
-      LOG_WARN("Failed to deep copy storage datum to buf", K(ret), K(row_idx), K(datum));
     }
   } else if (datum.is_null()) {
     nulls_[row_idx] = true;
@@ -278,7 +254,6 @@ int ObColumnVector::get_column_datum(const int64_t row_idx, ObStorageDatum &dst,
     dst.reuse();
     if (ObColumnVectorType::DATUM_TYPE == type_) {
       if (OB_FAIL(dst.deep_copy(datums_[row_idx], buf, buf_size, pos))) {
-        LOG_WARN("Failed to deep copy storage datum", K(ret), K(row_idx));
       }
     } else if (nulls_[row_idx]) {
       dst.set_null();
@@ -337,7 +312,6 @@ int ObColumnVector::deep_copy(
           pos += sizeof(ObStorageDatum) * row_cnt_;
           for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_cnt_; ++row_idx) {
             if (OB_FAIL(datums_[row_idx].deep_copy(other.datums_[row_idx], buf, buf_size, pos))) {
-              LOG_WARN("Failed to deep copy datum", K(ret), K(row_idx), K(other.datums_[row_idx]));
             }
           }
         }
@@ -477,7 +451,6 @@ int ObRowkeyVector::locate_key(
       found = std::upper_bound(first, last, rowkey, cmp);
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("Failed to locate key", K(ret), K(rowkey), K(*this));
     } else if (found == last) {
       rowkey_idx = end;
     } else {
@@ -489,7 +462,6 @@ int ObRowkeyVector::locate_key(
     rowkey_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
     const bool need_upper_bound = cmp_cnt > 1 || !is_lower_bound;
     const ObStoreCmpFuncs &cmp_funcs = datum_utils.get_cmp_funcs();
-    const bool is_oracle_mode = datum_utils.is_oracle_mode();
     for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt; ++i) {
       const ObStorageDatum &key = rowkey.get_datum(i);
       if (key.is_min()) {
@@ -500,8 +472,7 @@ int ObRowkeyVector::locate_key(
         break;
       } else {
         ObColumnVector *vec = &columns_[i];
-        if (OB_FAIL(vec->locate_key(need_upper_bound, begin_idx, end_idx, key, cmp_funcs.at(i), is_oracle_mode))) {
-          LOG_WARN("Failed to locate key", K(ret), K(i));
+        if (OB_FAIL(vec->locate_key(need_upper_bound, begin_idx, end_idx, key, cmp_funcs.at(i)))) {
         }
       }
       if (OB_SUCC(ret)) {
@@ -525,7 +496,6 @@ int ObRowkeyVector::locate_range(
     const ObDatumRange &range,
     const bool is_left_border,
     const bool is_right_border,
-    const bool is_normal_cg,
     const ObStorageDatumUtils &datum_utils,
     int64_t &begin_idx,
     int64_t &end_idx) const
@@ -534,13 +504,11 @@ int ObRowkeyVector::locate_range(
   if (!is_left_border || range.get_start_key().is_min_rowkey()) {
     begin_idx = 0;
   } else if (OB_FAIL(locate_key(0, row_cnt_, range.get_start_key(), datum_utils, begin_idx))) {
-    LOG_WARN("Failed to locate start key", K(ret));
   } else if (row_cnt_ == begin_idx) {
     ret = OB_BEYOND_THE_RANGE;
   } else if (!range.get_border_flag().inclusive_start()) {
     int cmp_ret = 0;
     if (OB_FAIL(compare_rowkey(range.get_start_key(), begin_idx, datum_utils, cmp_ret, false))) {
-      LOG_WARN("Failed to compare rowkey", K(ret), K(begin_idx), K(range), K(datum_utils));
     } else if (0 == cmp_ret) {
       ++begin_idx;
       if (begin_idx == row_cnt_) {
@@ -552,8 +520,7 @@ int ObRowkeyVector::locate_range(
   } else if (!is_right_border || range.get_end_key().is_max_rowkey()) {
     end_idx = row_cnt_ - 1;
   } else if (OB_FAIL(locate_key(begin_idx, row_cnt_, range.get_end_key(), datum_utils,
-                                end_idx, is_normal_cg || !range.get_border_flag().inclusive_end()))) {
-    LOG_WARN("Failed to locate start key", K(ret));
+                                end_idx, !range.get_border_flag().inclusive_end()))) {
   } else if (row_cnt_ == end_idx) {
     end_idx--;
   }
@@ -566,11 +533,10 @@ OB_INLINE int compare_column_key(
     const int64_t row_idx,
     const ObStorageDatum &key,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  ObRVIntegerWithNullComparor<int64_t> comparor(!is_oracle_mode);
+  ObRVIntegerWithNullComparor<int64_t> comparor(true/*null_first, MySQL mode*/);
   ObRVIntegerCell<int64_t> left(vector.signed_ints_[row_idx], vector.nulls_[row_idx]);
   ObRVIntegerCell<int64_t> right(key.is_null() ? 0 : key.get_int(), key.is_null());
   cmp_ret = comparor.compare(left, right);
@@ -583,11 +549,10 @@ OB_INLINE int compare_column_key<uint64_t>(
     const int64_t row_idx,
     const ObStorageDatum &key,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  ObRVIntegerWithNullComparor<uint64_t> comparor(!is_oracle_mode);
+  ObRVIntegerWithNullComparor<uint64_t> comparor(true/*null_first, MySQL mode*/);
   ObRVIntegerCell<uint64_t> left(vector.unsigned_ints_[row_idx], vector.nulls_[row_idx]);
   ObRVIntegerCell<uint64_t> right(key.is_null() ? 0 : key.get_uint(), key.is_null());
   cmp_ret = comparor.compare(left, right);
@@ -600,12 +565,10 @@ OB_INLINE int compare_column_key<ObStorageDatum>(
     const int64_t row_idx,
     const ObStorageDatum &key,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(cmp_func.compare(vector.datums_[row_idx], key, cmp_ret))) {
-    LOG_WARN("Failed to compare", K(ret));
   }
   return ret;
 }
@@ -615,7 +578,6 @@ typedef int (*compare_column_key_func) (
     const int64_t row_idx,
     const ObStorageDatum &key,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret);
 static compare_column_key_func COMPARE_COLUMN_KEY_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE] = 
 { compare_column_key<ObStorageDatum>, compare_column_key<int64_t>, compare_column_key<uint64_t> };
@@ -636,11 +598,9 @@ int ObRowkeyVector::compare_rowkey(
              K(col_cnt_), K(datum_utils));
   } else if (is_datum_vectors_) {
     if (OB_FAIL(compare_datum_rowkey(rowkey, row_idx, datum_utils, cmp_cnt, cmp_ret, compare_datum_cnt))) {
-      LOG_WARN("Failed to compare datum rowkey", K(ret));
     }
   } else {
     const ObStoreCmpFuncs &cmp_funcs = datum_utils.get_cmp_funcs();
-    const bool is_oracle_mode = datum_utils.is_oracle_mode();
     cmp_ret = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt && 0 == cmp_ret; ++i) {
       if (rowkey.datums_[i].is_min()) {
@@ -649,8 +609,7 @@ int ObRowkeyVector::compare_rowkey(
         cmp_ret = -1;
       } else {
         compare_column_key_func func = COMPARE_COLUMN_KEY_FUNCS[(int8_t)columns_[i].type_];
-        if (OB_FAIL(func(columns_[i], row_idx, rowkey.datums_[i], cmp_funcs.at(i), is_oracle_mode, cmp_ret))) {
-          LOG_WARN("Failed to compare key", K(ret));
+        if (OB_FAIL(func(columns_[i], row_idx, rowkey.datums_[i], cmp_funcs.at(i), cmp_ret))) {
         }
       }
     }
@@ -674,7 +633,6 @@ int ObRowkeyVector::compare_datum_rowkey(
   cmp_ret = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt && 0 == cmp_ret; ++i) {
     if (OB_FAIL(cmp_funcs.at(i).compare(columns_[i].datums_[row_idx], rowkey.datums_[i], cmp_ret))) {
-      LOG_WARN("Failed to compare key", K(ret), K(i), K(row_idx), K(rowkey));
     }
   }
   if (OB_SUCC(ret) && 0 == cmp_ret && compare_datum_cnt) {
@@ -690,11 +648,10 @@ int compare_column_row_idx(
     const int64_t left_row_idx,
     const int64_t right_row_idx,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  ObRVIntegerWithNullComparor<int64_t> comparor(!is_oracle_mode);
+  ObRVIntegerWithNullComparor<int64_t> comparor(true/*null_first, MySQL mode*/);
   ObRVIntegerCell<int64_t> left(left_vector.signed_ints_[left_row_idx], left_vector.nulls_[left_row_idx]);
   ObRVIntegerCell<int64_t> right(right_vector.signed_ints_[right_row_idx], right_vector.nulls_[right_row_idx]);
   cmp_ret = comparor.compare(left, right);
@@ -708,11 +665,10 @@ int compare_column_row_idx<uint64_t>(
     const int64_t left_row_idx,
     const int64_t right_row_idx,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  ObRVIntegerWithNullComparor<uint64_t> comparor(!is_oracle_mode);
+  ObRVIntegerWithNullComparor<uint64_t> comparor(true/*null_first, MySQL mode*/);
   ObRVIntegerCell<uint64_t> left(left_vector.unsigned_ints_[left_row_idx], left_vector.nulls_[left_row_idx]);
   ObRVIntegerCell<uint64_t> right(right_vector.unsigned_ints_[right_row_idx], right_vector.nulls_[right_row_idx]);
   cmp_ret = comparor.compare(left, right);
@@ -726,12 +682,10 @@ int compare_column_row_idx<ObStorageDatum>(
     const int64_t left_row_idx,
     const int64_t right_row_idx,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(cmp_func.compare(left_vector.datums_[left_row_idx], right_vector.datums_[right_row_idx], cmp_ret))) {
-    LOG_WARN("Failed to compare", K(ret));
   }
   return ret;
 }
@@ -741,11 +695,10 @@ int compare_column_datum_row_idx(
     ObColumnVector &left_vector,
     ObStorageDatum &right_datum,
     const int64_t left_row_idx,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  ObRVIntegerWithNullComparor<int64_t> comparor(!is_oracle_mode);
+  ObRVIntegerWithNullComparor<int64_t> comparor(true/*null_first, MySQL mode*/);
   ObRVIntegerCell<int64_t> left(left_vector.signed_ints_[left_row_idx], left_vector.nulls_[left_row_idx]);
   ObRVIntegerCell<int64_t> right(right_datum.get_int(), right_datum.is_null());
   cmp_ret = comparor.compare(left, right);
@@ -757,11 +710,10 @@ int compare_column_datum_row_idx<uint64_t>(
     ObColumnVector &left_vector,
     ObStorageDatum &right_datum,
     const int64_t left_row_idx,
-    const bool is_oracle_mode,
     int &cmp_ret)
 {
   int ret = OB_SUCCESS;
-  ObRVIntegerWithNullComparor<uint64_t> comparor(!is_oracle_mode);
+  ObRVIntegerWithNullComparor<uint64_t> comparor(true/*null_first, MySQL mode*/);
   ObRVIntegerCell<uint64_t> left(left_vector.unsigned_ints_[left_row_idx], left_vector.nulls_[left_row_idx]);
   ObRVIntegerCell<uint64_t> right(right_datum.get_uint(), right_datum.is_null());
   cmp_ret = comparor.compare(left, right);
@@ -774,7 +726,6 @@ typedef int (*compare_column_value_func) (
     const int64_t left_row_idx,
     const int64_t right_row_idx,
     const ObStorageDatumCmpFunc &cmp_func,
-    const bool is_oracle_mode,
     int &cmp_ret);
 static compare_column_value_func COMPARE_COLUMN_VALUE_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE + 1] = 
 { compare_column_row_idx<ObStorageDatum>, compare_column_row_idx<int64_t>, compare_column_row_idx<uint64_t> };
@@ -783,7 +734,6 @@ typedef int (*compare_column_value_datum_func) (
     ObColumnVector &left_vector,
     ObStorageDatum &right_datum,
     const int64_t left_row_idx,
-    const bool is_oracle_mode,
     int &cmp_ret);
 static compare_column_value_datum_func COMPARE_COLUMN_VALUE_DATUM_FUNCS[(int8_t)ObColumnVectorType::MAX_TYPE + 1] =
 { nullptr, compare_column_datum_row_idx<int64_t>, compare_column_datum_row_idx<uint64_t> };
@@ -808,23 +758,19 @@ int ObRowkeyVector::compare_rowkey(
     cmp_ret = 0;
   } else {
     const ObStoreCmpFuncs &cmp_funcs = datum_utils.get_cmp_funcs();
-    const bool is_oracle_mode = datum_utils.is_oracle_mode();
     cmp_ret = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt_ && 0 == cmp_ret; ++i) {
       if (OB_LIKELY(columns_[i].type_ == rowkey.rowkey_vector_->columns_[i].type_)) {
         compare_column_value_func func = COMPARE_COLUMN_VALUE_FUNCS[(int8_t)columns_[i].type_];
-        if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i], row_idx, rowkey.row_idx_, cmp_funcs.at(i), is_oracle_mode, cmp_ret))) {
-          LOG_WARN("Failed to compare key", K(ret));
+        if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i], row_idx, rowkey.row_idx_, cmp_funcs.at(i), cmp_ret))) {
         }
       } else if (ObColumnVectorType::DATUM_TYPE == rowkey.rowkey_vector_->columns_[i].type_) {
         compare_column_value_datum_func func = COMPARE_COLUMN_VALUE_DATUM_FUNCS[(int8_t)columns_[i].type_];
-        if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i].datums_[rowkey.row_idx_], row_idx, is_oracle_mode, cmp_ret))) {
-          LOG_WARN("Failed to compare key", K(ret));
+        if (OB_FAIL(func(columns_[i], rowkey.rowkey_vector_->columns_[i].datums_[rowkey.row_idx_], row_idx, cmp_ret))) {
         }
       } else if (ObColumnVectorType::DATUM_TYPE == columns_[i].type_) {
         compare_column_value_datum_func func = COMPARE_COLUMN_VALUE_DATUM_FUNCS[(int8_t)rowkey.rowkey_vector_->columns_[i].type_];
-        if (OB_FAIL(func(rowkey.rowkey_vector_->columns_[i], columns_[i].datums_[row_idx], rowkey.row_idx_, is_oracle_mode, cmp_ret))) {
-          LOG_WARN("Failed to compare key", K(ret));
+        if (OB_FAIL(func(rowkey.rowkey_vector_->columns_[i], columns_[i].datums_[row_idx], rowkey.row_idx_, cmp_ret))) {
         } else {
           cmp_ret = -cmp_ret;
         }
@@ -897,7 +843,6 @@ int ObRowkeyVector::get_deep_copy_rowkey_size(const int64_t row_idx, int64_t &si
   size = col_cnt_ * sizeof(ObStorageDatum);
   for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt_; ++i) {
     if (OB_FAIL(columns_[i].get_deep_copy_size(row_idx, column_size))) {
-      LOG_WARN("Failed to get column datum size", K(ret), K(row_idx));
     } else {
       size += column_size;
     }
@@ -916,7 +861,6 @@ int ObRowkeyVector::deep_copy_rowkey(const int64_t row_idx, ObDatumRowkey &dest,
     int64_t pos = sizeof(ObStorageDatum) * col_cnt_;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt_; i++) {
       if (OB_FAIL(columns_[i].get_column_datum(row_idx, datums[i], buf, buf_size, pos))) {
-        STORAGE_LOG(WARN, "Failed to get column datum", K(ret), K(i), K(*this));
       }
     }
     if (OB_SUCC(ret)) {
@@ -946,7 +890,6 @@ int ObRowkeyVector::fill_last_rowkey()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected rowkey vector", K(ret), KPC(this));
   } else if (OB_FAIL(get_rowkey(row_cnt_ - 1, *last_rowkey_))) {
-    LOG_WARN("Failed to get rowkey", K(ret), KPC(this));
   }
   return ret;
 }
@@ -955,7 +898,6 @@ int ObRowkeyVector::set_construct_finished()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(fill_last_rowkey())) {
-    LOG_WARN("Failed to fill last rowkey", K(ret));
   } else {
     for (int64_t i = 0; i < col_cnt_; ++i) {
       columns_[i].is_filled_ = true;
@@ -984,14 +926,11 @@ int ObRowkeyVector::deep_copy(
                                               pos,
                                               buf_size,
                                               other.columns_[col_idx]))) {
-        LOG_WARN("Failed to deep copy column vector", K(ret), K(col_idx));
       }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(prepare_rowkeys_buffer(row_cnt_, col_cnt_, buf, pos, buf_size, this))) {
-      LOG_WARN("Failed to prepare rowkeys buffer", K(ret));
     }  else if (OB_FAIL(fill_last_rowkey())) {
-      LOG_WARN("Failed to fill last rowkey", K(ret));
     }
   }
   return ret;
@@ -1060,13 +999,11 @@ int ObRowkeyVector::construct_rowkey_vector(
         obj_meta = &multi_version_col_meta_type;
       }
       if (OB_FAIL(ObColumnVector::construct_column_vector(buf, pos, buf_size, row_cnt, obj_meta, vector))) {
-        LOG_WARN("Failed to construct column vector", K(ret), K(col_idx), KPC(obj_meta));
       }
     }
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(tmp_rowkey_vector->is_datum_vectors_ = !all_cols_is_integer)) {
     } else if (OB_FAIL(prepare_rowkeys_buffer(row_cnt, col_cnt, buf, pos, buf_size, tmp_rowkey_vector))) {
-      LOG_WARN("Failed to prepare rowkeys buffer", K(ret));
     } else {
       rowkey_vector = tmp_rowkey_vector;
     }
@@ -1094,7 +1031,6 @@ int ObRowkeyVector::prepare_rowkeys_buffer(
     ObStorageDatum *datums = new (buf + pos) ObStorageDatum[col_cnt];
     pos += sizeof(ObStorageDatum) * col_cnt;
     if (OB_FAIL(rowkey_vector->last_rowkey_->assign(datums, col_cnt))) {
-      LOG_WARN("Failed to assign", K(ret));
     } else {
       rowkey_vector->discrete_rowkey_array_ = new (buf + pos) ObDiscreteDatumRowkey[row_cnt];
       pos += sizeof(ObDiscreteDatumRowkey) * row_cnt;

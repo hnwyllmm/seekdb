@@ -21,7 +21,9 @@
 #define protected public
 
 #include "storage/ob_partition_range_spliter.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -30,15 +32,8 @@ namespace storage
 using namespace blocksstable;
 using namespace common;
 
-class ObTenantMetaMemMgr;
-
 void ObCompactionBufferWriter::reset()
 {
-}
-
-int ObTenantMetaMemMgr::fetch_tenant_config()
-{
-  return OB_SUCCESS;
 }
 
 static int get_number(const char *str, const char *&endpos, int64_t &num)
@@ -618,7 +613,7 @@ class TestPartitionIncrementalRangeSliter : public ::testing::Test
   static const int64_t MAX_BUF_LENGTH = 1024;
 public:
   TestPartitionIncrementalRangeSliter()
-    : tenant_id_(1), tenant_base_(tenant_id_), merge_ctx_(param_, allocator_), buf_(nullptr), is_inited_(false)
+    : merge_ctx_(param_, allocator_), buf_(nullptr), is_inited_(false)
   {
     major_sstable_.meta_ = &major_sstable_meta_;
     minor_sstable_.meta_ = &minor_sstable_meta_;
@@ -667,8 +662,6 @@ private:
   void inner_test_split_ranges(const ObString &ranges_str, const ObString &split_ranges, bool full_merge = false);
 
 private:
-  const uint64_t tenant_id_;
-  share::ObTenantBase tenant_base_;
   ObArenaAllocator allocator_;
   compaction::ObTabletMergeDagParam param_;
   ObStorageSchema storage_schema_;
@@ -691,17 +684,14 @@ private:
 
 void TestPartitionIncrementalRangeSliter::SetUp()
 {
-  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   if (!is_inited_) {
     int ret = OB_SUCCESS;
     OB_STORAGE_OBJECT_MGR.super_block_.body_.macro_block_size_ = 1;
 
-    ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, tenant_id_);
+    ObStorageMetaMemMgr *t3m = OB_NEW(ObStorageMetaMemMgr, ObModIds::TEST);
     ret = t3m->init();
     ASSERT_EQ(OB_SUCCESS, ret);
-    tenant_base_.set(t3m);
-    share::ObTenantEnv::set_tenant(&tenant_base_);
-    ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
+    share::bind_server_service<ObStorageMetaMemMgr>(t3m);
 
     // table schema
     storage_schema_.tablet_size_ = 1024;
@@ -747,7 +737,7 @@ void TestPartitionIncrementalRangeSliter::SetUp()
     void *ptr = nullptr;
     ASSERT_NE(nullptr, ptr = allocator_.alloc(sizeof(ObRowkeyReadInfo)));
     tablet_.rowkey_read_info_ = new (ptr) ObRowkeyReadInfo();
-    ASSERT_EQ(OB_SUCCESS, tablet_.rowkey_read_info_->init(allocator_, col_descs_.count(), 1, lib::is_oracle_mode(), col_descs_));
+    ASSERT_EQ(OB_SUCCESS, tablet_.rowkey_read_info_->init(allocator_, col_descs_.count(), 1, col_descs_));
 
     // buf
     buf_ = static_cast<char *>(allocator_.alloc(MAX_BUF_LENGTH));
@@ -768,10 +758,9 @@ void TestPartitionIncrementalRangeSliter::TearDown()
   reset_major_sstable();
   reset_ranges();
 
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  OB_DELETE(ObTenantMetaMemMgr, ObModIds::TEST, t3m);
-  tenant_base_.destroy();
-  share::ObTenantEnv::set_tenant(nullptr);
+  ObStorageMetaMemMgr *t3m = ::oceanbase::share::server_service<::oceanbase::storage::ObStorageMetaMemMgr>();
+  OB_DELETE(ObStorageMetaMemMgr, ObModIds::TEST, t3m);
+  share::unbind_server_service<ObStorageMetaMemMgr>();
 }
 
 int TestPartitionIncrementalRangeSliter::set_major_sstable_macro_blocks(const ObString &str)
@@ -1187,12 +1176,3 @@ TEST_F(TestPartitionIncrementalRangeSliter, test_not_empty_major_sstable_split_r
 
 }  // namespace storage
 }  // namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  system("rm -f test_partition_incremental_range_spliter.log*");
-  oceanbase::ObLogger::get_logger().set_file_name("test_partition_incremental_range_spliter.log");
-  oceanbase::ObLogger::get_logger().set_log_level("DEBUG");
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

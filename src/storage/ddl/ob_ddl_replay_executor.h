@@ -18,12 +18,9 @@
 #define OCEANBASE_STORAGE_OB_DDL_REPLAY_EXECUTOR_H
 
 #include "common/ob_tablet_id.h"
-#include "logservice/replayservice/ob_tablet_replay_executor.h"
+#include "storage/tablet/ob_tablet_replay_executor.h"
 #include "storage/ddl/ob_ddl_clog.h"
-#include "storage/ddl/ob_ddl_inc_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
-#include "storage/ddl/ob_tablet_split_task.h"
-#include "storage/ddl/ob_tablet_lob_split_task.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
@@ -34,7 +31,7 @@ namespace storage
 class ObLS;
 class ObTabletHandle;
 
-class ObDDLReplayExecutor : public logservice::ObTabletReplayExecutor
+class ObDDLReplayExecutor : public ObTabletReplayExecutor
 {
 public:
   ObDDLReplayExecutor();
@@ -51,18 +48,10 @@ protected:
       const share::SCN &ddl_start_scn,
       const share::SCN &scn,
       bool &need_replay);
-  static int check_need_replay_ddl_inc_log_(
-      ObLS *ls,
-      const ObTabletHandle &tablet_handle,
-      const share::SCN &scn,
-      const ObDirectLoadType direct_load_type,
-      bool &need_replay);
-
   static int get_lob_meta_tablet_id(
       const ObTabletHandle &tablet_handle,
       const common::ObTabletID &possible_lob_meta_tablet_id,
       common::ObTabletID &lob_meta_tablet_id);
-
 
   virtual bool is_replay_update_mds_table_() const override
   {
@@ -78,7 +67,6 @@ protected:
   common::ObTabletID tablet_id_;
   share::SCN scn_;
 };
-
 
 class ObDDLStartReplayExecutor final : public ObDDLReplayExecutor
 {
@@ -101,11 +89,6 @@ protected:
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
   int replay_ddl_start(ObTabletHandle &handle, const bool is_lob_meta_tablet);
-  int pre_process_for_cs_replica(
-      ObTabletDirectLoadInsertParam &direct_load_param,
-      ObITable::TableKey &table_key,
-      ObTabletHandle &tablet_handle,
-      const ObTabletID &tablet_id);
 private:
   const ObDDLStartLog *log_;
 };
@@ -129,15 +112,7 @@ protected:
   // @return other error codes, failed to replay.
   virtual int do_replay_(ObTabletHandle &handle) override;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  int write_ss_block(blocksstable::ObStorageObjectWriteInfo &write_info, blocksstable::ObStorageObjectHandle &macro_handle);
-#endif
 private:
-  int do_inc_replay_(
-      ObTabletHandle &tablet_handle, 
-      blocksstable::ObMacroBlockWriteInfo &write_info, 
-      storage::ObDDLMacroBlock &macro_block,
-      const ObDirectLoadType direct_load_type);
   int do_full_replay_(
       ObTabletHandle &tablet_handle, 
       blocksstable::ObMacroBlockWriteInfo &write_info, 
@@ -175,167 +150,6 @@ protected:
 
 private:
   const ObDDLCommitLog *log_;
-};
-
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObDDLFinishReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObDDLFinishReplayExecutor();
-
-  int init(
-      ObLS *ls,
-      const ObDDLFinishLog &log,
-      const share::SCN &scn);
-
-protected:
-  // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return OB_TASK_EXPIRED, ddl task expired.
-  // @return other error codes, failed to replay.
-  int do_replay_(ObTabletHandle &handle) override;
-  int replay_ddl_finish(ObTabletHandle &handle);
-
-private:
-  const ObDDLFinishLog *log_;
-};
-#endif
-
-class ObDDLIncMinorStartReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObDDLIncMinorStartReplayExecutor();
-
-  int init(ObLS *ls, const common::ObTabletID &tablet_id, const share::SCN &scn);
-
-protected:
-  // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return other error codes, failed to replay.
-  int do_replay_(ObTabletHandle &handle) override;
-
-private:
-  common::ObTabletID tablet_id_;
-};
-
-class ObDDLIncMinorCommitReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObDDLIncMinorCommitReplayExecutor();
-
-  int init(ObLS *ls, const common::ObTabletID &tablet_id, const share::SCN &scn);
-
-protected:
-  // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return other error codes, failed to replay.
-  int do_replay_(ObTabletHandle &handle) override;
-
-private:
-  common::ObTabletID tablet_id_;
-};
-
-
-class ObSplitStartReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObSplitStartReplayExecutor();
-  ~ObSplitStartReplayExecutor() = default;
-
-  int init(
-      ObLS *ls,
-      const ObTabletSplitStartLog &log,
-      const share::SCN &scn);
-  static int prepare_param_from_log(
-      const share::ObLSID &ls_id,
-      const ObTabletHandle &handle,
-      const ObTabletSplitInfo &info,
-      const share::SCN &scn,
-      ObTabletSplitParam &param);
-  static int prepare_param_from_log(
-      const share::ObLSID &ls_id,
-      const ObTabletHandle &handle,
-      const ObTabletSplitInfo &info,
-      const share::SCN &scn,
-      ObLobSplitParam &param);
-  static bool is_split_log_retry_ret(const int ret_code) {
-    return OB_EAGAIN == ret_code || OB_SIZE_OVERFLOW == ret_code || OB_NEED_RETRY == ret_code;
-  }
-
-protected:
-  // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return other error codes, failed to replay.
-  virtual int do_replay_(ObTabletHandle &handle) override;
-
-private:
-  int check_need_wait_split_finished(
-      const share::ObLSID &ls_id,
-      const ObTabletHandle &handle,
-      const ObIArray<ObTabletID> &dest_tablets_id,
-      bool &need_wait_split_finished);
-
-private:
-  const ObTabletSplitStartLog *log_;
-};
-
-class ObSplitFinishReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObSplitFinishReplayExecutor();
-  ~ObSplitFinishReplayExecutor() = default;
-
-  int init(
-      ObLS *ls,
-      const ObTabletSplitFinishLog &log,
-      const share::SCN &scn);
-
-protected:
-  // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return other error codes, failed to replay.
-  virtual int do_replay_(ObTabletHandle &handle) override;
-private:
-  static int modify_tablet_restore_status_if_need(
-      const ObIArray<ObTabletID> &dest_tablet_ids, 
-      const ObTabletHandle &src_tablet_handle, 
-      ObLS* ls);
-  int check_can_skip_replay(ObTabletHandle &handle, bool &can_skip);
-private:
-  const ObTabletSplitFinishLog *log_;
-};
-
-class ObTabletFreezeReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObTabletFreezeReplayExecutor();
-  ~ObTabletFreezeReplayExecutor() = default;
-
-  int init(
-      ObLS *ls,
-      const ObTabletFreezeLog &log,
-      const share::SCN &scn);
-
-protected:
-   // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return other error codes, failed to replay.
-  virtual int do_replay_(ObTabletHandle &handle) override;
-
-private:
-  const ObTabletFreezeLog *log_;
 };
 
 class ObTabletForkFreezeReplayExecutor final : public ObDDLReplayExecutor
@@ -386,8 +200,7 @@ private:
   const ObTableForkFinishLog *log_;
 };
 
-
-class ObSchemaChangeReplayExecutor final : public logservice::ObTabletReplayExecutor
+class ObSchemaChangeReplayExecutor final : public ObTabletReplayExecutor
 {
 public:
   ObSchemaChangeReplayExecutor();
@@ -421,9 +234,7 @@ private:
   share::SCN scn_;
 };
 
-
 }  // end namespace storage
 }  // end namespace oceanbase
 
 #endif  // OCEANBASE_STORAGE_OB_DDL_REDO_LOG_REPLAYER_H
-

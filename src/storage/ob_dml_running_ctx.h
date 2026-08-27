@@ -74,16 +74,14 @@ private:
   int check_need_old_row_legitimacy();
   int init_cmp_funcs();
   int check_schema_version(share::schema::ObMultiVersionSchemaService &schema_service,
-                           const uint64_t tenant_id,
                            const uint64_t table_id,
-                           const int64_t tenant_schema_version,
+                           const int64_t runtime_schema_version,
                            const int64_t table_version,
                            ObTabletHandle &tablet_handle);
-  int check_tenant_schema_version(
+  int check_runtime_schema_version(
       share::schema::ObMultiVersionSchemaService &schema_service,
-      const uint64_t tenant_id,
       const uint64_t table_id,
-      const int64_t tenant_schema_version);
+      const int64_t runtime_schema_version);
 
 public:
   ObStoreCtx &store_ctx_;
@@ -99,7 +97,6 @@ public:
   bool is_need_check_old_row_;
   bool is_udf_;
   bool has_lob_rowkey_;
-  bool is_delete_insert_table_;
   ObLobTabletDmlCtx lob_dml_ctx_;
   common::ObFixedArray<bool, common::ObIAllocator> main_table_rowkey_col_flag_;
 

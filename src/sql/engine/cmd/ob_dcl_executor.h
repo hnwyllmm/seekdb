@@ -25,11 +25,6 @@ namespace common
 {
 class ObString;
 }
-namespace obrpc
-{
-class ObCommonRpcProxy;
-}
-
 namespace sql
 {
 class ObExecContext;
@@ -52,22 +47,12 @@ public:
   virtual ~ObRevokeExecutor() {}
   int execute(ObExecContext &ctx, ObRevokeStmt &stmt);
 private:
-  int revoke_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                  ObRevokeStmt &stmt);
-  int revoke_catalog(obrpc::ObCommonRpcProxy *rpc_proxy,
-                     ObRevokeStmt &stmt);
-  int revoke_db(obrpc::ObCommonRpcProxy *rpc_proxy,
-                ObRevokeStmt &stmt);
-  int revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy,
-                   ObRevokeStmt &stmt,
+  int revoke_user(ObRevokeStmt &stmt, ObExecContext &ctx);
+  int revoke_db(ObRevokeStmt &stmt, ObExecContext &ctx);
+  int revoke_table(ObRevokeStmt &stmt,
                    ObExecContext &ctx);
-
-  int revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy,
-                     ObRevokeStmt &stmt,
+  int revoke_routine(ObRevokeStmt &stmt,
                      ObExecContext &ctx);
-  int revoke_object(obrpc::ObCommonRpcProxy *rpc_proxy,
-                    ObRevokeStmt &stmt,
-                    ObExecContext &ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeExecutor);
 };

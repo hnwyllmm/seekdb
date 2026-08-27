@@ -27,7 +27,7 @@ namespace schema
 class ObMultiVersionSchemaService;
 }
 }
-namespace obrpc
+namespace obcall
 {
 class ObCreateIndexArg;
 class ObAlterTableRes;
@@ -39,10 +39,9 @@ class ObCreateIndexHelper : public ObDDLHelper
 public:
   ObCreateIndexHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
-    const uint64_t tenant_id,
     rootserver::ObDDLService &ddl_service,
-    const obrpc::ObCreateIndexArg &arg,
-    obrpc::ObAlterTableRes &res);
+    const obcall::ObCreateIndexArg &arg,
+    obcall::ObAlterTableRes &res);
   virtual ~ObCreateIndexHelper();
 
 private:
@@ -58,7 +57,6 @@ private:
   int is_local_generate_schema_(bool &is_local_generate);
   int create_table_();
   int create_tablets_();
-  int add_index_name_to_cache_();
   int check_fk_related_table_ddl_(const share::schema::ObTableSchema &data_table_schema,
                                   const share::ObDDLType &ddl_type);
   virtual int init_() override;
@@ -68,9 +66,9 @@ private:
   virtual int construct_and_adjust_result_(int &return_ret) override;
 
 private:
-  const obrpc::ObCreateIndexArg &arg_;
-  obrpc::ObCreateIndexArg *new_arg_;
-  obrpc::ObAlterTableRes &res_;
+  const obcall::ObCreateIndexArg &arg_;
+  obcall::ObCreateIndexArg *new_arg_;
+  obcall::ObAlterTableRes &res_;
   uint64_t database_id_;
   const ObTableSchema *orig_data_table_schema_;
   ObTableSchema* new_data_table_schema_;

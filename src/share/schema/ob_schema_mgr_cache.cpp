@@ -19,13 +19,12 @@
 #include "ob_schema_mgr_cache.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_schema_mgr.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/config/ob_runtime_config.h"
 
 namespace oceanbase
 {
 using namespace common;
 void ObSchemaSlot::reset() {
-  tenant_id_ = OB_INVALID_TENANT_ID;
   slot_id_ = OB_INVALID_INDEX;
   schema_version_ = OB_INVALID_VERSION;
   schema_count_ = OB_INVALID_COUNT;
@@ -34,10 +33,9 @@ void ObSchemaSlot::reset() {
   allocator_idx_ = OB_INVALID_INDEX;
 }
 
-void ObSchemaSlot::init(const uint64_t &tenant_id, const int64_t &slot_id,
+void ObSchemaSlot::init(const int64_t &slot_id,
                         const int64_t &schema_version, const int64_t &schema_count,
                         const int64_t &ref_cnt, const common::ObString &str, const int64_t &allocator_idx) {
-  tenant_id_ = tenant_id;
   slot_id_ = slot_id;
   schema_version_ = schema_version;
   schema_count_ = schema_count;
@@ -105,7 +103,6 @@ inline void ObSchemaMgrHandle::revert()
         && ObClockGenerator::getClock() - ref_timestamp_ >= REF_TIME_THRESHOLD) {
       ObSchemaMgr *&schema_mgr = schema_mgr_item_->schema_mgr_;
       LOG_WARN_RET(OB_SUCCESS, "long time to hold one guard", K(schema_mgr),
-               "tenant_id", schema_mgr->get_tenant_id(),
                "version", schema_mgr->get_schema_version(),
                "cur_timestamp", ObTimeUtility::current_time(),
                K_(ref_timestamp), K(lbt()));
@@ -121,7 +118,6 @@ ObSchemaMgrCache::ObSchemaMgrCache()
       max_cached_num_(0),
       last_get_schema_idx_(0),
       cur_cached_num_(0),
-      mode_(REFRESH),
       latest_schema_idx_(0)
 {
 }
@@ -131,7 +127,7 @@ ObSchemaMgrCache::~ObSchemaMgrCache()
   // TODO: release
 }
 
-int ObSchemaMgrCache::init(int64_t init_cached_num, Mode mode)
+int ObSchemaMgrCache::init(int64_t init_cached_num)
 {
   int ret = OB_SUCCESS;
 
@@ -140,8 +136,7 @@ int ObSchemaMgrCache::init(int64_t init_cached_num, Mode mode)
     LOG_WARN("invalid argument", K(ret), K(init_cached_num));
   } else {
     max_cached_num_ = init_cached_num;
-    mode_ = mode;
-    auto attr = SET_USE_500("SchemaMgrCache", ObCtxIds::SCHEMA_SERVICE);
+    const lib::ObMemAttr attr("SchemaMgrCache", ObCtxIds::SCHEMA_SERVICE);
     void *ptr = ob_malloc(sizeof(ObSchemaMgrItem[MAX_SCHEMA_SLOT_NUM]), attr);
     if (NULL == ptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -304,38 +299,6 @@ int ObSchemaMgrCache::get_nearest(const int64_t schema_version,
   return ret;
 }
 
-// Return the least referenced schema_version; if there is no reference, return the current latest schema version
-int ObSchemaMgrCache::get_recycle_schema_version(int64_t &schema_version) const
-{
-  int ret = OB_SUCCESS;
-  schema_version = OB_INVALID_VERSION;
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
-  } else {
-    TCRLockGuard guard(lock_);
-    for (int64_t i = 0; i < max_cached_num_; i++) {
-      ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
-      ObSchemaMgr *schema_mgr = schema_mgr_item.schema_mgr_;
-      if (OB_ISNULL(schema_mgr)) {
-        // do-nothing
-      } else if (ATOMIC_LOAD(&schema_mgr_item.ref_cnt_) > 0
-                 && (OB_INVALID_VERSION == schema_version
-                     || schema_mgr->get_schema_version() < schema_version)) {
-        schema_version = schema_mgr->get_schema_version();
-      }
-    }
-    if (OB_INVALID_VERSION == schema_version) {
-      // No reference version, take the largest schema_version that has been constructed
-      ObSchemaMgr *latest_schema_mgr = schema_mgr_items_[latest_schema_idx_].schema_mgr_;
-      if (OB_NOT_NULL(latest_schema_mgr)) {
-        schema_version = latest_schema_mgr->get_schema_version();
-      }
-    }
-  }
-  return ret;
-}
-
 static const char* ref_info_type_strs[] = {
   "STACK",
   "VTABLE_SCAN_PARAM",
@@ -345,7 +308,6 @@ static const char* ref_info_type_strs[] = {
   "REMOTE_EXE",
   "CACHED_GUARD",
   "UNIQ_CHECK",
-  "SSTABLE_SPLIT_CTX",
   "RELATIVE_TABLE",
   "VIRTUAL_TABLE",
   "DAS_CTX",
@@ -388,9 +350,7 @@ int ObSchemaMgrCache::build_ref_mod_infos_(const int64_t *mod_ref,
   for (int64_t i = 0; i < ARRAYSIZEOF(ref_info_type_strs) && OB_SUCC(ret); ++i) {
     if (mod_ref[i] > 0) {
       if (OB_FAIL(get_ref_info_type_str_(i, type_str))) {
-        LOG_WARN("fail to get ref info type str", KR(ret));
       } else if (OB_FAIL(databuff_printf(buff, buf_len, pos, "%s%s:%ld", (0 != pos ? "," : ""), type_str, mod_ref[i]))) {
-        LOG_WARN("fail to fail to databuff printf tmp_buff", KR(ret), K(type_str), K(mod_ref[i]));
       }
     }
   }
@@ -414,7 +374,7 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
     ObSchemaMgr *schema_mgr = NULL;
     int64_t cached_slot_num = OB_INVALID_COUNT;
     int64_t slot_id = OB_INVALID_INDEX;
-    uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    
     int64_t schema_version = OB_INVALID_VERSION;
     int64_t schema_count = OB_INVALID_COUNT;
     int64_t ref_cnt = OB_INVALID_COUNT;
@@ -437,30 +397,24 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
           ref_infos.reset();
           tmp_str.reset();
           slot_id = i;
-          tenant_id = schema_mgr->get_tenant_id();
           schema_version = schema_mgr->get_schema_version();
           allocator_idx = schema_mgr->get_allocator_idx();
           ref_cnt = schema_mgr_items_[i].ref_cnt_;
           mod_ref = schema_mgr_items_[i].mod_ref_cnt_;
           if (OB_FAIL(schema_mgr->get_schema_count(schema_count))) {
-            LOG_WARN("fail to get schema count", KR(ret), K(tenant_id), K(schema_version));
           } else if (0 == ref_cnt) {
             //do nothing
           } else if (OB_ISNULL(mod_ref)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tenant slot ref_cnt size > 0 but mod ref array is NULL", KR(ret), K(tenant_id),
+            LOG_WARN("schema slot ref_cnt size > 0 but mod ref array is NULL", KR(ret),
                     K(slot_id), K(schema_version));
           } else if (OB_FAIL(build_ref_mod_infos_(mod_ref, tmp_buff, buf_len, tmp_str))) {
-            LOG_WARN("fail to build mode_ref_cnt to string", KR(ret), K(tenant_id), K(schema_version));
-          //deep copy string
           } else if (OB_FAIL(ob_write_string(allocator, tmp_str, ref_infos))) {
-            LOG_WARN("set mod_ref_infos string faild", K(tmp_str));
           }
           if (OB_SUCC(ret)) {
-            schema_slot.init(tenant_id, slot_id, schema_version,
+            schema_slot.init(slot_id, schema_version,
                               schema_count, ref_cnt, ref_infos, allocator_idx);
             if (OB_FAIL(schema_slot_infos.push_back(schema_slot))) {
-              LOG_WARN("push back to schema_slot_infos failed", KR(ret), K(tenant_id), K(schema_version));
             }
           }
         }//OB_NOT_NULL(schema_mgr)
@@ -497,33 +451,20 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
   } else if (OB_ISNULL(schema_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(schema_mgr));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == schema_mgr->get_tenant_id())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), "tenant_id", schema_mgr->get_tenant_id());
   } else {
     ObSchemaMgrItem *dst_item = NULL;
     bool is_stop = false;
-    const uint64_t tenant_id = schema_mgr->get_tenant_id();
+    
     int64_t max_schema_slot_num = max_cached_num_;
-    if (!ObSchemaService::g_liboblog_mode_) {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      if (tenant_config.is_valid()) {
-        max_schema_slot_num = tenant_config->_max_schema_slot_num;
-      }
+    {
+
+      max_schema_slot_num = GCONF._max_schema_slot_num;
+
     }
     TCWLockGuard guard(lock_);
-    // 1. In order to avoid the repeated adjustment of the configuration item _max_schema_slot_num that may cause problems
-    //  that may be caused by the invisible version in the history, max_cached_num_ can only be increased during
-    //  the operation of the observer. The memory release frequency of the schema mgr is controlled by _max_schema_slot_num.
-    //  The user can reduce the _max_schema_slot_num to speed up the release of the schema mgr memory.
-    // 2. Because liboblog and agentserver cannot perceive ob configuration items, they still use startup
-    //  settings to control the number of schema slots.
-    // 3. The fallback mode has fewer usage scenarios in the OB and has nothing to do with the number of concurrent users,
-    //  and the schema_mgr memory management strategy is different from the schema refresh scenario.
-    //  In order to reduce unnecessary memory usage, a fixed number of 16 slots is also used.
-    if (!ObSchemaService::g_liboblog_mode_ && FALLBACK != mode_) {
-      max_cached_num_ = max(max_cached_num_, max_schema_slot_num);
-    }
+    // max_cached_num_ can only be increased to avoid making versions invisible.
+    // The user can reduce _max_schema_slot_num to speed up schema mgr memory release.
+    max_cached_num_ = max(max_cached_num_, max_schema_slot_num);
     int64_t target_pos = -1;
     for (int64_t i = 0; i < max_cached_num_ && !is_stop; ++i) {
       ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
@@ -549,9 +490,9 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
         const ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
         const ObSchemaMgr *schema_mgr = schema_mgr_item.schema_mgr_;
         if (OB_NOT_NULL(schema_mgr)) {
-          uint64_t tenant_id = schema_mgr->get_tenant_id();
+          
           uint64_t schema_version = schema_mgr->get_schema_version();
-          LOG_INFO("schema_mgr_item", "i", i, K(ret), K(tenant_id),
+          LOG_INFO("schema_mgr_item", "i", i, K(ret),
                    K(schema_version), K(schema_mgr),
                    "ref_cnt", schema_mgr_item.ref_cnt_,
                    "mod_ref_cnt", ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_,
@@ -562,10 +503,10 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
       eli_schema_mgr = dst_item->schema_mgr_;
       schema_mgr->set_timestamp_in_slot(ObClockGenerator::getClock());
       dst_item->schema_mgr_ = schema_mgr;
-      uint64_t tenant_id = schema_mgr->get_tenant_id();
+      
       int64_t dst_timestamp = schema_mgr->get_timestamp_in_slot();
       int64_t dst_schema_version = schema_mgr->get_schema_version();
-      LOG_INFO("dst schema mgr item ptr", K(tenant_id), K(dst_item),
+      LOG_INFO("dst schema mgr item ptr", K(dst_item),
                K(dst_timestamp), K(dst_schema_version), K(target_pos));
       (void)ATOMIC_STORE(&dst_item->ref_cnt_, 0);
       for (int64_t i = 0; i < ObSchemaMgrItem::MOD_MAX; i++) {
@@ -582,62 +523,23 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
       if (OB_SUCC(ret)) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = try_update_latest_schema_idx())) {
-          LOG_WARN("fail to update latest schema idx", K(tmp_ret));
         }
       }
     }
   }
 
-  return ret;
-}
-
-int ObSchemaMgrCache::try_gc_tenant_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
-{
-  int ret = OB_SUCCESS;
-  eli_schema_mgr = NULL;
-
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
-  } else {
-    TCWLockGuard guard(lock_);
-    bool is_stop = false;
-    // max_cached_num_ only increases without decreasing, you can only look at max_cached_num_ when releasing,
-    // instead of iterating MAX_SCHEMA_SLOT_NUM slots
-    for (int64_t i = 0; i < max_cached_num_ && !is_stop; ++i) {
-      ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
-      ObSchemaMgr *tmp_schema_mgr = schema_mgr_item.schema_mgr_;
-      if (NULL == tmp_schema_mgr) {
-        // do-nothing
-      } else if (ATOMIC_LOAD(&schema_mgr_item.ref_cnt_) > 0) {
-        // do-nothing
-      } else {
-        eli_schema_mgr = tmp_schema_mgr;
-        schema_mgr_item.schema_mgr_ = NULL;
-        (void)ATOMIC_STORE(&schema_mgr_item.ref_cnt_, 0);
-        for (int64_t i = 0; i < ObSchemaMgrItem::MOD_MAX; i++) {
-          (void)ATOMIC_STORE(&schema_mgr_item.mod_ref_cnt_[i], 0);
-        }
-        is_stop = true;
-      }
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(eli_schema_mgr)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = try_update_latest_schema_idx())) {
-        LOG_WARN("fail to update latest schema idx", K(tmp_ret));
-      }
-    }
-  }
   return ret;
 }
 
 int ObSchemaMgrCache::try_eliminate_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
 {
   int ret = OB_SUCCESS;
+  ObSchemaMgr *target_schema_mgr = eli_schema_mgr;
+  eli_schema_mgr = NULL;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
-  } else if (OB_ISNULL(eli_schema_mgr)) {
+  } else if (OB_ISNULL(target_schema_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("eli_schema_mgr is null", K(ret));
   } else {
@@ -645,19 +547,20 @@ int ObSchemaMgrCache::try_eliminate_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
     bool found = false;
     // max_cached_num_ only increases without decreasing, you can only look at max_cached_num_ when releasing,
     // instead of iterating MAX_SCHEMA_SLOT_NUM slots
-    for (int64_t i = 0; i < max_cached_num_ && !found; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < max_cached_num_ && !found; ++i) {
       ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
       ObSchemaMgr *tmp_schema_mgr = schema_mgr_item.schema_mgr_;
       if (NULL == tmp_schema_mgr) {
         // do-nothing
-      } else if (eli_schema_mgr != tmp_schema_mgr) {
+      } else if (target_schema_mgr != tmp_schema_mgr) {
       } else if (ATOMIC_LOAD(&schema_mgr_item.ref_cnt_) > 0) {
         ret = OB_EAGAIN;
-        uint64_t tenant_id = tmp_schema_mgr->get_tenant_id();
+        found = true;
+
         int64_t ref_cnt = ATOMIC_LOAD(&schema_mgr_item.ref_cnt_);
         int64_t timestamp = tmp_schema_mgr->get_timestamp_in_slot();
         int64_t schema_version = tmp_schema_mgr->get_schema_version();
-        LOG_WARN("schema mgr is in use, try eliminate later", KR(ret), K(tenant_id),
+        LOG_WARN("schema mgr is in use, try eliminate later", KR(ret),
                  K(ref_cnt), K(schema_version), K(timestamp));
       } else {
         eli_schema_mgr = tmp_schema_mgr;
@@ -669,10 +572,12 @@ int ObSchemaMgrCache::try_eliminate_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
         found = true;
       }
     }
+    if (OB_SUCC(ret) && !found) {
+      ret = OB_ENTRY_NOT_EXIST;
+    }
     if (OB_SUCC(ret) && OB_NOT_NULL(eli_schema_mgr)) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = try_update_latest_schema_idx())) {
-        LOG_WARN("fail to update latest schema idx", K(tmp_ret));
       }
     }
   }
@@ -692,7 +597,7 @@ void ObSchemaMgrCache::dump() const
     for (int64_t i = 0; i < max_cached_num_; ++i) {
       const ObSchemaMgrItem &schema_mgr_item = schema_mgr_items_[i];
       const ObSchemaMgr *schema_mgr = schema_mgr_item.schema_mgr_;
-      uint64_t tenant_id = OB_INVALID_TENANT_ID;
+      
       int64_t schema_version = OB_INVALID_VERSION;
       int64_t timestamp_in_slot = 0;
       int64_t schema_count = 0;
@@ -703,13 +608,12 @@ void ObSchemaMgrCache::dump() const
         ret = OB_SUCC(ret) ? tmp_ret : ret;
         tmp_ret = schema_mgr->get_schema_size(schema_size);
         ret = OB_SUCC(ret) ? tmp_ret : ret;
-        tenant_id = schema_mgr->get_tenant_id();
         schema_version = schema_mgr->get_schema_version();
         timestamp_in_slot = schema_mgr->get_timestamp_in_slot();
         total_count += schema_count;
         total_size += schema_size;
         FLOG_INFO("[SCHEMA_STATISTICS] dump schema_mgr_item", "i", i, K(ret),
-                  K(tenant_id), K(schema_version), K(schema_count),
+                  K(schema_version), K(schema_count),
                   K(schema_size), K(timestamp_in_slot),
                   "ref_cnt", schema_mgr_item.ref_cnt_,
                   "mod_ref_cnt", ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_,

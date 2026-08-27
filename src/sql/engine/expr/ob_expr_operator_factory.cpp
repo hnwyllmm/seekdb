@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_operator_factory.h"
+#include "sql/engine/expr/ob_expr_add.h"
 #include "sql/engine/expr/ob_expr_substring_index.h"
 #include "sql/engine/expr/ob_expr_strcmp.h"
 #include "sql/engine/expr/ob_expr_assign.h"
@@ -39,8 +40,6 @@
 #include "sql/engine/expr/ob_expr_bit_right_shift.h"
 #include "sql/engine/expr/ob_expr_bm25.h"
 #include "sql/engine/expr/ob_expr_case.h"
-#include "sql/engine/expr/ob_expr_oracle_decode.h"
-#include "sql/engine/expr/ob_expr_oracle_trunc.h"
 #include "sql/engine/expr/ob_expr_fun_values.h"
 #include "sql/engine/expr/ob_expr_fun_default.h"
 #include "sql/engine/expr/ob_expr_cast.h"
@@ -52,8 +51,6 @@
 #include "sql/engine/expr/ob_expr_concat.h"
 #include "sql/engine/expr/ob_expr_concat_ws.h"
 #include "sql/engine/expr/ob_expr_div.h"
-#include "sql/engine/expr/ob_expr_effective_tenant.h"
-#include "sql/engine/expr/ob_expr_effective_tenant_id.h"
 #include "sql/engine/expr/ob_expr_equal.h"
 #include "sql/engine/expr/ob_expr_from_unix_time.h"
 #include "sql/engine/expr/ob_expr_null_safe_equal.h"
@@ -63,7 +60,6 @@
 #include "sql/engine/expr/ob_expr_greater_than.h"
 #include "sql/engine/expr/ob_expr_greatest.h"
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
-#include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/expr/ob_expr_hex.h"
 #include "sql/engine/expr/ob_expr_password.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
@@ -133,7 +129,6 @@
 #include "sql/engine/expr/ob_expr_func_ceil.h"
 #include "sql/engine/expr/ob_expr_func_dump.h"
 #include "sql/engine/expr/ob_expr_func_sleep.h"
-#include "sql/engine/expr/ob_expr_merging_frozen_time.h"
 #include "sql/engine/expr/ob_expr_repeat.h"
 #include "sql/engine/expr/ob_expr_export_set.h"
 #include "sql/engine/expr/ob_expr_replace.h"
@@ -177,7 +172,6 @@
 #include "sql/engine/expr/ob_expr_char.h"
 #include "sql/engine/expr/ob_expr_get_sys_var.h"
 #include "sql/engine/expr/ob_expr_elt.h"
-#include "sql/engine/expr/ob_expr_part_id.h"
 #include "sql/engine/expr/ob_expr_timestamp_add.h"
 #include "sql/engine/expr/ob_expr_des_hex_str.h"
 #include "sql/engine/expr/ob_expr_doc_id.h"
@@ -208,9 +202,8 @@
 #include "sql/engine/expr/ob_expr_time_format.h"
 #include "sql/engine/expr/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_week_of_func.h"
-#include "sql/engine/expr/ob_expr_dll_udf.h"
+#include "sql/engine/expr/ob_expr_interval.h"
 #include "sql/engine/expr/ob_expr_timestamp.h"
-#include "sql/engine/expr/ob_expr_seq_nextval.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
 #include "sql/engine/expr/ob_expr_pl_sqlcode_sqlerrm.h"
@@ -228,7 +221,6 @@
 #include "sql/engine/expr/ob_expr_obversion.h"
 #include "sql/engine/expr/ob_expr_remove_const.h"
 #include "sql/engine/expr/ob_expr_wrapper_inner.h"
-#include "sql/engine/expr/ob_expr_coll_pred.h"
 #include "sql/engine/expr/ob_expr_radians.h"
 #include "sql/engine/expr/ob_expr_pi.h"
 #include "sql/engine/expr/ob_expr_to_outfile_row.h"
@@ -325,7 +317,6 @@
 #include "sql/engine/expr/ob_expr_prefix_pattern.h"
 #include "sql/engine/expr/ob_expr_extract_value.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
-#include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_st_numinteriorrings.h"
 #include "sql/engine/expr/ob_expr_priv_st_iscollection.h"
 #include "sql/engine/expr/ob_expr_priv_st_equals.h"
@@ -334,7 +325,6 @@
 #include "sql/engine/expr/ob_expr_extract_cert_expired_time.h"
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_inner_row_cmp_val.h"
-#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 #include "sql/engine/expr/ob_expr_priv_st_makeenvelope.h"
 #include "sql/engine/expr/ob_expr_priv_st_clipbybox2d.h"
 #include "sql/engine/expr/ob_expr_priv_st_pointonsurface.h"
@@ -373,17 +363,6 @@
 #include "sql/engine/expr/ob_expr_vec_chunk.h"
 #include "sql/engine/expr/ob_expr_embedded_vec.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
-#include "sql/engine/expr/ob_expr_rb_build_empty.h"
-#include "sql/engine/expr/ob_expr_rb_is_empty.h"
-#include "sql/engine/expr/ob_expr_rb_build_varbinary.h"
-#include "sql/engine/expr/ob_expr_rb_to_varbinary.h"
-#include "sql/engine/expr/ob_expr_rb_cardinality.h"
-#include "sql/engine/expr/ob_expr_rb_calc_cardinality.h"
-#include "sql/engine/expr/ob_expr_rb_calc.h"
-#include "sql/engine/expr/ob_expr_rb_to_string.h"
-#include "sql/engine/expr/ob_expr_rb_from_string.h"
-#include "sql/engine/expr/ob_expr_rb_select.h"
-#include "sql/engine/expr/ob_expr_rb_build.h"
 #include "sql/engine/expr/ob_expr_array_contains.h"
 #include "sql/engine/expr/ob_expr_array_to_string.h"
 #include "sql/engine/expr/ob_expr_string_to_array.h"
@@ -433,21 +412,13 @@
 #include "sql/engine/expr/ob_expr_array_intersect.h"
 #include "sql/engine/expr/ob_expr_array_union.h"
 #include "sql/engine/expr/ob_expr_map.h"
-#include "sql/engine/expr/ob_expr_rb_to_array.h"
-#include "sql/engine/expr/ob_expr_rb_contains.h"
 #include "sql/engine/expr/ob_expr_map_keys.h"
-#include "sql/engine/expr/ob_expr_current_catalog.h"
-#include "sql/engine/expr/ob_expr_check_catalog_access.h"
-#include "sql/engine/expr/ob_expr_oracle_to_char.h"
 #include "sql/engine/expr/ob_expr_semantic_distance.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_complete.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "sql/engine/expr/ob_expr_vector_similarity.h"
-#include "sql/engine/expr/ob_expr_check_location_access.h"
-
-
 #include "sql/engine/expr/ob_expr_lock_func.h"
 
 using namespace oceanbase::common;
@@ -456,7 +427,6 @@ namespace oceanbase
 namespace sql
 {
 static AllocFunc OP_ALLOC[T_MAX_OP];
-static AllocFunc                                                                           OP_ALLOC_ORCL[T_MAX_OP];
 
 #define REG_OP(OpClass)                             \
   do {                                              \
@@ -492,40 +462,7 @@ static AllocFunc                                                                
     }();                                                               \
   } while(0)
 
-#define REG_OP_ORCL(OpClass)                        \
-  do {                                              \
-    [&]() {                                         \
-      OpClass op(alloc);                            \
-      if (OB_UNLIKELY(j >= EXPR_OP_NUM)) {          \
-        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");           \
-      } else {                                      \
-        NAME_TYPES_ORCL[j].name_ = op.get_name();   \
-        NAME_TYPES_ORCL[j].type_ = op.get_type();   \
-        NAME_TYPES_ORCL[j].is_internal_ = op.is_internal_for_oracle();\
-        OP_ALLOC_ORCL[op.get_type()] = ObExprOperatorFactory::alloc<OpClass>; \
-        j++;                                        \
-      }                                             \
-    }();                                            \
-  } while(0)
-// Used for registering the same function expression in Oracle mode
-#define REG_SAME_OP_ORCL(OriOpType, NewOpType, NewOpName, idx_oracle)      \
-  do {                                                                     \
-    [&]() {                                                                \
-      if (OB_UNLIKELY((idx_oracle) >= EXPR_OP_NUM)) {                      \
-        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");                                  \
-      } else if (OB_ISNULL(OP_ALLOC_ORCL[OriOpType])) {                    \
-        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
-      } else {                                                             \
-        NAME_TYPES_ORCL[(idx_oracle)].name_ = NewOpName;                   \
-        NAME_TYPES_ORCL[(idx_oracle)].type_ = NewOpType;                   \
-        OP_ALLOC_ORCL[NewOpType] = OP_ALLOC_ORCL[OriOpType];               \
-        (idx_oracle)++;                                                    \
-      }                                                                    \
-    }();                                                                   \
-  } while(0)
-
 ObExprOperatorFactory::NameType ObExprOperatorFactory::NAME_TYPES[EXPR_OP_NUM] = { };
-ObExprOperatorFactory::NameType ObExprOperatorFactory::NAME_TYPES_ORCL[EXPR_OP_NUM] = { };
 
 
 ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
@@ -574,16 +511,8 @@ void ObExprOperatorFactory::get_internal_info_by_name(const ObString &name, bool
 void ObExprOperatorFactory::register_expr_operators()
 {
   memset(NAME_TYPES, 0, sizeof(NAME_TYPES));
-  memset(NAME_TYPES_ORCL, 0, sizeof(NAME_TYPES_ORCL));
   ObArenaAllocator alloc;
   int64_t i = 0;
-  int64_t j = 0;
-  /*
-  --REG_OP is used for mysql tenant registration, REG_OP_ORCL is used for oracle tenant system function registration
-  --If the same function needs to be used under both mysql tenant and oracle, and compatibility has been implemented
-  --Please use REG_OP() and REG_OP_ORCL() respectively for registration
-  For formatting, please register in the oracle system function section at the end of the function
-  */
   [&]() {
     REG_OP(ObExprAdd);
     REG_OP(ObExprAggAdd);
@@ -597,7 +526,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprTimeStampAdd);
     REG_OP(ObExprToType);
     REG_OP(ObExprChar);
-    REG_OP(ObExprToChar);
     REG_OP(ObExprConvert);
     REG_OP(ObExprCoalesce);
     REG_OP(ObExprNvl);
@@ -605,12 +533,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentUser);
     REG_OP(ObExprCurrentUserPriv);
     REG_OP(ObExprYear);
-    REG_OP(ObExprOracleDecode);
-    REG_OP(ObExprOracleTrunc);
     REG_OP(ObExprDiv);
     REG_OP(ObExprAggDiv);
-    REG_OP(ObExprEffectiveTenant);
-    REG_OP(ObExprEffectiveTenantId);
     REG_OP(ObExprEqual);
     REG_OP(ObExprNullSafeEqual);
     REG_OP(ObExprGetUserVar);
@@ -715,7 +639,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprUtcDate);
     REG_OP(ObExprTimeToUsec);
     REG_OP(ObExprUsecToTime);
-    REG_OP(ObExprMergingFrozenTime);
     REG_OP(ObExprFuncRound);
     REG_OP(ObExprFuncFloor);
     REG_OP(ObExprFuncCeil);
@@ -751,7 +674,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRowCount);
     REG_OP(ObExprFoundRows);
     REG_OP(ObExprAggParamList);
-    REG_OP(ObExprIsServingTenant);
     REG_OP(ObExprSysPrivilegeCheck);
     REG_OP(ObExprField);
     REG_OP(ObExprElt);
@@ -778,7 +700,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSecToTime);
     REG_OP(ObExprInterval);
     REG_OP(ObExprTruncate);
-    REG_OP(ObExprDllUdf);
     REG_OP(ObExprExp);
     REG_OP(ObExprAnyValue);
     REG_OP(ObExprUuidShort);
@@ -811,7 +732,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRpcPort);
     REG_OP(ObExprMySQLPort);
     REG_OP(ObExprGetSysVar);
-    REG_OP(ObExprPartId);
     REG_OP(ObExprLastTraceId);
     REG_OP(ObExprLastExecId);
     REG_OP(ObExprDocID);
@@ -832,7 +752,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprYearWeek);
     REG_OP(ObExprWeek);
     REG_OP(ObExprQuarter);
-    REG_OP(ObExprSeqNextval);
     REG_OP(ObExprAesDecrypt);
     REG_OP(ObExprAesEncrypt);
     REG_OP(ObExprBool);
@@ -1004,7 +923,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprExtractExpiredTime);
     REG_OP(ObExprTransactionId);
     REG_OP(ObExprInnerRowCmpVal);
-    REG_OP(ObExprLastRefreshScn);
     REG_OP(ObExprTopNFilter);
     REG_OP(ObExprPrivSTMakeEnvelope);
     REG_OP(ObExprPrivSTClipByBox2D);
@@ -1063,31 +981,6 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVectorSimilarity);
     REG_OP(ObExprInnerTableOptionPrinter);
     REG_OP(ObExprInnerTableSequenceGetter);
-    REG_OP(ObExprRbBuildEmpty);
-    REG_OP(ObExprRbIsEmpty);
-    REG_OP(ObExprRbBuildVarbinary);
-    REG_OP(ObExprRbToVarbinary);
-    REG_OP(ObExprRbCardinality);
-    REG_OP(ObExprRbAndCardinality);
-    REG_OP(ObExprRbOrCardinality);
-    REG_OP(ObExprRbXorCardinality);
-    REG_OP(ObExprRbAndnotCardinality);
-    REG_OP(ObExprRbAndNull2emptyCardinality);
-    REG_OP(ObExprRbOrNull2emptyCardinality);
-    REG_OP(ObExprRbAndnotNull2emptyCardinality);
-    REG_OP(ObExprRbAnd);
-    REG_OP(ObExprRbOr);
-    REG_OP(ObExprRbXor);
-    REG_OP(ObExprRbAndnot);
-    REG_OP(ObExprRbAndNull2empty);
-    REG_OP(ObExprRbOrNull2empty);
-    REG_OP(ObExprRbAndnotNull2empty);
-    REG_OP(ObExprRbToString);
-    REG_OP(ObExprRbFromString);
-    REG_OP(ObExprRbSelect);
-    REG_OP(ObExprRbBuild);
-    REG_OP(ObExprRbToArray);
-    REG_OP(ObExprRbContains);
     REG_OP(ObExprGetPath);
     REG_OP(ObExprGTIDSubset);
     REG_OP(ObExprGTIDSubtract);
@@ -1149,15 +1042,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerInfoColsExtraPrinter);
     REG_OP(ObExprInnerInfoColsDataTypePrinter);
     REG_OP(ObExprInnerInfoColsColumnTypePrinter);
-    REG_OP(ObExprCurrentCatalog);
-    REG_OP(ObExprCheckCatalogAccess);
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
     REG_OP(ObExprVectorL2Squared);
     REG_OP(ObExprAIComplete);
     REG_OP(ObExprAIEmbed);
     REG_OP(ObExprAIRerank);
     REG_OP(ObExprAIPrompt);
-    REG_OP(ObExprCheckLocationAccess);
   }();
 }
 
@@ -1180,7 +1070,6 @@ int ObExprOperatorFactory::alloc(ObExprOperatorType type, ObExprOperator *&expr_
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpectd expr item type", K(ret), K(type));
   } else if (OB_FAIL(OP_ALLOC[type](alloc_, expr_op))) {
-    OB_LOG(WARN, "fail to alloc expr_op", K(ret), K(type));
   } else if (OB_ISNULL(expr_op)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(ERROR, "fail to alloc expr_op", K(ret), K(type));
@@ -1252,7 +1141,7 @@ int ObExprOperatorFactory::alloc(common::ObIAllocator &alloc, ObExprOperator *&e
 
 
 void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name, ObString &alias_name) {
-  if (is_mysql_mode()) {
+  {
     //for synonyms in mysql mode
     if (0 == origin_name.case_compare("bin")) {
       // bin(N) is equivalent to CONV(N,10,2)
@@ -1267,8 +1156,7 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       // ucase is synonym for upper
       alias_name = ObString::make_string(N_UPPER);
     } else if (0 == origin_name.case_compare("power")) {
-      // don't alias "power" to "pow" in oracle mode, because oracle has no
-      // "pow" function.
+      // power is a synonym for pow
       alias_name = ObString::make_string(N_POW);
     } else if (0 == origin_name.case_compare("VEC_IVF_CENTER_ID")) {
       alias_name = ObString::make_string(N_VEC_IVF_CENTER_ID);
@@ -1337,11 +1225,8 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
     } else {
       //do nothing
     }
-  } else {
-    //for synonyms in oracle mode
   }
 }
 
 } //end sql
 } //end oceanbase
-

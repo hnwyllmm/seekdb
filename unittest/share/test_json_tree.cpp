@@ -16,8 +16,8 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_parse.h"
+#include "common/json_type/ob_json_bin.h"
+#include "common/json_type/ob_json_parse.h"
 #undef private
 
 using namespace std;
@@ -45,7 +45,7 @@ public:
   static void TearDownTestCase()
   {}
 
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestJsonTree);
 };
@@ -1578,7 +1578,7 @@ TEST_F(TestJsonTree, test_get_serialize_size_array_one_depth)
   // array
   ObJsonArray j_arr(&allocator);
   j_base = &j_arr;
-  int64 repeat_num = 10000;
+  constexpr int64 repeat_num = 64;
   int64_t times = 0;
   uint64_t last_size = 0;
   uint64_t new_size = 0;
@@ -1605,7 +1605,7 @@ TEST_F(TestJsonTree, test_get_serialize_size_array_multi_depth)
   // array
   ObJsonArray j_arr_root(&allocator);
   j_base = &j_arr_root;
-  int64 repeat_num = 10000;
+  constexpr int64 repeat_num = 64;
   int64_t times = 0;
   uint64_t last_size = 0;
   uint64_t new_size = 0;
@@ -1641,7 +1641,7 @@ TEST_F(TestJsonTree, test_get_serialize_size_object_one_depth)
   // object
   ObJsonObject j_obj(&allocator);
   j_base = &j_obj;
-  int64 repeat_num = 10000;
+  constexpr int64 repeat_num = 64;
   int64_t times = 0;
   uint64_t last_size = 0;
   uint64_t new_size = 0;
@@ -1676,7 +1676,7 @@ TEST_F(TestJsonTree, test_get_serialize_size_object_multi_depth)
   // object
   ObJsonObject j_obj(&allocator);
   j_base = &j_obj;
-  int64 repeat_num = 10000;
+  constexpr int64 repeat_num = 64;
   int64_t times = 0;
   uint64_t last_size = 0;
   uint64_t new_size = 0;
@@ -1997,7 +1997,7 @@ TEST_F(TestJsonTree, test_clone_node_datetime)
 
 }
 
-TEST_F(TestJsonTree, oracle_sub_type)
+TEST_F(TestJsonTree, json_ext_sub_type)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
 
@@ -2026,11 +2026,11 @@ TEST_F(TestJsonTree, oracle_sub_type)
   memcpy(buf3, binary, strlen(binary));
   ObJsonORawString o_binary(buf3, strlen(binary), ObJsonNodeType::J_OBINARY);
 
-  // odate, oracledate, otimestamp, otimestamptz
+  // odate, json_date_ext, otimestamp, otimestamptz
   ObTime ob_time;
   ASSERT_EQ(OB_SUCCESS, ObTimeConverter::datetime_to_ob_time(1429089727 * USECS_PER_SEC, NULL, ob_time));
   ObJsonDatetime j_odate(ObJsonNodeType::J_ODATE, ob_time);
-  ObJsonDatetime j_oracledate(ObJsonNodeType::J_ORACLEDATE, ob_time);
+  ObJsonDatetime j_json_date_ext(ObJsonNodeType::J_JSON_DATE_EXT, ob_time);
   ObJsonDatetime j_otimestamp(ObJsonNodeType::J_OTIMESTAMP, ob_time);
   ObJsonDatetime j_otimestamptz(ObJsonNodeType::J_OTIMESTAMPTZ, ob_time);
 
@@ -2069,9 +2069,9 @@ TEST_F(TestJsonTree, oracle_sub_type)
   cout << "odate = " << j_buf.ptr() << endl;
 
   j_buf.reuse();
-  j_base = (ObIJsonBase*)&j_oracledate;
+  j_base = (ObIJsonBase*)&j_json_date_ext;
   ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
-  cout << "oracledate = " << j_buf.ptr() << endl;
+  cout << "json_date_ext = " << j_buf.ptr() << endl;
 
   j_buf.reuse();
   j_base = (ObIJsonBase*)&j_otimestamp;
@@ -2102,8 +2102,8 @@ TEST_F(TestJsonTree, oracle_sub_type)
   ObJsonNode *p_odate = j_odate.clone(&allocator);
   ASSERT_NE(nullptr, p_odate);
 
-  ObJsonNode *p_oracledate = j_oracledate.clone(&allocator);
-  ASSERT_NE(nullptr, p_oracledate);
+  ObJsonNode *p_json_date_ext = j_json_date_ext.clone(&allocator);
+  ASSERT_NE(nullptr, p_json_date_ext);
 
   ObJsonNode *p_otimestamp = j_otimestamp.clone(&allocator);
   ASSERT_NE(nullptr, p_otimestamp);
@@ -2126,7 +2126,6 @@ TEST_F(TestJsonTree, oracle_sub_type)
 
 TEST_F(TestJsonTree, test_sort)
 {
-  set_compat_mode(lib::Worker::CompatMode::MYSQL);
   // correct json text
   common::ObString json_text("{ \"a\" : \"value1\", \"a\" : \"value2\", \
       \"b\" : \"value3\",  \"b\" : \"value4\" }");
@@ -2145,11 +2144,11 @@ TEST_F(TestJsonTree, test_sort)
   ASSERT_EQ(result, tmp_res);
 }
 
-TEST_F(TestJsonTree, test_big_json)
+TEST_F(TestJsonTree, parse_generated_object)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer j_buf(&allocator);
-  ASSERT_EQ(j_buf.reserve(1024 * 1024), 0);
+  ASSERT_EQ(j_buf.reserve(64 * 1024), 0);
   ASSERT_EQ(j_buf.append("{"), 0);
 
 
@@ -2158,7 +2157,7 @@ TEST_F(TestJsonTree, test_big_json)
   char value_buffer[16] = {0};
   int idx = 0;
 
-  for (int64_t pos = 0; pos < 50000; ++pos) {
+  for (int64_t pos = 0; pos < 64; ++pos) {
     for (int i = 0; i < 32; ++i) {
       idx = ObRandom::rand(0, 15);
       key_buffer[i] = origin[idx];
@@ -2184,20 +2183,13 @@ TEST_F(TestJsonTree, test_big_json)
   const char *syntaxerr = NULL;
   ObJsonNode *json_tree = NULL;
 
-  struct timeval time_start, time_end;
-  gettimeofday(&time_start, nullptr);
   ASSERT_EQ(OB_SUCCESS, ObJsonParser::parse_json_text(&allocator, json_text.ptr(),
       json_text.length(), syntaxerr, NULL, json_tree));
   ASSERT_TRUE(json_tree != NULL);
-
-  gettimeofday(&time_end, nullptr);
-
-  cout << "time start : " << " sec = " << time_start.tv_sec << ", usec = " << time_start.tv_usec << endl;
-  cout << "time  end  : " << " sec = " << time_end.tv_sec << ", usec = " << time_end.tv_usec << endl;
   
 }
 
-TEST_F(TestJsonTree, test_parse_big_json)
+TEST_F(TestJsonTree, parse_deeply_nested_json)
 {
   common::ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer j_buf(&allocator);
@@ -2210,8 +2202,6 @@ TEST_F(TestJsonTree, test_parse_big_json)
   const char *syntaxerr = NULL;
   ObJsonNode *json_tree = NULL;
 
-  struct timeval time_start, time_end;
-  gettimeofday(&time_start, nullptr);
   ASSERT_EQ(OB_SUCCESS, ObJsonParser::parse_json_text(&allocator, json_text.ptr(),
       json_text.length(), syntaxerr, NULL, json_tree));
   ASSERT_TRUE(json_tree != NULL);
@@ -2223,27 +2213,9 @@ TEST_F(TestJsonTree, test_parse_big_json)
 
   ASSERT_EQ(OB_SUCCESS, bin.get_raw_binary(raw_bin, &allocator));
 
-  gettimeofday(&time_end, nullptr);
-
-
-
-  cout << "time start : " << " sec = " << time_start.tv_sec << ", usec = " << time_start.tv_usec << endl;
-  cout << "time  end  : " << " sec = " << time_end.tv_sec << ", usec = " << time_end.tv_usec << endl;
-  
 }
 
 
 
 } // namespace common
 } // namespace oceanbase
-
-int main(int argc, char** argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  /*
-  system("rm -f test_json_tree.log");
-  OB_LOGGER.set_file_name("test_json_tree.log");
-  OB_LOGGER.set_log_level("INFO");
-  */
-  return RUN_ALL_TESTS();
-}

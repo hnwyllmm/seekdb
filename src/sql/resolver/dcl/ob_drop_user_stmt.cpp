@@ -19,14 +19,12 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
 ObDropUserStmt::ObDropUserStmt(ObIAllocator *name_pool)
-    : ObDDLStmt(name_pool, stmt::T_DROP_USER),
-      tenant_id_(OB_INVALID_ID)
+    : ObDDLStmt(name_pool, stmt::T_DROP_USER)
 {
 }
 
 ObDropUserStmt::ObDropUserStmt()
-    : ObDDLStmt(NULL, stmt::T_DROP_USER),
-      tenant_id_(OB_INVALID_ID)
+    : ObDDLStmt(NULL, stmt::T_DROP_USER)
 {
 }
 
@@ -42,9 +40,7 @@ int ObDropUserStmt::add_user(const common::ObString &user_name, const common::Ob
     ret = OB_ERR_NO_PRIVILEGE;
     SQL_RESV_LOG(WARN, "Can not drop root user", K(ret));
   } else if (OB_FAIL(users_.add_string(user_name))) {
-    SQL_RESV_LOG(WARN, "failed to add user to DropUserStmt", K(ret));
   } else if (OB_FAIL(users_.add_string(host_name))) {
-    SQL_RESV_LOG(WARN, "failed to add host_name to DropUserStmt", K(ret));
   } else {
     //do nothing
   }

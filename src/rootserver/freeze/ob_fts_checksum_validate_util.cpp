@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "rootserver/freeze/ob_fts_checksum_validate_util.h"
-#include "share/rc/ob_tenant_base.h"
+#include "share/rc/ob_server_runtime.h"
 
 namespace oceanbase
 {
@@ -26,13 +26,13 @@ ObFTSGroup::ObFTSGroup()
       doc_rowkey_index_id_(0),
       index_info_()
 {
-  index_info_.set_attr(ObMemAttr(MTL_ID(), "FTS_GROUP"));
+  index_info_.set_attr(ObMemAttr("FTS_GROUP"));
 }
 
 ObFTSGroupArray::ObFTSGroupArray()
   : fts_groups_()
 {
-  fts_groups_.set_attr(ObMemAttr(MTL_ID(), "FTS_INFO_ARR"));
+  fts_groups_.set_attr(ObMemAttr("FTS_INFO_ARR"));
 }
 
 bool ObFTSGroupArray::need_check_fts() const

@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "obmp_disconnect.h"
+#include "share/rc/ob_server_runtime.h"
 
 
 using namespace oceanbase::observer;
@@ -38,9 +39,8 @@ int ObMPDisconnect::kill_unfinished_session(uint32_t sessid)
 {
   int ret = OB_SUCCESS;
   sql::ObSQLSessionInfo *session = NULL;
-  sql::ObSessionGetterGuard guard(*GCTX.session_mgr_, sessid);
+  sql::ObSessionGetterGuard guard(*::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>(), sessid);
   if (OB_FAIL(guard.get_session(session))) {
-    LOG_WARN("get session fail", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(session), K(sessid), K(ret));
@@ -54,8 +54,7 @@ int ObMPDisconnect::kill_unfinished_session(uint32_t sessid)
      *     When the long SQL acquires the query_lock lock, it will immediately check the IS_KILLED status, and exit the processing flow upon detection.
      *     Ultimately, the reference count is reduced to 0, and the session is physically recycled.
      */
-    if (OB_FAIL(GCTX.session_mgr_->disconnect_session(*session))) {
-      LOG_WARN("fail to disconnect session", K(session), K(sessid), K(ret));
+    if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>()->disconnect_session(*session))) {
     }
   }
   return ret;
@@ -64,32 +63,16 @@ int ObMPDisconnect::kill_unfinished_session(uint32_t sessid)
 int ObMPDisconnect::run()
 {
   int ret = OB_SUCCESS;
-  bool is_need_clear = false;
   if (ctx_.sessid_ != 0) {
-    if (OB_ISNULL(GCTX.session_mgr_)) {
+    if (OB_ISNULL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid session mgr", K(GCTX.session_mgr_), K(ret));
+      LOG_WARN("invalid session mgr", K(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>()), K(ret));
     } else {
-      ObSMConnection conn;
-      conn.sessid_ = ctx_.sessid_;
-      conn.is_need_clear_sessid_ = true;
-      // bugfix: 
+      // bugfix:
       (void) kill_unfinished_session(ctx_.sessid_); // ignore ret
-      if (OB_FAIL(GCTX.session_mgr_->free_session(ctx_))) {
-        LOG_WARN("free session fail", K(ctx_));
+      if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>()->free_session(ctx_))) {
       } else {
-        common::ObTenantDiagnosticInfoSummaryGuard guard(ctx_.tenant_id_);
-        EVENT_INC(SQL_USER_LOGOUTS_CUMULATIVE);
         LOG_INFO("free session successfully", "sessid", ctx_.sessid_);
-        if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(&conn, is_need_clear)))) {
-          LOG_ERROR("fail to judge need clear", K(ret), "sessid", conn.sessid_);
-        } else if (is_need_clear) {
-          if (OB_FAIL(GCTX.session_mgr_->mark_sessid_unused(conn.sessid_))) {
-            LOG_WARN("mark session id unused failed", K(ret), "sessid", conn.sessid_);
-          } else {
-            LOG_INFO("mark session id unused", "sessid", conn.sessid_);
-          }
-        }
       }
     }
   }

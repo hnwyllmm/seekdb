@@ -49,7 +49,7 @@ int ObConstraint::assign(const ObConstraint &src_schema)
   if (this != &src_schema) {
     reset();
     error_ret_ = src_schema.error_ret_;
-    tenant_id_ = src_schema.tenant_id_;
+    
     table_id_ = src_schema.table_id_;
     constraint_id_ = src_schema.constraint_id_;
     schema_version_ = src_schema.schema_version_;
@@ -64,9 +64,7 @@ int ObConstraint::assign(const ObConstraint &src_schema)
     name_generated_type_ = src_schema.name_generated_type_;
     int ret = OB_SUCCESS;
     if (OB_FAIL(deep_copy_str(src_schema.constraint_name_, constraint_name_))) {
-      LOG_WARN("Fail to deep copy constraint_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_schema.check_expr_, check_expr_))) {
-      LOG_WARN("Fail to deep copy check_expr", K(ret));
     } else {
       column_cnt_ = src_schema.column_cnt_;
       if (column_cnt_ > 0) {
@@ -129,7 +127,7 @@ int ObConstraint::get_not_null_column_name(ObString &cst_col_name) const
 
 void ObConstraint::reset()
 {
-  tenant_id_ = OB_INVALID_ID;
+  
   table_id_ = OB_INVALID_ID;
   constraint_id_ = OB_INVALID_ID;
   schema_version_ = 0;
@@ -154,7 +152,6 @@ OB_DEF_SERIALIZE(ObConstraint)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
-              tenant_id_,
               table_id_,
               constraint_id_,
               schema_version_,
@@ -171,11 +168,9 @@ OB_DEF_SERIALIZE(ObConstraint)
   //serialize column count and column ids
   if (OB_SUCC(ret)) {
     if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, column_cnt_))) {
-      LOG_WARN("Fail to encode column_cnt_", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
       if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, column_id_array_[i]))) {
-        LOG_WARN("Fail to encode column_ids_", K(ret), K(i), K(column_id_array_[i]));
       }
     }
   }
@@ -192,7 +187,7 @@ OB_DEF_DESERIALIZE(ObConstraint)
   ObString check_expr;
 
   LST_DO_CODE(OB_UNIS_DECODE,
-              tenant_id_,
+              
               table_id_,
               constraint_id_,
               schema_version_,
@@ -210,7 +205,6 @@ OB_DEF_DESERIALIZE(ObConstraint)
   if (OB_SUCC(ret) && pos < data_len) {
     int64_t column_id = 0;
     if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &column_cnt_))) {
-      LOG_WARN("Fail to decode index table count", K(ret));
     } else if (column_cnt_ > 0) {
       column_id_array_ = static_cast<uint64_t*>(alloc(sizeof(uint64_t) * column_cnt_));
       if (NULL == column_id_array_) {
@@ -220,7 +214,6 @@ OB_DEF_DESERIALIZE(ObConstraint)
         MEMSET(column_id_array_, 0, sizeof(uint64_t) * column_cnt_);
         for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
           if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &column_id))) {
-            LOG_WARN("Fail to deserialize column id", K(ret));
           } else {
             column_id_array_[i] = column_id;
           }
@@ -232,11 +225,8 @@ OB_DEF_DESERIALIZE(ObConstraint)
     LST_DO_CODE(OB_UNIS_DECODE, need_validate_data_, name_generated_type_);
   }
   if (OB_FAIL(ret)) {
-    LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(deep_copy_str(constraint_name, constraint_name_))) {
-    LOG_WARN("Fail to deep copy constraint_name, ", K(ret), K_(constraint_name));
   } else if (OB_FAIL(deep_copy_str(check_expr, check_expr_))) {
-    LOG_WARN("Fail to deep copy check_expr, ", K(ret), K_(check_expr));
   } else {/*do nothing*/}
 
   return ret;
@@ -246,7 +236,6 @@ OB_DEF_SERIALIZE_SIZE(ObConstraint)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-              tenant_id_,
               table_id_,
               constraint_id_,
               schema_version_,
@@ -274,8 +263,7 @@ int64_t ObConstraint::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
 
   J_OBJ_START();
-  J_KV(K_(tenant_id),
-    K_(table_id),
+  J_KV(K_(table_id),
     K_(constraint_id),
     K_(schema_version),
     K_(constraint_name),

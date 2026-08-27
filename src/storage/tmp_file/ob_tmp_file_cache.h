@@ -35,20 +35,19 @@ class ObTmpBlockCacheKey final : public common::ObIKVCacheKey
 {
 public:
   ObTmpBlockCacheKey();
-  ObTmpBlockCacheKey(const int64_t block_id, const uint64_t tenant_id);
+  ObTmpBlockCacheKey(const int64_t block_id);
   ~ObTmpBlockCacheKey();
   bool operator ==(const ObIKVCacheKey &other) const override;
-  uint64_t get_tenant_id() const override;
+  
   uint64_t hash() const override;
   int64_t size() const override;
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
   bool is_valid() const;
   int64_t get_block_id() const { return block_id_; }
-  TO_STRING_KV(K(block_id_), K(tenant_id_));
+  TO_STRING_KV(K(block_id_));
 
 private:
   int64_t block_id_;
-  uint64_t tenant_id_;
 };
 
 class ObTmpBlockCacheValue final : public common::ObIKVCacheValue
@@ -107,7 +106,7 @@ class ObTmpBlockCache final : public common::ObKVCache<ObTmpBlockCacheKey, ObTmp
 public:
   typedef common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockCacheValue> BasePageCache;
   static ObTmpBlockCache &get_instance();
-  int init(const char *cache_name, const int64_t priority);
+  int init(const char *cache_name);
   void destroy();
   int get_block(const ObTmpBlockCacheKey &key, ObTmpBlockValueHandle &handle);
   int put_block(ObKVCacheInstHandle &inst_handle,
@@ -129,16 +128,10 @@ class ObTmpPageCacheKey final : public common::ObIKVCacheKey
 {
 public:
   ObTmpPageCacheKey();
-  // For Shared nothing mode
-  ObTmpPageCacheKey(const int64_t block_id, const int64_t page_id, const uint64_t tenant_id);
-  // For Shared Storage mode
-  ObTmpPageCacheKey(const int64_t tmp_file_id,
-                    const uint64_t unfilled_page_length,
-                    const uint64_t virtual_page_id,
-                    const uint64_t tenant_id);
+  ObTmpPageCacheKey(const int64_t block_id, const int64_t page_id);
   ~ObTmpPageCacheKey();
   bool operator ==(const ObIKVCacheKey &other) const override;
-  uint64_t get_tenant_id() const override;
+  
   uint64_t hash() const override;
   int64_t size() const override;
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
@@ -147,22 +140,8 @@ public:
   int64_t get_block_id() const { return block_id_; }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
-  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS = 48;
-  static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_BITS = 16;
-  static const int64_t PAGE_CACHE_KEY_PAGE_LENGTH_MAX = (1 << 13);
-  static const int64_t PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_MAX = (1LL << PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS);
-  union {
-    int64_t block_id_;      // for sn mode
-    int64_t tmp_file_id_;   // for ss mode
-  };
-  union {
-    int64_t page_id_;       // for sn mode
-    struct {                // for ss mode
-      uint64_t unfilled_page_length_ : PAGE_CACHE_KEY_PAGE_LENGTH_BITS;
-      uint64_t virtual_page_id_      : PAGE_CACHE_KEY_VIRTUAL_PAGE_ID_BITS;
-    };
-  };
-  uint64_t tenant_id_;
+  int64_t block_id_;
+  int64_t page_id_;
 
 };
 
@@ -221,7 +200,7 @@ class ObTmpPageCache final : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPa
 public:
   typedef common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> BasePageCache;
   static ObTmpPageCache &get_instance();
-  int init(const char *cache_name, const int64_t priority);
+  int init(const char *cache_name);
   // only read disk pages
   int direct_read(ObTmpPageCacheReadInfo &read_info,
                   common::ObIAllocator &callback_allocator);
@@ -344,5 +323,4 @@ private:
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 #endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_CACHE_H_
-
 

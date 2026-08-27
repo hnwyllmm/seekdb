@@ -22,7 +22,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_vector.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "share/rc/ob_tenant_base.h"
+#include "share/rc/ob_server_runtime.h"
 #include "storage/fts/dict/ob_ft_cache_container.h"
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
@@ -38,7 +38,7 @@ public:
   ObFTRangeDict(ObIAllocator &alloc,
                 ObFTCacheRangeContainer *range_container,
                 const ObFTDictDesc &desc)
-      : is_inited_(false), desc_(desc), range_alloc_(lib::ObMemAttr(MTL_ID(), "Range Dict")),
+      : is_inited_(false), desc_(desc), range_alloc_(lib::ObMemAttr("Range Dict")),
         range_dicts_(&range_alloc_), range_container_(range_container)
   {
   }

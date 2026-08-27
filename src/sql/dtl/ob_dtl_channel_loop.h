@@ -25,7 +25,7 @@
 #include "sql/dtl/ob_dtl_channel_watcher.h"
 #include "sql/dtl/ob_dtl_channel.h"
 #include "sql/dtl/ob_dtl_local_channel.h"
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
+#include "query/monitor/ob_monitor_node.h"
 
 namespace oceanbase {
 namespace sql {
@@ -83,7 +83,7 @@ public:
     }
     interrupt_proc_ = nullptr;
   }
-  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id;}
+  
 
   void reset_eof_cnt() { eof_channel_cnt_ = 0; }
   void inc_eof_cnt() { eof_channel_cnt_ += 1; }
@@ -122,7 +122,6 @@ public:
   void set_interm_result(bool flag) { use_interm_result_ = flag; }
 private:
   static const int64_t INTERRUPT_CHECK_TIMES = 16;
-  static const int64_t SERVER_ALIVE_CHECK_TIMES = 4096;
   Proc *proc_map_[MAX_PROCS];
   InterruptProc *interrupt_proc_;
   common::ObSEArray<ObDtlChannel*, 128> chans_;
@@ -130,12 +129,10 @@ private:
   uint16_t last_msg_type_;
   common::SimpleCond cond_; // 1-to-1 wake-up mode, SimpleCond is sufficient
   bool ignore_interrupt_;
-  uint64_t tenant_id_;
   int64_t timeout_;
 
   // list hold channels that has msg
   ObSpinLock spin_lock_;
-  ObAddr mock_addr_;
   ObDtlMockChannel sentinel_node_;
   int64_t n_first_no_data_;
   ObMonitorNode default_op_monitor_info_; // used by sqc, das module

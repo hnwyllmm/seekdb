@@ -15,6 +15,7 @@
  */
 
 #include "ob_all_virtual_server_compaction_progress.h"
+#include "share/rc/ob_server_runtime.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 
 namespace oceanbase
@@ -41,8 +42,7 @@ int ObAllVirtualServerCompactionProgress::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     SERVER_LOG(WARN, "ObAllVirtualServerCompactionProgress has been inited", K(ret));
-  } else if (OB_FAIL(progress_iter_.open(effective_tenant_id_))) {
-    SERVER_LOG(WARN, "Fail to open suggestion iter", K(ret));
+  } else if (OB_FAIL(progress_iter_.open())) {
   } else {
     is_inited_ = true;
   }
@@ -61,7 +61,6 @@ int ObAllVirtualServerCompactionProgress::inner_get_next_row(common::ObNewRow *&
       STORAGE_LOG(WARN, "Fail to get next suggestion info", K(ret));
     }
   } else if (OB_FAIL(fill_cells())) {
-    STORAGE_LOG(WARN, "Fail to fill cells", K(ret), K(progress_));
   } else {
     row = &cur_row_;
   }
@@ -123,9 +122,8 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
     case ESTIMATED_FINISH_TIME:
       if (share::ObIDag::DAG_STATUS_FINISH != progress_.status_) {
         update_estimated_finish_time = 0;
-        MTL_SWITCH(progress_.tenant_id_) {
-          if (OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_max_major_finish_time(progress_.merge_version_, update_estimated_finish_time))) {
-            SERVER_LOG(WARN, "failed to get max major_finish_time", K(tmp_ret));
+        SERVER_MODULE_SCOPE {
+          if (OB_TMP_FAIL(::oceanbase::share::server_service<::oceanbase::share::ObDagScheduler>()->get_max_major_finish_time(progress_.merge_version_, update_estimated_finish_time))) {
           }
         }
         progress_.estimated_finish_time_ = MAX(progress_.estimated_finish_time_, update_estimated_finish_time);
@@ -141,11 +139,10 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
       MEMSET(event_buf_, '\0', sizeof(event_buf_));
       tmp_event.reset();
       if (share::ObIDag::DAG_STATUS_FINISH != progress_.status_) {
-        MTL_SWITCH(progress_.tenant_id_) {
-          MTL(compaction::ObServerCompactionEventHistory *)->get_last_event(tmp_event);
+        SERVER_MODULE_SCOPE {
+          ::oceanbase::share::server_service<::oceanbase::compaction::ObServerCompactionEventHistory>()->get_last_event(tmp_event);
           if (tmp_event.compaction_scn_ == progress_.merge_version_) {
             if (OB_FAIL(tmp_event.generate_event_str(event_buf_, sizeof(event_buf_)))) {
-              SERVER_LOG(WARN, "failed to generate event str", K(ret), K(tmp_event));
             }
           }
         }

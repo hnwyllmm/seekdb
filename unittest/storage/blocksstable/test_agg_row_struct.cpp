@@ -28,6 +28,8 @@
 #include "storage/blocksstable/index_block/ob_agg_row_struct.h"
 #include "storage/blocksstable/index_block/ob_index_block_util.h"
 #include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
+#undef protected
+#undef private
 
 namespace oceanbase
 {
@@ -57,14 +59,11 @@ public:
 
 protected:
   ObArenaAllocator allocator_;
-  int64_t data_version_;
 };
 
 TestAggRow::TestAggRow()
     : allocator_()
-{
-  data_version_ = DATA_VERSION_1_0_0_0;
-}
+{}
 TestAggRow::~TestAggRow()
 {
 }
@@ -418,7 +417,7 @@ TEST_F(TestAggRow, test_agg_row)
   }
 
   ObAggRowWriter row_writer;
-  OK(row_writer.init(agg_cols, agg_row, data_version_, allocator_));
+  OK(row_writer.init(agg_cols, agg_row, allocator_));
   int64_t buf_size = row_writer.get_serialize_data_size();
   char *buf = reinterpret_cast<char *>(allocator_.alloc(buf_size));
   ASSERT_NE(nullptr, buf);
@@ -444,13 +443,3 @@ TEST_F(TestAggRow, test_agg_row)
 
 } // end namespace unittest
 } // end namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  system("rm -f test_agg_row_struct.log*");
-  oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
-  OB_LOGGER.set_file_name("test_agg_row_struct.log", true);
-  srand(time(NULL));
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

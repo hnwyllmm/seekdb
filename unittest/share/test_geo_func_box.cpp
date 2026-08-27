@@ -16,8 +16,8 @@
 
 #include <gtest/gtest.h>
 #define private public
-#include "lib/geo/ob_geo_func_utils.h"
-#include "lib/json_type/ob_json_common.h"
+#include "share/geo/ob_geo_func_utils.h"
+#include "common/json_type/ob_json_common.h"
 #undef private
 
 
@@ -28,6 +28,8 @@ namespace oceanbase
 {
 
 namespace common
+{
+namespace test_geo_func_box
 {
 
 class TestGeoFuncBox : public ::testing::Test
@@ -48,7 +50,7 @@ public:
   static void TearDownTestCase()
   {}
 
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestGeoFuncBox);
 };
@@ -464,14 +466,6 @@ TEST_F(TestGeoFuncBox, geom_collection)
   ASSERT_EQ(6.0, result->ymax);
 }
 
+}  // namespace test_geo_func_box
 }  // namespace common
 }  // namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  // system("rm -f test_geo_func_box.log");
-  // OB_LOGGER.set_file_name("test_geo_func_box.log");
-  // OB_LOGGER.set_log_level("INFO");
-  return RUN_ALL_TESTS();
-}

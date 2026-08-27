@@ -72,7 +72,6 @@ int ObExprMd5::calc_md5(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
   int ret = OB_SUCCESS;
   ObDatum *param_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, param_datum))) {
-    LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
   } else {
@@ -119,7 +118,7 @@ int ObExprMd5::calc_md5(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprMd5, raw_expr) {
   int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
+  {
     SET_LOCAL_SYSVAR_CAPACITY(1);
     EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   }

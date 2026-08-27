@@ -16,9 +16,9 @@
 #define USING_LOG_PREFIX SHARE
 #include <gtest/gtest.h>
 #define private public
-#include "lib/json_type/ob_json_bin.h"
-#include "lib/json_type/ob_json_parse.h"
-#include "lib/json_type/ob_json_diff.h"
+#include "common/json_type/ob_json_bin.h"
+#include "common/json_type/ob_json_parse.h"
+#include "common/json_type/ob_json_diff.h"
 #undef private
 
  
@@ -42,7 +42,7 @@ public:
   static void TearDownTestCase()
   {}
 
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestJsonBin);
 
@@ -497,7 +497,6 @@ TEST_F(TestJsonBin, test_bin_lookup)
 
 TEST_F(TestJsonBin, test_wrapper_to_string_object)
 {
-  set_compat_mode(lib::Worker::CompatMode::MYSQL);
   // json text to json tree
   common::ObString json_text("{ \"greeting\" : \"Hello!\", \"farewell\" : \"bye-bye!\", \"json_text\" : \"test!\" }");
   common::ObArenaAllocator allocator(ObModIds::TEST);
@@ -1142,38 +1141,25 @@ void createTime(ObTime &ob_time)
 //    ASSERT_EQ(6, jt1.parts_[DT_MDAY]);
 //  }
 
-long getCurrentTime()
-{
-   struct timeval tv;
-   gettimeofday(&tv,NULL);
-   return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
-
 TEST_F(TestJsonBin, test_seek_member) {
   int ret = OB_SUCCESS;
   common::ObString path_str("$.\"resolution\".x");
   std::cout<<"path_expression:"<<path_str.ptr()<<std::endl;
-  long t_path1 = getCurrentTime();
-  ObArenaAllocator allocator(ObModIds::TEST); 
+  ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path(path_str, &allocator);
   ret = test_path.parse_path();
-  std::cout<<"time of parse_path:"<<getCurrentTime()-t_path1<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //common::ObString json_str("{\"name\": \"Safari\", \"os\": \"Mac\"}");
   common::ObString j_text("{\"x\": \"Safari\", \"os\": \"Mac\", \"resolution\": {\"x\": \"1920\", \"y\": \"1080\"}}");
   std::cout<<"json_data:"<<j_text.ptr()<<std::endl;
  
-  long t_json1 =getCurrentTime();
-  std::cout<<"time of parse_json:"<<getCurrentTime()-t_json1<<std::endl;
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
   ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
-  long t_seek1 =getCurrentTime();
   ret = j_bin->seek(test_path, cnt, false, false, hit);
-  std::cout<<"time of seek:"<<getCurrentTime()-t_seek1<<std::endl;
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(hit.size(), 1);
   ASSERT_EQ(false, hit[0]->is_tree());
@@ -1189,25 +1175,19 @@ TEST_F(TestJsonBin, test_seek_member) {
 TEST_F(TestJsonBin, test_seek_member_wildcard) {
   common::ObString path_str("$.*");
   std::cout<<"path_expression:"<<path_str.ptr()<<std::endl;
-  long t_path1 = getCurrentTime();
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path(path_str, &allocator);
-  std::cout<<"time of parse_path:"<<getCurrentTime()-t_path1<<std::endl;
   ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
 
   //common::ObString json_str("{\"name\": \"Safari\", \"os\": \"Mac\"}");
   common::ObString j_text("{\"name\": \"Safari\", \"os\": \"Mac\", \"resolution\": {\"x\": \"1920\", \"y\": \"1080\"}}");
   std::cout<<"json_data:"<<j_text.ptr()<<std::endl;
   
-  long t_json1 =getCurrentTime();
-  std::cout<<"time of parse_json:"<<getCurrentTime()-t_json1<<std::endl;
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
   ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
-  long t_seek1 =getCurrentTime();
-  std::cout<<"time of seek:"<<getCurrentTime()-t_seek1<<std::endl;
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
 
   ASSERT_EQ(hit.size(), 3);
@@ -1259,25 +1239,19 @@ TEST_F(TestJsonBin, test_seek_array_range) {
 TEST_F(TestJsonBin, test_seek_ellipsis) {
   common::ObString path_str("$**[0]");
   std::cout<<"path_expression:"<<path_str.ptr()<<std::endl;
-  long t_path1 = getCurrentTime();
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path(path_str, &allocator);
-  std::cout<<"time of parse_path:"<<getCurrentTime()-t_path1<<std::endl;
   ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
   //common::ObString json_str("{\"name\": \"Safari\", \"os\": \"Mac\"}");
   //common::ObString json_str("{\"x\": \"Safari\", \"os\": \"Mac\", \"resolution\": {\"x\": \"1920\", \"y\": \"1080\"}}");
   common::ObString j_text("{\"x\": [1, 2, 3], \"os\": [4, 5,6] }");
   std::cout<<"json_data:"<<j_text.ptr()<<std::endl;
   
-  long t_json1 =getCurrentTime();
-  std::cout<<"time of parse_json:"<<getCurrentTime()-t_json1<<std::endl;
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
   ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
-  long t_seek1 =getCurrentTime();
-  std::cout<<"time of seek:"<<getCurrentTime()-t_seek1<<std::endl;
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
 
   ASSERT_EQ(hit.size(), 2);
@@ -3178,11 +3152,7 @@ TEST_F(TestJsonBin, test_type)
   ObJsonDecimal j_dec_1(res_nmb, res_precision, res_scale);
   ASSERT_EQ(OB_SUCCESS, tree.add("j_dec_1", &j_dec_1));
 
-<<<<<<< HEAD
   nmb_str.assign_ptr("-1.1234e9", static_cast<int64_t>(STRLEN("-1.1234e9")));  
-=======
-  nmb_str.assign_ptr("-1.1234e9", static_cast<int64_t>(STRLEN("-1.1234e9")));
->>>>>>> master
   res_precision = 10;
   res_scale = 4;
   ASSERT_EQ(OB_SUCCESS, res_nmb.from_sci_opt(nmb_str.ptr(), nmb_str.length(), allocator, &res_precision, &res_scale));
@@ -3394,16 +3364,3 @@ TEST_F(TestJsonBin, test_array_remove_2)
 
 } // namespace common
 } // namespace oceanbase
-
-int main(int argc, char** argv)
-{
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  OB_LOGGER.set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
-  /*
-  system("rm -f test_json_bin.log");
-  OB_LOGGER.set_file_name("test_json_bin.log");
-  OB_LOGGER.set_log_level("INFO");
-  */
-  return RUN_ALL_TESTS();
-}

@@ -16,8 +16,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_array_contains_all.h"
-#include "lib/udt/ob_collection_type.h"
-#include "lib/udt/ob_array_type.h"
+#include "common/udt/ob_collection_type.h"
+#include "common/udt/ob_array_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
@@ -53,12 +53,6 @@ int ObExprArrayContainsAll::eval_array_contains_all_batch(const ObExpr &expr, Ob
   return eval_array_relations_batch(expr, ctx, skip, batch_size, CONTAINS_ALL);
 }
 
-int ObExprArrayContainsAll::eval_array_contains_all_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                                           const ObBitVector &skip, const EvalBound &bound)
-{
-  return eval_array_relation_vector(expr, ctx, skip, bound, CONTAINS_ALL);
-}
-
 int ObExprArrayContainsAll::cg_expr(ObExprCGCtx &expr_cg_ctx,
                          const ObRawExpr &raw_expr,
                          ObExpr &rt_expr) const
@@ -68,7 +62,6 @@ int ObExprArrayContainsAll::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   rt_expr.eval_func_ = eval_array_contains_all;
   rt_expr.eval_batch_func_ = eval_array_contains_all_batch;
-  rt_expr.eval_vector_func_ = eval_array_contains_all_vector;
 
   return OB_SUCCESS;
 }

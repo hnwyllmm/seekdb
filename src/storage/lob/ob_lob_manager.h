@@ -26,10 +26,19 @@
 #include "storage/lob/ob_lob_constants.h"
 #include "storage/lob/ob_lob_iterator.h"
 #include "storage/lob/ob_lob_meta_manager.h"
-#include "storage/ob_storage_rpc.h"
+#include "share/ob_i_lob_read_service.h"  // implements the lob-read domain port(dependency inversion)
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+struct ObStorageDatum;
+}
+namespace common
+{
+struct ObLobDiffHeader;
+}
+
 namespace storage
 {
 
@@ -44,7 +53,7 @@ struct ObLobCtx
   TO_STRING_KV(KPC(lob_meta_mngr_), KPC(lob_piece_mngr_));
 };
 
-class ObLobManager
+class ObLobManager : public common::ObILobReadService
 {
 public:
   static const int64_t LOB_AUX_TABLE_COUNT = 2; // lob aux table count for each table
@@ -53,18 +62,17 @@ public:
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
   static const ObLobCommon ZERO_LOB; // static empty lob for zero val
 private:
-  explicit ObLobManager(const uint64_t tenant_id)
-    : tenant_id_(tenant_id),
-      is_inited_(false),
-      allocator_(tenant_id),
+  explicit ObLobManager()
+    : is_inited_(false),
+      allocator_{},
       lob_ctx_(),
-      meta_manager_(tenant_id),
-      piece_manager_(tenant_id)
+      meta_manager_{},
+      piece_manager_{}
   {}
 public:
   ~ObLobManager() { destroy(); }
-  static int mtl_new(ObLobManager *&m);
-  // MTL 
+  static int server_module_new(ObLobManager *&m);
+  // Server module lifecycle.
   int init();
   int start();
   int stop();
@@ -73,7 +81,9 @@ public:
 
   // Only use for default lob col val
   static int fill_lob_header(ObIAllocator &allocator, ObString &data, ObString &out);
-  static int fill_lob_header(ObIAllocator &allocator, ObStorageDatum &datum);
+  static int fill_lob_header(
+      ObIAllocator &allocator,
+      blocksstable::ObStorageDatum &datum);
   static int fill_lob_header(ObIAllocator &allocator,
                              const ObIArray<share::schema::ObColDesc> &column_ids,
                              blocksstable::ObDatumRow &datum_row);
@@ -141,6 +151,43 @@ public:
                       int64_t timeout,
                       ObLobLocatorV2 &lob);
 
+  // ===== common::ObILobReadService port implementation (injected by the server module provider) =====
+  virtual int get_outrow_lob_full_data(common::ObLobTextIterCtx &ctx,
+                                       common::ObCollationType cs_type,
+                                       bool has_lob_header,
+                                       bool is_outrow,
+                                       common::ObIAllocator *tmp_alloc) override;
+  virtual int get_delta_lob_full_data(common::ObLobTextIterCtx &ctx,
+                                      common::ObObjType type,
+                                      common::ObCollationType cs_type,
+                                      common::ObLobLocatorV2 &lob_locator,
+                                      common::ObIAllocator *allocator,
+                                      common::ObString &data_str) override;
+  virtual int get_outrow_prefix_data(common::ObLobTextIterCtx &ctx,
+                                     common::ObCollationType cs_type,
+                                     bool has_lob_header,
+                                     bool is_outrow,
+                                     common::ObIAllocator *tmp_alloc,
+                                     uint32_t prefix_char_len) override;
+  virtual int get_first_block(common::ObLobTextIterCtx &ctx,
+                              common::ObCollationType cs_type,
+                              bool has_lob_header,
+                              bool is_outrow,
+                              common::ObIAllocator *tmp_alloc,
+                              common::ObString &str,
+                              common::ObTextStringIterState &state) override;
+  virtual int get_next_block_inner(common::ObLobTextIterCtx &ctx,
+                                   common::ObCollationType cs_type,
+                                   bool has_lob_header,
+                                   bool is_outrow,
+                                   common::ObString &str,
+                                   common::ObTextStringIterState &state) override;
+  virtual int get_outrow_char_len(common::ObLobTextIterCtx &ctx,
+                                  common::ObCollationType cs_type,
+                                  common::ObIAllocator *tmp_alloc,
+                                  int64_t &char_length) override;
+  virtual void free_lob_query_iter(common::ObLobTextIterCtx &ctx) override;
+
   common::ObIAllocator& get_ext_info_log_allocator() { return ext_info_log_allocator_; }
   inline bool can_write_inrow(uint64_t len, int64_t inrow_threshold) { return len <= inrow_threshold; }
 
@@ -183,14 +230,15 @@ private:
 
   int query_outrow(ObLobAccessParam& param, ObLobQueryIter *&result);
   int query_outrow(ObLobAccessParam& param, ObString &data);
-  int process_diff(ObLobAccessParam& param, ObLobLocatorV2& lob_locator, ObLobDiffHeader *diff_header);
+  int process_diff(ObLobAccessParam& param,
+                   ObLobLocatorV2& lob_locator,
+                   common::ObLobDiffHeader *diff_header);
   int prepare_outrow_locator(ObLobAccessParam& param, ObLobDataInsertTask &task);
   int prepare_char_len(ObLobAccessParam& param, ObLobDiskLocatorBuilder &locator_builder, ObLobDataInsertTask &task);
   int prepare_lob_id(ObLobAccessParam& param, ObLobDiskLocatorBuilder &locator_builder);
   int alloc_lob_id(ObLobAccessParam& param, ObLobId &lob_id);
   int prepare_seq_no(ObLobAccessParam& param, ObLobDiskLocatorBuilder &locator_builder, ObLobDataInsertTask &task);
 private:
-  const uint64_t tenant_id_;
   bool is_inited_;
   common::ObFIFOAllocator allocator_;
   // global ctx

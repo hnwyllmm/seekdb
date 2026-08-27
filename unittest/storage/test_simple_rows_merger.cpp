@@ -17,6 +17,7 @@
 #include "storage/access/ob_simple_rows_merger.h"
 #include <gtest/gtest.h>
 using namespace oceanbase::storage;
+using namespace oceanbase::common;
 
 class ObSimpleRowsMergerTest: public ::testing::Test
 {
@@ -433,10 +434,4 @@ TEST_F(ObSimpleRowsMergerTest, reset_range)
   ret = merger.pop();
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(merger.empty());
-}
-
-int main(int argc, char **argv)
-{
-  ::testing::InitGoogleTest(&argc,argv);
-  return RUN_ALL_TESTS();
 }

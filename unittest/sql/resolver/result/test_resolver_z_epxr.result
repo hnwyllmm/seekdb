@@ -7,7 +7,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
       "table_id":1099511677777,
       "table_name":"t1",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677777,
       "database_name":"rongxuan",
@@ -83,7 +82,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -172,7 +170,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -367,7 +364,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -399,7 +395,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
           "table_id":-2,
           "table_name":"t1",
           "alias_name":"t1",
-          "synonym_name":"",
           "table_type":1,
           "ref_id":1099511677777,
           "database_name":"rongxuan",
@@ -475,7 +470,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
                 "column_id":16,
                 "database_name":"rongxuan",
                 "table_name":"t1",
-                "synonym_name":"",
                 "column_name":"c1",
                 "expr_level":1,
                 "expr_levels": [
@@ -565,7 +559,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":1,
             "expr_levels": [
@@ -613,7 +606,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":1,
             "expr_levels": [
@@ -693,7 +685,6 @@ select (select c1 from t1) as field from t1 GROUP BY field;
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -735,7 +726,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
       "table_id":1099511677779,
       "table_name":"t3",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677779,
       "database_name":"rongxuan",
@@ -791,7 +781,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t3",
-        "synonym_name":"",
         "column_name":"c3",
         "expr_level":0,
         "expr_levels": [
@@ -932,7 +921,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -964,7 +952,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
           "table_id":1099511677777,
           "table_name":"t1",
           "alias_name":"",
-          "synonym_name":"",
           "table_type":0,
           "ref_id":1099511677777,
           "database_name":"rongxuan",
@@ -1040,7 +1027,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
                 "column_id":16,
                 "database_name":"rongxuan",
                 "table_name":"t1",
-                "synonym_name":"",
                 "column_name":"c1",
                 "expr_level":1,
                 "expr_levels": [
@@ -1129,7 +1115,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":1,
             "expr_levels": [
@@ -1176,7 +1161,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t3",
-            "synonym_name":"",
             "column_name":"c3",
             "expr_level":0,
             "expr_levels": [
@@ -1303,7 +1287,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
               "column_id":16,
               "database_name":"rongxuan",
               "table_name":"t3",
-              "synonym_name":"",
               "column_name":"c3",
               "expr_level":0,
               "expr_levels": [
@@ -1363,7 +1346,6 @@ select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -1405,7 +1387,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
       "table_id":1099511677777,
       "table_name":"t1",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677777,
       "database_name":"rongxuan",
@@ -1481,7 +1462,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -1571,7 +1551,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -1619,7 +1598,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -1756,7 +1734,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -1788,7 +1765,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
           "table_id":-2,
           "table_name":"t1",
           "alias_name":"t1",
-          "synonym_name":"",
           "table_type":1,
           "ref_id":1099511677777,
           "database_name":"rongxuan",
@@ -1864,7 +1840,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
                 "column_id":16,
                 "database_name":"rongxuan",
                 "table_name":"t1",
-                "synonym_name":"",
                 "column_name":"c1",
                 "expr_level":1,
                 "expr_levels": [
@@ -1953,7 +1928,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":1,
             "expr_levels": [
@@ -2087,7 +2061,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
               "column_id":16,
               "database_name":"rongxuan",
               "table_name":"t1",
-              "synonym_name":"",
               "column_name":"c1",
               "expr_level":0,
               "expr_levels": [
@@ -2173,7 +2146,6 @@ select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -2217,7 +2189,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
       "table_id":1099511677777,
       "table_name":"t1",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677777,
       "database_name":"rongxuan",
@@ -2293,7 +2264,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -2383,7 +2353,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -2438,7 +2407,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
         "column_id":17,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c2",
         "expr_level":0,
         "expr_levels": [
@@ -2486,7 +2454,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -2538,7 +2505,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -2735,7 +2701,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -2803,7 +2768,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -2879,7 +2843,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -2981,7 +2944,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
                 "column_id":17,
                 "database_name":"rongxuan",
                 "table_name":"t1",
-                "synonym_name":"",
                 "column_name":"c2",
                 "expr_level":0,
                 "expr_levels": [
@@ -3089,7 +3051,6 @@ SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -3131,7 +3092,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
       "table_id":1099511677778,
       "table_name":"t2",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677778,
       "database_name":"rongxuan",
@@ -3209,7 +3169,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
             "column_id":17,
             "database_name":"rongxuan",
             "table_name":"t2",
-            "synonym_name":"",
             "column_name":"c2",
             "expr_level":0,
             "expr_levels": [
@@ -3253,7 +3212,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
             "column_id":18,
             "database_name":"rongxuan",
             "table_name":"t2",
-            "synonym_name":"",
             "column_name":"c3",
             "expr_level":0,
             "expr_levels": [
@@ -3315,7 +3273,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         "column_id":17,
         "database_name":"rongxuan",
         "table_name":"t2",
-        "synonym_name":"",
         "column_name":"c2",
         "expr_level":0,
         "expr_levels": [
@@ -3370,7 +3327,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         "column_id":18,
         "database_name":"rongxuan",
         "table_name":"t2",
-        "synonym_name":"",
         "column_name":"c3",
         "expr_level":0,
         "expr_levels": [
@@ -3425,7 +3381,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t2",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -3473,7 +3428,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t2",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -3525,7 +3479,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         "column_id":17,
         "database_name":"rongxuan",
         "table_name":"t2",
-        "synonym_name":"",
         "column_name":"c2",
         "expr_level":0,
         "expr_levels": [
@@ -3722,7 +3675,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -3790,7 +3742,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t2",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -3866,7 +3817,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -3938,7 +3888,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
             "column_id":18,
             "database_name":"rongxuan",
             "table_name":"t2",
-            "synonym_name":"",
             "column_name":"c3",
             "expr_level":0,
             "expr_levels": [
@@ -4014,7 +3963,6 @@ SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -4064,7 +4012,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
       "table_id":1099511677777,
       "table_name":"t1",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677777,
       "database_name":"rongxuan",
@@ -4140,7 +4087,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -4230,7 +4176,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -4278,7 +4223,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -4330,7 +4274,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -4474,7 +4417,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -4506,7 +4448,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
           "table_id":-2,
           "table_name":"t1",
           "alias_name":"t1",
-          "synonym_name":"",
           "table_type":1,
           "ref_id":1099511677777,
           "database_name":"rongxuan",
@@ -4582,7 +4523,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
                 "column_id":16,
                 "database_name":"rongxuan",
                 "table_name":"t1",
-                "synonym_name":"",
                 "column_name":"c1",
                 "expr_level":1,
                 "expr_levels": [
@@ -4672,7 +4612,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":1,
             "expr_levels": [
@@ -4819,7 +4758,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
               "column_id":16,
               "database_name":"rongxuan",
               "table_name":"t1",
-              "synonym_name":"",
               "column_name":"c1",
               "expr_level":1,
               "expr_levels": [
@@ -4954,7 +4892,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,
@@ -4996,7 +4933,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
       "table_id":1099511677777,
       "table_name":"t1",
       "alias_name":"",
-      "synonym_name":"",
       "table_type":0,
       "ref_id":1099511677777,
       "database_name":"rongxuan",
@@ -5072,7 +5008,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":0,
             "expr_levels": [
@@ -5162,7 +5097,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -5210,7 +5144,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -5262,7 +5195,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
         "column_id":16,
         "database_name":"rongxuan",
         "table_name":"t1",
-        "synonym_name":"",
         "column_name":"c1",
         "expr_level":0,
         "expr_levels": [
@@ -5408,7 +5340,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
     ],
     "use_late_materialization":-1,
     "log_level":"",
-    "max_concurrent":-1,
     "only_concurrent_hint":false,
     "has_hint_exclude_concurrent":false,
     "parallel":-1,
@@ -5440,7 +5371,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
           "table_id":-2,
           "table_name":"t1",
           "alias_name":"t1",
-          "synonym_name":"",
           "table_type":1,
           "ref_id":1099511677777,
           "database_name":"rongxuan",
@@ -5516,7 +5446,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
                 "column_id":16,
                 "database_name":"rongxuan",
                 "table_name":"t1",
-                "synonym_name":"",
                 "column_name":"c1",
                 "expr_level":1,
                 "expr_levels": [
@@ -5605,7 +5534,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
             "column_id":16,
             "database_name":"rongxuan",
             "table_name":"t1",
-            "synonym_name":"",
             "column_name":"c1",
             "expr_level":1,
             "expr_levels": [
@@ -5754,7 +5682,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
               "column_id":16,
               "database_name":"rongxuan",
               "table_name":"t1",
-              "synonym_name":"",
               "column_name":"c1",
               "expr_level":0,
               "expr_levels": [
@@ -5885,7 +5812,6 @@ select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
         ],
         "use_late_materialization":-1,
         "log_level":"",
-        "max_concurrent":-1,
         "only_concurrent_hint":false,
         "has_hint_exclude_concurrent":false,
         "parallel":-1,

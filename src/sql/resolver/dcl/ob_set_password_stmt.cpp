@@ -21,7 +21,7 @@ using namespace oceanbase::sql;
 
 ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_SET_PASSWORD),
-      masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
+      masked_sql_(), need_enc_(false), for_current_user_(false),
       modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
       max_user_connections_(OB_INVALID_ID)
 {
@@ -29,7 +29,7 @@ ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator *name_pool)
 
 ObSetPasswordStmt::ObSetPasswordStmt()
     : ObDDLStmt(NULL, stmt::T_SET_PASSWORD),
-      masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
+      masked_sql_(), need_enc_(false), for_current_user_(false),
       modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
       max_user_connections_(OB_INVALID_ID)
 {
@@ -48,11 +48,8 @@ int ObSetPasswordStmt::set_user_password(const common::ObString &user_name,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should be only set once", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(user_name))) {
-    LOG_WARN("failed to add string", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(host_name))) {
-    LOG_WARN("failed to add string", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(password))) {
-    LOG_WARN("failed to add string", K(ret));
   } else {
     //do nothing
   }
@@ -66,13 +63,9 @@ int ObSetPasswordStmt::add_ssl_info(const common::ObString &ssl_type,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(user_pwd_.add_string(ssl_type))) {
-    LOG_WARN("failed to add ssl_type", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(ssl_cipher))) {
-    LOG_WARN("failed to add ssl_cipher", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(x509_issuer))) {
-    LOG_WARN("failed to add x509_issuer", K(ret));
   } else if (OB_FAIL(user_pwd_.add_string(x509_subject))) {
-    LOG_WARN("failed to add x509_subject", K(ret));
   } else {
     //do nothing
   }

@@ -25,8 +25,7 @@ namespace observer
 {
 
 ObInfoSchemaReferentialConstraintsTable::ObInfoSchemaReferentialConstraintsTable()
-    : ObVirtualTableScannerIterator(),
-      tenant_id_(OB_INVALID_ID)
+    : ObVirtualTableScannerIterator()
 {
 }
 
@@ -37,7 +36,6 @@ ObInfoSchemaReferentialConstraintsTable::~ObInfoSchemaReferentialConstraintsTabl
 
 void ObInfoSchemaReferentialConstraintsTable::reset()
 {
-  tenant_id_ = OB_INVALID_ID;
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -45,20 +43,16 @@ int ObInfoSchemaReferentialConstraintsTable::inner_get_next_row(common::ObNewRow
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(NULL == allocator_ || NULL == schema_guard_ ||
-                  OB_INVALID_ID == tenant_id_)) {
+  if (OB_UNLIKELY(NULL == allocator_ || NULL == schema_guard_)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "allocator or schema_guard is NULL or tenant_id is invalid!",
+    SERVER_LOG(WARN, "allocator or schema_guard is NULL!",
                K_(schema_guard),
                K_(allocator),
-               K_(tenant_id),
                K(ret));
   }
   if (OB_SUCCESS == ret && !start_to_read_) {
     ObSArray<const ObDatabaseSchema *> database_schemas;
-    if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_,
-                                                                database_schemas))) {
-      SERVER_LOG(WARN, "failed to get database schema of tenant", K_(tenant_id));
+    if (OB_FAIL(schema_guard_->get_database_schemas_in_runtime(database_schemas))) {
     } else {
       ObObj *cells = NULL;
       const int64_t col_count = output_column_ids_.count();
@@ -85,8 +79,6 @@ int ObInfoSchemaReferentialConstraintsTable::inner_get_next_row(common::ObNewRow
                            *database_schema,
                            cells,
                            output_column_ids_.count()))) {
-          SERVER_LOG(WARN, "failed to add fk constraint of database schema",
-                     K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -122,10 +114,8 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_db(
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "schema guard should not be null", K(ret));
   } else if (OB_FAIL(schema_guard_->get_table_schemas_in_database(
-                     tenant_id_,
                      database_schema.get_database_id(),
                      table_schemas))) {
-    SERVER_LOG(WARN, "failed to get table schema in database", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
       const ObTableSchema *table_schema = table_schemas.at(i);
@@ -137,10 +127,7 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_db(
       } else if (OB_FAIL(check_priv("table_acc",
                                  database_schema.get_database_name_str(),
                                  table_schema->get_table_name_str(),
-                                 tenant_id_,
                                  priv_passed))) {
-        SERVER_LOG(WARN, "failed to check priv", K(ret), K(database_schema.get_database_name_str()),
-        K(table_schema->get_table_name_str()));
       } else if (!priv_passed) {
         continue;
       } else if (OB_FAIL(add_fk_constraints_in_table(
@@ -148,8 +135,6 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_db(
                          database_schema.get_database_name_str(),
                          cells,
                          col_count))){
-        SERVER_LOG(WARN, "failed to add fk constraints of table schema",
-                   "table_schema", *table_schema, K(ret));
       }
     }
   }
@@ -166,7 +151,7 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
   int ret = OB_SUCCESS;
   ObStringBuf allocator;
   ObString index_name;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
+  
   const ObIArray<ObForeignKeyInfo> &foreign_key_infos =
         table_schema.get_foreign_key_infos();
 
@@ -191,10 +176,8 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
                                                K_(reserved_column_cnt));
     } else if (!foreign_key_info.is_parent_table_mock_) {
       if (OB_FAIL(schema_guard_->get_simple_table_schema(
-                  tenant_id,
                   foreign_key_info.parent_table_id_,
                   parent_tbl_schema))) {
-        SERVER_LOG(WARN, "failed to get parent table schema", K(ret), K(tenant_id));
       } else if (OB_ISNULL(parent_tbl_schema)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "parent_tbl_schema is null", K(ret));
@@ -203,22 +186,18 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
         table_name = parent_tbl_schema->get_table_name_str();
       }
     } else {
-      if (OB_FAIL(schema_guard_->get_mock_fk_parent_table_schema_with_id(
-          tenant_id_, foreign_key_info.parent_table_id_, mock_fk_parent_table_schema))) {
-        SERVER_LOG(WARN, "failed to get parent table schema", K(ret));
+      if (OB_FAIL(schema_guard_->get_mock_fk_parent_table_schema_with_id(foreign_key_info.parent_table_id_, mock_fk_parent_table_schema))) {
       } else if (OB_ISNULL(mock_fk_parent_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "mock_fk_parent_table_schema is not existed", K(ret), K(tenant_id_), K(foreign_key_info));
+        SERVER_LOG(WARN, "mock_fk_parent_table_schema is not existed", K(ret), K(foreign_key_info));
       } else {
         database_id = mock_fk_parent_table_schema->get_database_id();
         table_name = mock_fk_parent_table_schema->get_mock_fk_parent_table_name();
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(schema_guard_->get_database_schema(
-        tenant_id, database_id,
+    } else if (OB_FAIL(schema_guard_->get_database_schema( database_id,
         parent_db_schema))) {
-      SERVER_LOG(WARN, "failed to get parent database schema", K(ret), K(tenant_id));
     } else if (OB_ISNULL(parent_db_schema)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "parent_db_schema is null", K(ret));
@@ -264,9 +243,8 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_table(
             } else if (FK_REF_TYPE_NON_UNIQUE_KEY == foreign_key_info.fk_ref_type_
                        || FK_REF_TYPE_UNIQUE_KEY == foreign_key_info.fk_ref_type_) {
               const ObSimpleTableSchemaV2 *index_schema = NULL;
-              if (OB_FAIL(schema_guard_->get_simple_table_schema(
-                          tenant_id, foreign_key_info.ref_cst_id_, index_schema))) {
-                SERVER_LOG(WARN, "get index_schema failed", K(ret), K(tenant_id));
+              if (OB_FAIL(schema_guard_->get_simple_table_schema( foreign_key_info.ref_cst_id_, index_schema))) {
+                SERVER_LOG(WARN, "get index_schema failed", K(ret));
                 break;
               } else if (OB_ISNULL(index_schema)) {
                 ret = OB_ERR_UNEXPECTED;

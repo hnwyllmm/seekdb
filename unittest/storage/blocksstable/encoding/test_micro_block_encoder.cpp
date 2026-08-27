@@ -22,6 +22,8 @@
 #include "storage/blocksstable/encoding/ob_micro_block_encoder.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "../ob_row_generate.h"
+#undef protected
+#undef private
 
 namespace oceanbase
 {
@@ -42,15 +44,15 @@ class TestIColumnEncoder : public ::testing::Test
 {
 public:
   TestIColumnEncoder(const bool is_multi_version_row = false)
-    : tenant_ctx_(OB_SERVER_TENANT_ID), is_multi_version_row_(is_multi_version_row)
+    : runtime_state_(), is_multi_version_row_(is_multi_version_row)
   {
-    share::ObTenantEnv::set_tenant(&tenant_ctx_);
+    share::g_server_runtime = &runtime_state_;
   }
   virtual ~TestIColumnEncoder() {}
   virtual void SetUp();
   virtual void TearDown() {}
 
-protected:
+public:
   int64_t rowkey_cnt_;
   int64_t column_cnt_;
   ObObjType *col_types_;
@@ -59,19 +61,16 @@ protected:
   ObRowkeyReadInfo read_info_;
   ObArenaAllocator allocator_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
-  share::ObTenantBase tenant_ctx_;
+  share::ObServerRuntimeState runtime_state_;
   bool is_multi_version_row_;
 };
 
 void TestIColumnEncoder::SetUp()
 {
-  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   const int64_t tid = 200001;
   ObTableSchema table;
   ObColumnSchemaV2 col;
   table.reset();
-  table.set_tenant_id(1);
-  table.set_tablegroup_id(1);
   table.set_database_id(1);
   table.set_table_id(tid);
   table.set_table_name("test_micro_decoder_schema");
@@ -105,7 +104,6 @@ void TestIColumnEncoder::SetUp()
   ASSERT_EQ(OB_SUCCESS, read_info_.init(allocator_,
                                       row_generate_.get_schema().get_column_count(),
                                       row_generate_.get_schema().get_rowkey_column_num(),
-                                      lib::is_oracle_mode(),
                                       col_descs_));
 
   ctx_.micro_block_size_ = 1L << 20; // 1MB, maximum micro block size;
@@ -113,7 +111,6 @@ void TestIColumnEncoder::SetUp()
   ctx_.rowkey_column_cnt_ = rowkey_cnt_;
   ctx_.column_cnt_ = is_multi_version_row_ ? column_cnt_ + 2 : column_cnt_;
   ctx_.col_descs_ = &col_descs_;
-  ctx_.major_working_cluster_version_=cal_version(3, 1, 0, 0);
   ctx_.row_store_type_ = common::ENCODING_ROW_STORE;
   ctx_.compressor_type_ = common::ObCompressorType::NONE_COMPRESSOR;
 }
@@ -140,10 +137,7 @@ public:
 
 TEST_F(TestEncoderOverFlow, test_append_row_with_timestamp_and_max_estimate_limit)
 {
-  common::ObClusterVersion::get_instance().update_cluster_version(cal_version(2, 2, 0, 75));
   ObMicroBlockEncoder encoder;
-  encoder.data_buffer_.allocator_.set_tenant_id(500);
-  encoder.row_buf_holder_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   encoder.estimate_size_limit_ = ctx_.macro_block_size_;
@@ -199,8 +193,6 @@ TEST_F(TestDictLargeVarchar, test_dict_large_varchar)
     ctx_.column_encodings_[i] = ObColumnHeader::Type::DICT;
   }
   ObMicroBlockEncoder encoder;
-  encoder.data_buffer_.allocator_.set_tenant_id(500);
-  encoder.row_buf_holder_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   ObDatumRow row;
@@ -363,10 +355,7 @@ TEST_F(TestStringDiffNullLength, test_string_diff_null_length)
        ObColumnHeader::Type::STRING_DIFF};
   ctx_.column_encodings_ = column_encoding_array;
   ctx_.micro_block_size_ = 1 << 20; // 1M
-  ctx_.major_working_cluster_version_ = DATA_VERSION_1_0_0_0;
   ObMicroBlockEncoder encoder;
-  encoder.data_buffer_.allocator_.set_tenant_id(500);
-  encoder.row_buf_holder_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   ObDatumRow row;
@@ -456,13 +445,4 @@ TEST_F(TestEncodingRowBufHolder, test_encoding_row_buf_holder)
 }
 
 }
-}
-
-int main(int argc, char **argv)
-{
-  system("rm -f test_micro_block_encoder.log*");
-  OB_LOGGER.set_file_name("test_micro_block_encoder.log");
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
 }

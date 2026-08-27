@@ -23,7 +23,8 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/schema/ob_table_schema.h"
-#include "share/schema/ob_table_param.h"
+#include "storage/access/ob_table_param.h"
+#include "storage/ob_obj_buf_array.h"
 
 namespace oceanbase
 {
@@ -88,7 +89,6 @@ public:
     if (hash() != other.hash()) {
       is_equal = false;
     } else if (OB_FAIL(rowkey_->equal(*other.rowkey_, is_equal))) {
-      TRANS_LOG(ERROR, "failed to compare", KR(ret), K(rowkey_), K(*other.rowkey_));
     } else {
       // do nothing
     }
@@ -176,9 +176,8 @@ public:
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
           && schema_meta.get_type() != value.get_type()
-          && !(lib::is_mysql_mode() 
-            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta()) 
-              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta)))) { // small integer -> big integer; mysql mode;
+          && !(common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) { // small integer -> big integer; mysql mode;
         TRANS_LOG(WARN, "data/schema type does not match",
                   "index", i,
                   "data_type", value.get_type(),
@@ -220,9 +219,8 @@ public:
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
           && schema_meta.get_type() != value.get_type()
-          && !(lib::is_mysql_mode() 
-            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta()) 
-              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta)))) { // small integer -> big integer; mysql mode;
+          && !(common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta))) { // small integer -> big integer; mysql mode;
         TRANS_LOG(WARN, "data/schema type does not match",
                   "index", i,
                   "data_type", value.get_type(),
@@ -254,9 +252,7 @@ public:
     int ret = common::OB_SUCCESS;
     ObMemtableKey tmp_key;
     if (OB_FAIL(tmp_key.encode(columns, rowkey))) {
-      TRANS_LOG(WARN, "ObMemtableKey encode fail", "ret", ret);
     } else if (OB_FAIL(tmp_key.dup_without_hash(new_key, allocator))) {
-      TRANS_LOG(WARN, "ObMemtableKey dup fail", K(ret));
     } else {
       // do nothing
     }
@@ -273,9 +269,7 @@ public:
     int ret = common::OB_SUCCESS;
     ObMemtableKey tmp_key;
     if (OB_FAIL(tmp_key.encode_without_hash(columns, rowkey))) {
-      TRANS_LOG(WARN, "ObMemtableKey encode fail", "ret", ret);
     } else if (OB_FAIL(tmp_key.dup_without_hash(new_key, allocator))) {
-      TRANS_LOG(WARN, "ObMemtableKey dup fail", K(ret));
     } else {
       // do nothing
     }
@@ -318,7 +312,7 @@ public:
     const int64_t rowkey_cnt, 
     const common::ObIArray<share::schema::ObColDesc> &columns,
     ObMemtableKeyBuffer *memtable_key_buffer = nullptr) 
-    : allocator_(common::ObMemAttr(MTL_ID(), "ObMemtableKey")),
+    : allocator_(common::ObMemAttr("ObMemtableKey")),
       rowkey_cnt_(rowkey_cnt),
       columns_(columns),
       memtable_key_buffer_(memtable_key_buffer),

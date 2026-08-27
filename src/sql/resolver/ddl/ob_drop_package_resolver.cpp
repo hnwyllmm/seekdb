@@ -45,14 +45,14 @@ int ObDropPackageResolver::resolve(const ParseNode &parse_tree)
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is null");
   } else if (OB_FAIL(ObResolverUtils::resolve_sp_name(*session_info_, *name_node, db_name, package_name))) {
-    LOG_WARN("resolve package name failed", K(ret));
   } else if (OB_ISNULL(package_stmt = create_stmt<ObDropPackageStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("create drop package stmt failed");
   } else {
     bool is_drop_body = static_cast<bool>(parse_tree.value_);
-    obrpc::ObDropPackageArg &package_arg = package_stmt->get_drop_package_arg();
-    package_arg.tenant_id_ = session_info_->get_effective_tenant_id();
+    obcall::ObDropPackageArg &package_arg = package_stmt->get_drop_package_arg();
+    
+    
     package_arg.db_name_ = db_name;
     package_arg.package_name_ = package_name;
     if (is_drop_body) {
@@ -60,13 +60,11 @@ int ObDropPackageResolver::resolve(const ParseNode &parse_tree)
     } else {
       package_arg.package_type_ = share::schema::PACKAGE_TYPE;
     }
-    package_arg.compatible_mode_ = COMPATIBLE_MYSQL_MODE;
   }
   return ret;
 }
 } //namespace sql
 } //namespace oceanbase
-
 
 
 

@@ -13,39 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <thread>
+
 #define UNITTEST_DEBUG
 #include <gtest/gtest.h>
 #define private public
 #define protected public
 
+#include "unittest/storage/multi_data_source/common_define.h"
 #include "storage/multi_data_source/mds_row.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-namespace oceanbase {
-namespace storage {
-namespace mds {
-void *DefaultAllocator::alloc(const int64_t size) {
-  void *ptr = std::malloc(size);// ob_malloc(size, "MDS"); 
-  ATOMIC_INC(&alloc_times_);
-  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
-  return ptr;
-}
-void DefaultAllocator::free(void *ptr) {
-  ATOMIC_INC(&free_times_);
-  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  std::free(ptr);// ob_free(ptr);
-}
-void *MdsAllocator::alloc(const int64_t size) {
-  void *ptr = std::malloc(size);// ob_malloc(size, "MDS"); 
-  ATOMIC_INC(&alloc_times_);
-  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
-  return ptr;
-}
-void MdsAllocator::free(void *ptr) {
-  ATOMIC_INC(&free_times_);
-  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  std::free(ptr);// ob_free(ptr);
-}
-}}}
+#undef protected
+#undef private
+
 namespace oceanbase {
 namespace unittest {
 
@@ -63,7 +43,7 @@ public:
   };
   virtual void TearDown() {
   };
-private:
+public:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestMdsNode);
 };
@@ -100,8 +80,8 @@ struct UserDataWithCallBack
 
 TEST_F(TestMdsNode, call_user_method) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
-  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ::mk_v0(1));// commit finally
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
+  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ(1, 0));// commit finally
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {0}));
   ctx.on_redo(mock_scn(1));
   ctx.before_prepare();
   ctx.on_prepare(mock_scn(2));
@@ -114,8 +94,8 @@ TEST_F(TestMdsNode, call_user_method) {
 
 TEST_F(TestMdsNode, release_node_while_node_in_ctx) {
   MdsRow<DummyKey, UserDataWithCallBack> row;
-  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ::mk_v0(1));// commit finally
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
+  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ(1, 0));// commit finally
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {0}));
   ctx.on_redo(mock_scn(1));
   ctx.before_prepare();
   row.~MdsRow();
@@ -130,18 +110,18 @@ TEST_F(TestMdsNode, release_node_while_node_in_ctx_concurrent) {
   call_try_on_commit = 0;
   call_try_on_abort = 0;
   MdsRow<DummyKey, UserDataWithCallBack> row;
-  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ::mk_v0(1));// commit finally
+  MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(100)), transaction::ObTxSEQ(1, 0));// commit finally
   // Submitting these nodes will take 50ms
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {share::ObLSID(0), 0}));
-  ASSERT_EQ(OB_SUCCESS, ctx.inc_seq_no());
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(2), ctx, {share::ObLSID(0), 0}));
-  ASSERT_EQ(OB_SUCCESS, ctx.inc_seq_no());
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(3), ctx, {share::ObLSID(0), 0}));
-  ASSERT_EQ(OB_SUCCESS, ctx.inc_seq_no());
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(4), ctx, {share::ObLSID(0), 0}));
-  ASSERT_EQ(OB_SUCCESS, ctx.inc_seq_no());
-  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(5), ctx, {share::ObLSID(0), 0}));
-  ASSERT_EQ(OB_SUCCESS, ctx.inc_seq_no());
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(1), ctx, {0}));
+  ctx.set_seq_no(ctx.get_seq_no() + 1);
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(2), ctx, {0}));
+  ctx.set_seq_no(ctx.get_seq_no() + 1);
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(3), ctx, {0}));
+  ctx.set_seq_no(ctx.get_seq_no() + 1);
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(4), ctx, {0}));
+  ctx.set_seq_no(ctx.get_seq_no() + 1);
+  ASSERT_EQ(OB_SUCCESS, row.set(UserDataWithCallBack(5), ctx, {0}));
+  ctx.set_seq_no(ctx.get_seq_no() + 1);
 
   std::thread t1([&ctx]() {
     OCCAM_LOG(DEBUG, "t1 start");
@@ -215,29 +195,10 @@ TEST_F(TestMdsNode, release_node_while_node_in_ctx_concurrent) {
 // }
 
 TEST_F(TestMdsNode, test_node_print) {
-  UserMdsNode<DummyKey, UserDataWithCallBack> node0(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1, transaction::ObTxSEQ::mk_v0(100));
-  UserMdsNode<DummyKey, UserDataWithCallBack> node1(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1, transaction::ObTxSEQ::mk_v0(100));
+  UserMdsNode<DummyKey, UserDataWithCallBack> node0(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1, transaction::ObTxSEQ(100, 0));
+  UserMdsNode<DummyKey, UserDataWithCallBack> node1(nullptr, MdsNodeType::SET, WriterType::TRANSACTION, 1, transaction::ObTxSEQ(100, 0));
 }
 
 
 }
-}
-
-int main(int argc, char **argv)
-{
-  system("rm -rf test_mds_node.log");
-  oceanbase::common::ObLogger &logger = oceanbase::common::ObLogger::get_logger();
-  logger.set_file_name("test_mds_node.log", false);
-  logger.set_log_level(OB_LOG_LEVEL_DEBUG);
-  testing::InitGoogleTest(&argc, argv);
-  int ret = RUN_ALL_TESTS();
-  int64_t alloc_times = oceanbase::storage::mds::MdsAllocator::get_alloc_times();
-  int64_t free_times = oceanbase::storage::mds::MdsAllocator::get_free_times();
-  if (alloc_times != free_times) {
-    MDS_LOG(ERROR, "memory may leak", K(free_times), K(alloc_times));
-    ret = -1;
-  } else {
-    MDS_LOG(INFO, "all memory released", K(free_times), K(alloc_times));
-  }
-  return ret;
 }

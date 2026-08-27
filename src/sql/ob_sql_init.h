@@ -27,13 +27,11 @@
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/plan_cache/ob_plan_set.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#include "sql/executor/ob_task_runner_notifier_service.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/ob_end_trans_callback.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "share/object/ob_obj_cast.h"
-#include "engine/ob_serializable_function.h"
 
 namespace oceanbase
 {
@@ -63,34 +61,18 @@ inline int init_sql_expr_static_var()
 {
   int ret = common::OB_SUCCESS;
   static ObArenaAllocator allocator("init_sql");
-  if (OB_FAIL(ObExprTRDateFormat::init())) {
-    SQL_LOG(ERROR, "failed to init vars in oracle trunc", K(ret));
-  } else if (OB_FAIL(ObExprUuid::init())) {
-    SQL_LOG(ERROR, "failed to init vars in uuid", K(ret));
+  if (OB_FAIL(ObExprUuid::init())) {
   } else if (OB_FAIL(common::ObNumberConstValue::init(allocator))) {
-    SQL_LOG(ERROR, "failed to init ObNumberConstValue", K(ret));
-  } else if (OB_FAIL(ARITH_RESULT_TYPE_ORACLE.init())) {
-    SQL_LOG(ERROR, "failed to init ORACLE_ARITH_RESULT_TYPE", K(ret));
+  } else if (OB_FAIL(MOD_RESULT_TYPE_MAP.init())) {
   } else if (OB_FAIL(ObCharset::init_charset())) {
-    SQL_LOG(ERROR, "fail to init charset", K(ret));
   } else if (OB_FAIL(wide::ObDecimalIntConstValue::init_const_values(allocator))) {
-    SQL_LOG(ERROR, "failed to init ObDecimalIntConstValue", K(ret));
   }
   return ret;
 }
 
 inline int init_sql_executor_singletons()
 {
-  int ret = common::OB_SUCCESS;
-  if (OB_FAIL(ObTaskRunnerNotifierService::build_instance())) {
-    SQL_LOG(ERROR, "fail to build ObTaskRunnerNotifierService instance", K(ret));
-  } else {
-    ObFuncSerialization::init();
-  }
-  if (OB_FAIL(ret)) {
-    SQL_LOG(ERROR, "fail to init sql singletons", K(ret));
-  }
-  return ret;
+  return common::OB_SUCCESS;
 }
 
 inline void print_sql_stat()

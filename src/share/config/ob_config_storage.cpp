@@ -17,9 +17,11 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_config_storage.h"
+#include "lib/guard/ob_unique_guard.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/guard/ob_unique_guard.h"
 #include "share/config/ob_system_config.h"
 #include "share/config/ob_config.h"
 #include "share/storage/ob_sqlite_connection_pool.h"
@@ -49,7 +51,6 @@ int ObConfigStorage::init(share::ObSQLiteConnectionPool *pool)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid pool", K(ret));
   } else if (OB_FAIL(create_table_if_not_exists())) {
-    LOG_WARN("failed to create table", K(ret));
   }
   if (OB_FAIL(ret)) {
     pool_ = NULL;
@@ -69,7 +70,6 @@ int ObConfigStorage::create_table_if_not_exists()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to acquire connection", K(ret));
     } else if (OB_FAIL(guard->execute(SQLITE_CREATE_TABLE_SYS_PARAMETER, nullptr))) {
-      LOG_WARN("failed to create table", K(ret));
     }
   }
   return ret;
@@ -78,9 +78,11 @@ int ObConfigStorage::create_table_if_not_exists()
 int ObConfigStorage::load_all_configs(ObSystemConfig &system_config)
 {
   int ret = OB_SUCCESS;
+  ObUniqueGuard<ObSystemConfigValue> config_value;
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ob_make_unique(config_value))) {
   } else {
     const char *select_sql =
       "SELECT name, data_type, value, info, section, scope, source, edit_level "
@@ -88,7 +90,8 @@ int ObConfigStorage::load_all_configs(ObSystemConfig &system_config)
 
     auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
       ObSystemConfigKey key;
-      ObSystemConfigValue value;
+      ObSystemConfigValue &value = *config_value;
+      value.reset();
 
       const char *name_str = reader.get_text();
       if (nullptr != name_str) {
@@ -134,7 +137,6 @@ int ObConfigStorage::load_all_configs(ObSystemConfig &system_config)
       }
 
       if (OB_FAIL(system_config.update_value(key, value))) {
-        LOG_WARN("failed to update system config", K(ret));
       }
       return ret;
     };
@@ -161,7 +163,7 @@ int ObConfigStorage::get_config_value(const char *name, ObString &value, common:
 {
   int ret = OB_SUCCESS;
   value.reset();
-
+  
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -172,15 +174,13 @@ int ObConfigStorage::get_config_value(const char *name, ObString &value, common:
     // Use load_all_configs interface to load configs from table
     ObSystemConfig system_config;
     if (OB_FAIL(system_config.init())) {
-      LOG_WARN("failed to init system_config", K(ret));
     } else if (OB_FAIL(load_all_configs(system_config))) {
-      LOG_WARN("failed to load all configs", K(ret));
     } else {
       // Find config value from system_config
       ObSystemConfigKey key;
       key.set_name(ObString::make_string(name));
       const ObSystemConfigValue *pvalue = nullptr;
-
+      
       if (OB_FAIL(system_config.find(key, pvalue))) {
         if (OB_SEARCH_NOT_FOUND == ret) {
           ret = OB_ENTRY_NOT_EXIST;
@@ -255,7 +255,6 @@ int ObConfigStorage::upsert_config(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to acquire connection", K(ret));
     } else if (OB_FAIL(guard->execute(upsert_sql, binder))) {
-      LOG_WARN("failed to execute upsert", K(ret));
     } else {
       LOG_INFO("upsert config to sqlite success", K(name));
     }

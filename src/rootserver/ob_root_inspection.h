@@ -22,11 +22,10 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_fixed_length_string.h"
-#include "lib/thread/ob_work_queue.h"
-#include "share/ob_virtual_table_projector.h"
-#include "share/ob_common_rpc_proxy.h"
+#include "lib/task/ob_timer.h"
+#include "lib/thread/ob_async_task_queue.h"
 #include "share/ob_schema_status_proxy.h"
-#include "observer/ob_server_struct.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -47,21 +46,19 @@ class ObMultiVersionSchemaService;
 
 namespace rootserver
 {
-class ObRootService;
+class ObLocalManagementService;
 
 ////////////////////////////////////////////////////////////////
 // Class I: purge recyclebin in the background
-class ObPurgeRecyclebinTask: public common::ObAsyncTimerTask
+class ObPurgeRecyclebinTask: public common::ObTimerTask
 {
 public:
-  explicit ObPurgeRecyclebinTask(ObRootService &rs);
+  explicit ObPurgeRecyclebinTask(ObLocalManagementService &local_management_service);
   virtual ~ObPurgeRecyclebinTask() {}
 
-  virtual int process() override;
-  virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
-  virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
+  virtual void runTimerTask() override;
 private:
-  ObRootService &root_service_;
+  ObLocalManagementService &local_management_service_;
 };
 
 }//end namespace rootserver

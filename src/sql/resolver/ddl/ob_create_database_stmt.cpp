@@ -55,16 +55,6 @@ void ObCreateDatabaseStmt::set_read_only(const bool read_only)
   create_database_arg_.database_schema_.set_read_only(read_only);
 }
 
-int ObCreateDatabaseStmt::set_default_tablegroup_name(const common::ObString &tablegroup_name)
-{
-  return create_database_arg_.database_schema_.set_default_tablegroup_name(tablegroup_name);
-}
-
-void ObCreateDatabaseStmt::set_tenant_id(const uint64_t tenant_id)
-{
-  create_database_arg_.database_schema_.set_tenant_id(tenant_id);
-}
-
 int ObCreateDatabaseStmt::set_database_name(const ObString &database_name)
 {
   return create_database_arg_.database_schema_.set_database_name(database_name);
@@ -101,7 +91,7 @@ common::ObCollationType ObCreateDatabaseStmt::get_collation_type() const
   return create_database_arg_.database_schema_.get_collation_type();
 }
 
-obrpc::ObCreateDatabaseArg& ObCreateDatabaseStmt::get_create_database_arg()
+obcall::ObCreateDatabaseArg& ObCreateDatabaseStmt::get_create_database_arg()
 {
   return create_database_arg_;
 }

@@ -17,7 +17,7 @@
 #ifndef SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_SERVER_H_
 #define SRC_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_SERVER_H_
 
-#include "share/ob_virtual_table_scanner_iterator.h"  // ObVirtualTableScannerIterator
+#include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"  // ObVirtualTableScannerIterator
 
 namespace oceanbase
 {
@@ -48,30 +48,30 @@ class ObAllVirtualServer : public common::ObVirtualTableScannerIterator
     RPC_TLS_ENABLED,
     MEMORY_LIMIT,
     DATA_DISK_ALLOCATED,
-    DATA_DISK_ASSIGNED,
     START_SERVICE_TIME,
     CREATE_TIME,
     ROLE,
     SWITCHOVER_STATUS,
     LOG_RESTORE_SOURCE,
     SYNC_SCN,
-    READABLE_SCN
+    READABLE_SCN,
+    PENDING_ROLE
   };
 
 public:
   ObAllVirtualServer();
   virtual ~ObAllVirtualServer();
   int init(common::ObAddr &addr, common::ObServerConfig *config);
-  virtual int inner_open();
   virtual int inner_get_next_row(common::ObNewRow *&row);
 
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   common::ObAddr addr_;
   common::ObServerConfig *config_;
-  char log_restore_source_buf_[1024];
   char role_buf_[64];
   char switchover_status_buf_[128];
+  char pending_role_buf_[64];
+  char log_restore_source_buf_[1024];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualServer);

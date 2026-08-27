@@ -16,28 +16,63 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "lib/alloc/malloc_hook.h"
+#ifdef WITH_COVERAGE
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+// Point the coverage runtime at <base_dir>/seekdb.profraw (continuous) from a priority-101
+// constructor, which runs before the runtime's own initializer, so counters go straight there
+// and no default.profraw is ever created.
+extern "C" void __llvm_profile_set_filename(const char *);
+__attribute__((constructor(101)))
+static void seekdb_cov_init_profile_file(int argc, char **argv)
+{
+  const char *base = ".";
+  for (int i = 1; i < argc; ++i) {
+    if (strncmp(argv[i], "--base-dir=", 11) == 0) { base = argv[i] + 11; break; }
+    if (strcmp(argv[i], "--base-dir") == 0 && i + 1 < argc) { base = argv[i + 1]; break; }
+  }
+  char abs_base[1024];
+  if (base[0] == '/') {
+    snprintf(abs_base, sizeof(abs_base), "%s", base);
+  } else {
+    char cwd[1024] = {0};
+    (void)getcwd(cwd, sizeof(cwd));
+    snprintf(abs_base, sizeof(abs_base), "%s/%s", cwd, base);
+  }
+  char val[1100];
+  snprintf(val, sizeof(val), "%s/seekdb%%c.profraw", abs_base);
+  __llvm_profile_set_filename(val);
+  fprintf(stderr, "Coverage: set_filename('%s')\n", val);
+}
+#endif
+
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/oblog/ob_easy_log.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_warning_buffer.h"
-#include "lib/allocator/ob_mem_leak_checker.h"
-#include "lib/allocator/ob_libeasy_mem_pool.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/utility/ob_defer.h"
-#include "objit/ob_llvm_symbolizer.h"
 #include "observer/ob_command_line_parser.h"
 #include "observer/ob_server.h"
+#include "share/ob_encryption_util.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_signal_handle.h"
 #include "share/config/ob_server_config.h"
-#include "share/ob_tenant_mgr.h"
 #include "share/ob_version.h"
 #include <curl/curl.h>
+#include <stdlib.h>
 #ifndef _WIN32
 #include <getopt.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+#if defined(__linux__)
+#include <limits.h>
+#include <sys/prctl.h>
 #endif
 #include <locale.h>
 #ifdef __APPLE__
@@ -322,16 +357,51 @@ static int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info, size_t siz
 #include <dlfcn.h>
 #endif
 
+#if defined(__linux__)
+#ifndef PR_SET_THP_DISABLE
+#define PR_SET_THP_DISABLE 41
+#endif
+
+static void disable_hugepage_for_self_text()
+{
+  (void)prctl(PR_SET_THP_DISABLE, 1, 0, 0, 0);
+
+  char exe_path[PATH_MAX] = {0};
+  const ssize_t exe_len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+  if (exe_len <= 0) {
+    return;
+  }
+  exe_path[exe_len] = '\0';
+
+  FILE *maps = fopen("/proc/self/maps", "r");
+  if (maps == nullptr) {
+    return;
+  }
+
+  char line[4096];
+  while (fgets(line, sizeof(line), maps) != nullptr) {
+    unsigned long start = 0;
+    unsigned long end = 0;
+    char perms[8] = {0};
+    char path[PATH_MAX] = {0};
+    const int fields = sscanf(line, "%lx-%lx %7s %*s %*s %*s %4095[^\n]",
+                              &start, &end, perms, path);
+    if (fields == 4 && start < end && perms[0] == 'r' && perms[2] == 'x'
+        && 0 == strcmp(path, exe_path)) {
+      (void)madvise(reinterpret_cast<void *>(start), end - start, MADV_NOHUGEPAGE);
+    }
+  }
+  fclose(maps);
+}
+#endif
+
 using namespace oceanbase::obsys;
 using namespace oceanbase;
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
-using namespace oceanbase::diagnose;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
 using namespace oceanbase::omt;
-
-namespace oceanbase { namespace share { void ob_init_create_func(); } }
 
 #define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 #define MPRINTx(format, ...)                                                   \
@@ -412,11 +482,11 @@ static void print_args(int argc, char *argv[])
 }
 
 /**
- * 解析命令行参数
- * @details 解析命令行参数，并初始化ObServerOptions。
- * @param argc 命令行参数个数
- * @param argv 命令行参数
- * @param opts 配置选项
+ * Parse command-line arguments
+ * @details Parse command-line arguments，and initialize ObServerOptions。
+ * @param argc number of command-line arguments
+ * @param argv command-line arguments
+ * @param opts config options
  */
 static int parse_args(int argc, char *argv[], ObServerOptions &opts)
 {
@@ -425,7 +495,7 @@ static int parse_args(int argc, char *argv[], ObServerOptions &opts)
   ObCommandLineParser parser;
   bool config_file_exists = false;
 
-  // 解析参数，结果直接设置到opts中
+  // Parse arguments and write the results directly into opts
   if (OB_FAIL(parser.parse_args(argc, argv, opts))) {
     MPRINT("Failed to parse command line arguments, ret=%d", ret);
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(opts.base_dir_.ptr()))) {
@@ -524,7 +594,7 @@ static int check_uid_before_start(const char *dir_path)
     /* do nothing */
   } else {
     if (current_uid != dir_info.st_uid) {
-      ret = OB_UTL_FILE_ACCESS_DENIED;
+      ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
       MPRINT("ERROR: current user(uid=%u) that starts seekdb is not the same with the original one(uid=%u), seekdb starts failed!",
               current_uid, dir_info.st_uid);
     }
@@ -574,12 +644,16 @@ static int safe_sd_notify(int unset_environment, const char *state)
 
 int inner_main(int argc, char *argv[])
 {
-  // temporarily unlimited memory before init config
-  set_memory_limit(INT_MAX64);
-
-#ifdef ENABLE_SANITY
-  backtrace_symbolize_func = oceanbase::common::backtrace_symbolize;
+#if defined(__APPLE__)
+  const ObMallocBackend startup_malloc_backend = get_ob_malloc_backend();
+  if (!configure_darwin_malloc_zone(startup_malloc_backend)) {
+    MPRINT("Failed to configure macOS malloc zone for backend '%s'.",
+           ob_malloc_backend_name(startup_malloc_backend));
+    return OB_ERR_UNEXPECTED;
+  }
 #endif
+  // LLVM removed: the LLVM symbolizer is gone; sanity (ASAN/UBSAN) builds keep
+  // backtrace_symbolize_func at its default (NULL) -> unsymbolized frames.
 #if defined(_WIN32) || defined(__ANDROID__)
   snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "seekdb");
 #else
@@ -589,41 +663,6 @@ int inner_main(int argc, char *argv[])
 #endif
   ObStackHeaderGuard stack_header_guard;
   int64_t memory_used = get_virtual_memory_used();
-#if !defined(OB_USE_ASAN) && !defined(_WIN32)
-  /**
-    signal handler stack
-   */
-  void *ptr = malloc(SIG_STACK_SIZE);
-  abort_unless(ptr != nullptr);
-  stack_t nss;
-  stack_t oss;
-  bzero(&nss, sizeof(nss));
-  bzero(&oss, sizeof(oss));
-  nss.ss_sp = ptr;
-  nss.ss_size = SIG_STACK_SIZE;
-#ifdef __APPLE__
-  // On macOS, sigaltstack might fail or behave differently
-  // Just try to set it but don't abort if it fails
-  int sigaltstack_ret = sigaltstack(&nss, &oss);
-  if (0 == sigaltstack_ret) {
-    DEFER(sigaltstack(&oss, nullptr));
-  } else {
-    // sigaltstack failed, but continue anyway
-    free(ptr);
-    ptr = nullptr;
-  }
-#else
-  abort_unless(0 == sigaltstack(&nss, &oss));
-  DEFER(sigaltstack(&oss, nullptr));
-#endif
-  ::oceanbase::common::g_redirect_handler = true;
-#endif
-
-  // Fake routines for current thread.
-
-#ifndef OB_USE_ASAN
-  get_mem_leak_checker().init();
-#endif
 
   ObCurTraceId::SeqGenerator::seq_generator_  = ObTimeUtility::current_time();
   static const int  LOG_FILE_SIZE             = DEFAULT_LOG_FILE_SIZE_MB * 1024 * 1024;
@@ -641,7 +680,7 @@ int inner_main(int argc, char *argv[])
   }
 #endif
 
-  lib::ObMemAttr mem_attr(OB_SYS_TENANT_ID, "ObserverAlloc");
+  lib::ObMemAttr mem_attr("ObserverAlloc");
   ObServerOptions *opts = nullptr;
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(opts = OB_NEW(ObServerOptions, mem_attr))) {
@@ -696,6 +735,9 @@ int inner_main(int argc, char *argv[])
     MPRINT("    Start seekdb with --nodaemon if you don't want to start as a daemon process.");
     if (OB_FAIL(start_daemon(PID_FILE_NAME))) {
       MPRINT("Start seekdb as a daemon failed. Did you started seekdb already?");
+    } else if (!restore_malloc_backend_after_fork()) {
+      ret = OB_ERR_UNEXPECTED;
+      MPRINT("Failed to restore malloc backend after starting daemon process.");
     }
   } else if (opts->nodaemon_) {
     if (OB_FAIL(start_daemon(PID_FILE_NAME, true/*skip_daemon*/))) {
@@ -713,12 +755,13 @@ int inner_main(int argc, char *argv[])
     OB_LOGGER.set_log_level(opts->log_level_);
     OB_LOGGER.set_max_file_size(LOG_FILE_SIZE);
     OB_LOGGER.set_new_file_info(syslog_file_info);
-    OB_LOGGER.set_file_name(LOG_FILE_NAME, true/*no_redirect_flag*/);
+    OB_LOGGER.set_file_name(LOG_FILE_NAME, false/*no_redirect_flag*/);
     ObPLogWriterCfg log_cfg;
     LOG_INFO("succ to init logger",
              "default file", LOG_FILE_NAME,
              "max_log_file_size", LOG_FILE_SIZE,
              "enable_async_log", OB_LOGGER.enable_async_log());
+    const ObMallocBackend malloc_backend = get_ob_malloc_backend();
     if (0 == memory_used) {
       _LOG_INFO("Get virtual memory info failed");
     } else {
@@ -736,42 +779,35 @@ int inner_main(int argc, char *argv[])
 #if defined(__APPLE__) || defined(__ANDROID__)
     // macOS/Android don't support M_MMAP_MAX and M_ARENA_MAX
 #elif defined(__linux__)
-    static const int DEFAULT_MMAP_MAX_VAL = 1024 * 1024 * 1024;
-    mallopt(M_MMAP_MAX, DEFAULT_MMAP_MAX_VAL);
-    mallopt(M_ARENA_MAX, 1); // disable malloc multiple arena pool
+    if (is_ob_malloc_backend(malloc_backend)) {
+      static const int DEFAULT_MMAP_MAX_VAL = 1024 * 1024 * 1024;
+      mallopt(M_MMAP_MAX, DEFAULT_MMAP_MAX_VAL);
+      mallopt(M_ARENA_MAX, 1); // disable malloc multiple arena pool
+    }
 #endif
 
     // turn warn log on so that there's a observer.log.wf file which
     // records all WARN and ERROR logs in log directory.
     ObWarningBuffer::set_warn_log_on(true);
     if (OB_SUCC(ret)) {
-      const bool embed_mode = opts->embed_mode_;
       const bool initialize = opts->initialize_;
       lib::Worker worker;
       lib::Worker::set_worker_to_thread_local(&worker);
-      lib::init_create_func();
-      oceanbase::share::ob_init_create_func();
-      lib::create_func_inited_ = true;
-      lib::TGMgr::instance();
-      {
-        auto &tg_mgr = lib::TGMgr::instance();
-        int fixed = 0;
-        for (int i = 0; i < lib::TGDefIDs::END; i++) {
-          if (lib::create_funcs_[i] && !tg_mgr.tgs_[i]) {
-            tg_mgr.tgs_[i] = lib::create_funcs_[i]();
-            if (tg_mgr.tgs_[i]) fixed++;
-          }
-        }
-      }
       ObServer &observer = ObServer::get_instance();
-      LOG_INFO("seekdb starts", "seekdb_version", PACKAGE_STRING);
-      ATOMIC_STORE(&palf::election::INIT_TS, palf::election::get_monotonic_ts());
+      LOG_INFO("seekdb starts", "seekdb_version", PACKAGE_STRING, "embedded", opts->embedded_);
       if (OB_FAIL(observer.init(*opts, log_cfg))) {
         LOG_ERROR("seekdb init fail", K(ret));
+      } else if (OB_MALLOC_BACKEND_UNKNOWN == malloc_backend) {
+        LOG_WARN("invalid malloc backend",
+                 "env", ob_malloc_backend_env_name(),
+                 "supported", "obmalloc, jemalloc");
+      } else {
+        LOG_INFO("malloc backend initialized",
+                 "backend", ob_malloc_backend_name(malloc_backend));
       }
       OB_DELETE(ObServerOptions, mem_attr, opts);
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(observer.start(embed_mode))) {
+      } else if (OB_FAIL(observer.start())) {
         LOG_ERROR("seekdb start fail", K(ret));
       } else {
         safe_sd_notify(0, "READY=1\n"
@@ -799,13 +835,6 @@ int inner_main(int argc, char *argv[])
   return ret;
 }
 
-#ifdef OB_USE_ASAN
-const char* __asan_default_options()
-{
-  return "abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1:log_path=./log/asan.log";
-}
-#endif
-
 #ifdef _WIN32
 static bool has_arg(int argc, char *argv[], const char *name)
 {
@@ -828,6 +857,9 @@ static const char *get_arg_value(int argc, char *argv[], const char *name)
 
 int main(int argc, char *argv[])
 {
+#if defined(__linux__)
+  disable_hugepage_for_self_text();
+#endif
 #ifdef _WIN32
   ::oceanbase::common::g_ob_log_main_entered = true;
 #endif

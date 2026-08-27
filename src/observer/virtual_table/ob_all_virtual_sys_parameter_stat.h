@@ -17,10 +17,9 @@
 #ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_SYS_PARAMETER_STAT_H_
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_VIRTUAL_SYS_PARAMETER_STAT_H_
 
-#include "share/ob_virtual_table_iterator.h"
+#include "observer/virtual_table/ob_virtual_table_iterator.h"
 #include "share/config/ob_server_config.h"
 #include "share/config/ob_config_helper.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -38,8 +37,7 @@ private:
   int inner_sys_get_next_row(common::ObNewRow *&row);
 
   enum SYS_PARAMETER_STAT_COLUMN {
-    ZONE = common::OB_APP_MIN_COLUMN_ID,
-    SERVER_TYPE,
+    SERVER_TYPE = common::OB_APP_MIN_COLUMN_ID,
     NAME,
     DATA_TYPE,
     VALUE,
@@ -55,8 +53,6 @@ private:
     ISDEFAULT
 };
   common::ObConfigContainer::const_iterator sys_iter_;
-  omt::ObTenantConfigGuard tenant_config_;
-  common::ObConfigContainer::const_iterator tenant_iter_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSysParameterStat);
 };
 } // namespace observer

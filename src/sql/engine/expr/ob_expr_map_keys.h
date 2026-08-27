@@ -18,8 +18,8 @@
 #define OCEANBASE_SQL_OB_EXPR_MAP_KEYS_
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#include "lib/geo/ob_geo_utils.h"
-#include "lib/udt/ob_array_utils.h"
+#include "share/geo/ob_geo_utils.h"
+#include "common/udt/ob_array_utils.h"
 
 namespace oceanbase
 {
@@ -37,8 +37,6 @@ public:
                                 common::ObExprTypeCtx &type_ctx,
                                 bool is_key = true);
   static int eval_map_components(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, bool is_key = true);
-  static int eval_map_components_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                          const ObBitVector &skip, const EvalBound &bound, bool is_key = true);
   static  int get_map_components_arr(ObIAllocator &tmp_allocator,
                                 ObEvalCtx &ctx,
                                 ObString &map_blob, 
@@ -62,8 +60,6 @@ public:
                                 common::ObExprTypeCtx &type_ctx)
                                 const override;
   static int eval_map_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  static int eval_map_keys_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                          const ObBitVector &skip, const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
@@ -82,8 +78,6 @@ public:
                                 common::ObExprTypeCtx &type_ctx)
                                 const override;
   static int eval_map_values(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  static int eval_map_values_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                          const ObBitVector &skip, const EvalBound &bound);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

@@ -21,7 +21,6 @@
 #include "logservice/palf/log_writer_utils.h"
 #include "logservice/palf/log_entry_header.h"
 #undef private
-#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -39,15 +38,11 @@ public:
   virtual ~TestLogGroupBuffer();
   virtual void SetUp();
   virtual void TearDown();
-protected:
-  int64_t  palf_id_;
+public:
   LogGroupBuffer log_group_buffer_;
 };
 
-TestLogGroupBuffer::TestLogGroupBuffer()
-    : palf_id_(1)
-{
-}
+TestLogGroupBuffer::TestLogGroupBuffer() {}
 
 TestLogGroupBuffer::~TestLogGroupBuffer()
 {
@@ -55,10 +50,6 @@ TestLogGroupBuffer::~TestLogGroupBuffer()
 
 void TestLogGroupBuffer::SetUp()
 {
-  ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
-  // init MTL
-  ObTenantBase tbase(1001);
-  ObTenantEnv::set_tenant(&tbase);
 }
 
 void TestLogGroupBuffer::TearDown()
@@ -66,7 +57,6 @@ void TestLogGroupBuffer::TearDown()
   PALF_LOG(INFO, "TestLogGroupBuffer has TearDown");
   PALF_LOG(INFO, "TearDown success");
   log_group_buffer_.destroy();
-  ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
 }
 
 TEST_F(TestLogGroupBuffer, test_init)
@@ -293,24 +283,12 @@ TEST_F(TestLogGroupBuffer, test_check_log_buf_wrapped)
   EXPECT_TRUE(is_wrapped);
 }
 
-TEST_F(TestLogGroupBuffer, test_to_leader)
+TEST_F(TestLogGroupBuffer, test_activate)
 {
-  EXPECT_EQ(OB_NOT_INIT, log_group_buffer_.to_leader());
+  EXPECT_EQ(OB_NOT_INIT, log_group_buffer_.activate());
   LSN start_lsn(100);
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
-  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.to_leader());
-#if LEADER_DEFAULT_GROUP_BUFFER_SIZE != FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE
-  EXPECT_EQ(OB_STATE_NOT_MATCH, log_group_buffer_.to_leader());
-#endif
-}
-
-TEST_F(TestLogGroupBuffer, test_to_follower)
-{
-  EXPECT_EQ(OB_NOT_INIT, log_group_buffer_.to_follower());
-  LSN start_lsn(100);
-  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
-  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.to_follower());
-  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.to_follower());
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.activate());
 }
 
 TEST_F(TestLogGroupBuffer, test_read_data)
@@ -397,13 +375,3 @@ TEST_F(TestLogGroupBuffer, test_read_data)
 
 } // END of unittest
 } // end of oceanbase
-
-int main(int argc, char **argv)
-{
-  system("rm -rf ./test_log_group_buffer.log*");
-  OB_LOGGER.set_file_name("test_log_group_buffer.log", true);
-  OB_LOGGER.set_log_level("TRACE");
-  PALF_LOG(INFO, "begin unittest::test_log_group_buffer");
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

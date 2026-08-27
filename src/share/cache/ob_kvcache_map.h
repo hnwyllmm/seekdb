@@ -18,6 +18,7 @@
 #define OCEANBASE_CACHE_OB_KVCACHE_MAP_H_
 
 #include "lib/allocator/ob_malloc.h"
+#include "lib/allocator/ob_lf_fifo_allocator.h"
 #include "lib/lock/ob_bucket_lock.h"
 #include "share/cache/ob_kvcache_struct.h"
 #include "share/cache/ob_kvcache_store.h"
@@ -25,10 +26,6 @@
 
 namespace oceanbase
 {
-namespace blocksstable
-{
-class ObMicroBlockCacheKey;
-}
 namespace common
 {
 class ObKVCacheIterator;
@@ -49,8 +46,6 @@ public:
   void destroy();
   int erase_all();
   int erase_all(const int64_t cache_id);
-  int erase_tenant(const uint64_t tenant_id, const bool force_erase = false);
-  int erase_tenant_cache(const uint64_t tenant_id, const int64_t cache_id);
   int clean_garbage_node(int64_t &start_pos, const int64_t clean_num);
   int replace_fragment_node(int64_t &start_pos, int64_t &replace_node_count, const int64_t replace_num);
   int put(
@@ -65,8 +60,16 @@ public:
     const ObIKVCacheValue *&pvalue,
     HazptrHolder &hazptr_holder);
   int erase(const int64_t cache_id, const ObIKVCacheKey &key);
-  int get_batch_data_block_cache_key(const int bucket_count, ObIArray<blocksstable::ObMicroBlockCacheKey> &keys);
   OB_INLINE int64_t get_bucket_num() const { return bucket_num_; }
+  OB_INLINE ObLfFIFOAllocator *get_node_allocator() { return &node_allocator_; }
+  int64_t get_managed_used() const
+  {
+    const int64_t bucket_group_count =
+        bucket_size_ > 0 ? (bucket_num_ + bucket_size_ - 1) / bucket_size_ : 0;
+    return node_allocator_.allocated()
+        + bucket_num_ * static_cast<int64_t>(sizeof(Node *))
+        + bucket_group_count * static_cast<int64_t>(sizeof(Bucket));
+  }
   void print_hazard_version_info();
 private:
   friend class ObKVCacheIterator;
@@ -75,15 +78,17 @@ private:
     ObKVCacheInst *inst_;
     uint64_t hash_code_;
     int32_t seq_num_;
+    int32_t kvpair_size_;
     ObKVMemBlockHandle *mb_handle_;
     const ObIKVCacheKey *key_;
     const ObIKVCacheValue *value_;
     Node *next_;
     int64_t get_cnt_;
-    Node()
-      : inst_(NULL),
+    Node() :
+        inst_(NULL),
         hash_code_(0),
         seq_num_(0),
+        kvpair_size_(0),
         mb_handle_(NULL),
         key_(NULL),
         value_(NULL),
@@ -92,7 +97,7 @@ private:
     {}
     virtual ~Node() {};
     virtual void retire() override;  // only free memory of itself
-    INHERIT_TO_STRING_KV("Node", ObKVCacheHazardNode, KPC_(inst), K_(hash_code), K_(seq_num), KP_(mb_handle), KP_(key),
+    INHERIT_TO_STRING_KV("Node", ObKVCacheHazardNode, KPC_(inst), K_(hash_code), K_(seq_num), K_(kvpair_size), KP_(mb_handle), KP_(key),
                          KP_(value), KP_(next), K_(get_cnt));
   };
   struct Bucket
@@ -120,6 +125,7 @@ private:
 
   bool is_inited_;
   ObMalloc bucket_allocator_;
+  ObLfFIFOAllocator node_allocator_;
   int64_t bucket_start_pos_;
   int64_t bucket_num_;
   int64_t bucket_size_;

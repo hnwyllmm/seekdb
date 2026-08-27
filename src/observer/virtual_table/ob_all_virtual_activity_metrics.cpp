@@ -15,6 +15,7 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_activity_metrics.h"
+#include "share/rc/ob_server_runtime.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -25,9 +26,7 @@ namespace observer
 ObAllVirtualActivityMetric::ObAllVirtualActivityMetric()
     : ObVirtualTableScannerIterator(),
       current_pos_(0),
-      length_(0),
-      addr_(),
-      ip_buffer_()
+      length_(0)
 {
 }
 
@@ -40,41 +39,14 @@ void ObAllVirtualActivityMetric::reset()
 {
   current_pos_ = 0;
   length_ = 0;
-  addr_.reset();
-  ip_buffer_[0] = '\0';
-  omt::ObMultiTenantOperator::reset();
   ObVirtualTableScannerIterator::reset();
 }
 
-bool ObAllVirtualActivityMetric::is_need_process(uint64_t tenant_id)
-{
-  if (!is_virtual_tenant_id(tenant_id) &&
-      (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)) {
-    return true;
-  }
-  return false;
-}
-
-void ObAllVirtualActivityMetric::release_last_tenant()
-{
-  current_pos_ = 0;
-  length_ = 0;
-  ip_buffer_[0] = '\0';
-}
-
-int ObAllVirtualActivityMetric::inner_get_next_row(ObNewRow *&row)
+int ObAllVirtualActivityMetric::get_next_freezer_stat_(
+    storage::ObMemstoreFreezerStat &stat)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(execute(row))) {
-    SERVER_LOG(WARN, "execute fail", K(ret));
-  }
-  return ret;
-}
-
-int ObAllVirtualActivityMetric::get_next_freezer_stat_(ObTenantFreezerStat& stat)
-{
-  int ret = OB_SUCCESS;
-  storage::ObTenantFreezer *freezer = MTL(storage::ObTenantFreezer *);
+  storage::ObMemstoreFreezer *freezer = ::oceanbase::share::server_service<::oceanbase::storage::ObMemstoreFreezer>();
 
   if (current_pos_ < length_) {
     (void)freezer->get_freezer_stat_from_history(current_pos_, stat);
@@ -89,7 +61,7 @@ int ObAllVirtualActivityMetric::get_next_freezer_stat_(ObTenantFreezerStat& stat
 int ObAllVirtualActivityMetric::prepare_start_to_read_()
 {
   int ret = OB_SUCCESS;
-  storage::ObTenantFreezer *freezer = MTL(storage::ObTenantFreezer *);
+  storage::ObMemstoreFreezer *freezer = ::oceanbase::share::server_service<::oceanbase::storage::ObMemstoreFreezer>();
 
   (void)freezer->get_freezer_stat_history_snapshot(length_);
   current_pos_ = 0;
@@ -98,10 +70,10 @@ int ObAllVirtualActivityMetric::prepare_start_to_read_()
   return ret;
 }
 
-int ObAllVirtualActivityMetric::process_curr_tenant(ObNewRow *&row)
+int ObAllVirtualActivityMetric::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObTenantFreezerStat stat;
+  storage::ObMemstoreFreezerStat stat;
 
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
@@ -132,22 +104,22 @@ int ObAllVirtualActivityMetric::process_curr_tenant(ObNewRow *&row)
           cells[i].set_int(stat.captured_freeze_times_);
           break;
         case MINI_MERGE_COST:
-          cells[i].set_int(stat.captured_merge_time_cost_[storage::ObTenantFreezerStat::ObFreezerMergeType::MINI_MERGE]);
+          cells[i].set_int(stat.captured_merge_time_cost_[storage::ObMemstoreFreezerStat::ObFreezerMergeType::MINI_MERGE]);
           break;
         case MINI_MERGE_TIMES:
-          cells[i].set_int(stat.captured_merge_times_[storage::ObTenantFreezerStat::ObFreezerMergeType::MINI_MERGE]);
+          cells[i].set_int(stat.captured_merge_times_[storage::ObMemstoreFreezerStat::ObFreezerMergeType::MINI_MERGE]);
           break;
         case MINOR_MERGE_COST:
-          cells[i].set_int(stat.captured_merge_time_cost_[storage::ObTenantFreezerStat::ObFreezerMergeType::MINOR_MERGE]);
+          cells[i].set_int(stat.captured_merge_time_cost_[storage::ObMemstoreFreezerStat::ObFreezerMergeType::MINOR_MERGE]);
           break;
         case MINOR_MERGE_TIMES:
-          cells[i].set_int(stat.captured_merge_times_[storage::ObTenantFreezerStat::ObFreezerMergeType::MINOR_MERGE]);
+          cells[i].set_int(stat.captured_merge_times_[storage::ObMemstoreFreezerStat::ObFreezerMergeType::MINOR_MERGE]);
           break;
         case MAJOR_MERGE_COST:
-          cells[i].set_int(stat.captured_merge_time_cost_[storage::ObTenantFreezerStat::ObFreezerMergeType::MAJOR_MERGE]);
+          cells[i].set_int(stat.captured_merge_time_cost_[storage::ObMemstoreFreezerStat::ObFreezerMergeType::MAJOR_MERGE]);
           break;
         case MAJOR_MERGE_TIMES:
-          cells[i].set_int(stat.captured_merge_times_[storage::ObTenantFreezerStat::ObFreezerMergeType::MAJOR_MERGE]);
+          cells[i].set_int(stat.captured_merge_times_[storage::ObMemstoreFreezerStat::ObFreezerMergeType::MAJOR_MERGE]);
           break;
         default:
           // abnormal column id

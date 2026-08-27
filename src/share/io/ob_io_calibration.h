@@ -17,14 +17,13 @@
 #ifndef OCEANBASE_SHARE_IO_OB_IO_CALIBRATION_H
 #define OCEANBASE_SHARE_IO_OB_IO_CALIBRATION_H
 
-#include "lib/allocator/ob_concurrent_fifo_allocator.h"
-#include "lib/thread/thread_mgr_interface.h"
+#include "lib/thread/threads.h"
 #include "lib/queue/ob_fixed_queue.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/lock/ob_drw_lock.h"
 #include "share/io/ob_io_define.h"
-#include "storage/blocksstable/ob_block_manager.h"
+#include "share/io/ob_i_io_bench_controller.h"
 
 namespace oceanbase
 {
@@ -83,46 +82,6 @@ private:
   
 };
 
-class ObIOBenchRunner : public lib::TGRunnable
-{
-public:
-  ObIOBenchRunner();
-  ~ObIOBenchRunner();
-  int init(const int64_t block_count);
-  int do_benchmark(const ObIOBenchLoad &load, const int64_t thread_count, ObIOBenchResult &result);
-  void destroy();
-  virtual void run1() override;
-
-private:
-  bool is_inited_;
-  ObArray<blocksstable::ObMacroBlockHandle> block_handles_;
-  ObIOBenchLoad load_;
-  int tg_id_;
-  int64_t io_count_;
-  int64_t rt_us_;
-  char *write_buf_;
-  char *read_buf_;
-  int64_t block_count_;
-};
-
-class ObIOBenchController : public lib::TGRunnable
-{
-public:
-  ObIOBenchController();
-  virtual ~ObIOBenchController();
-  int start_io_bench();
-  void run1();
-  int64_t get_start_timestamp();
-  int64_t get_finish_timestamp();
-  int get_ret_code();
-private:
-  int tg_id_;
-  lib::ObMutex running_mutex_;
-  int64_t start_ts_;
-  int64_t finish_ts_;
-  int ret_code_;
-};
-
 /**
  * load benchmark result file from the config directory
  */
@@ -131,14 +90,12 @@ class ObIOCalibration final
 public:
   static ObIOCalibration &get_instance();
   static int parse_calibration_string(const ObString &calibration_string, ObIOBenchResult &item);
-  int init();
+  int init(ObIIOBenchController &benchmark_controller);
   void destroy();
   int update_io_ability(const ObIOAbility &io_ability);
   int reset_io_ability();
   int get_io_ability(ObIOAbility &io_ability);
   void get_iops_scale(const ObIOMode mode, const int64_t size, double &iops_scale, bool &is_io_ability_valid);
-  int read_from_table();
-  int write_into_table(ObMySQLTransaction &trans, const ObAddr &addr, const ObIOAbility &io_ability);
   int refresh(const bool only_refresh, const ObIArray<ObIOBenchResult> &items);
   int execute_benchmark();
   int get_benchmark_status(int64_t &start_ts, int64_t &finish_ts, int &ret_code);
@@ -154,7 +111,7 @@ private:
   double baseline_iops_;
   ObIOAbility io_ability_;
   DRWLock lock_;
-  ObIOBenchController benchmark_controller_;
+  ObIIOBenchController *benchmark_controller_;
 };
 
 }// end namespace oceanbase

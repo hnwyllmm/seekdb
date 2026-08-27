@@ -18,10 +18,6 @@
 
 #include "storage/blocksstable/ob_macro_seq_generator.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "share/compaction/ob_shared_storage_compaction_util.h"
-#include "share/ob_server_struct.h"
-#endif
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -56,11 +52,7 @@ int ObMacroIncSeqGenerator::init(const ObMacroSeqParam &seq_param)
   } else {
     start_ = seq_param.start_;
     current_ = -1;
-#ifdef OB_BUILD_SHARED_STORAGE
-    seq_threshold_ = start_ + (GCTX.is_shared_storage_mode() ? compaction::MACRO_STEP_SIZE : blocksstable::ObMacroDataSeq::MAX_MACRO_SEQ);
-#else
     seq_threshold_ = start_ + blocksstable::ObMacroDataSeq::MAX_MACRO_SEQ;
-#endif
     is_inited_ = true;
   }
   return ret;
@@ -74,7 +66,6 @@ int ObMacroIncSeqGenerator::get_next(int64_t &seq_val)
     ret = OB_NOT_INIT;
     LOG_WARN("init twice", K(ret));
   } else if (OB_FAIL(preview_next(current_, seq_val))) {
-    LOG_WARN("preview next value failed", K(ret));
   } else if (OB_UNLIKELY(seq_val >= seq_threshold_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("seq is larger than threshold", K(ret), K(seq_val), K_(seq_threshold), K_(start));
@@ -113,7 +104,6 @@ int ObMacroSkipSeqGenerator::init(const ObMacroSeqParam &seq_param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(seq_param));
   } else if (OB_FAIL(ddl_seq_generator_.init(seq_param.start_, seq_param.interval_, seq_param.step_))) {
-    LOG_WARN("init ddl sequence generator failed", K(ret), K(seq_param));
   }
   return ret;
 }

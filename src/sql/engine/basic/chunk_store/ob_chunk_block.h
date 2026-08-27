@@ -22,7 +22,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/list/ob_dlist.h"
-#include "src/share/datum/ob_datum.h"
+#include "common/datum/ob_datum.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/basic/ob_temp_block_store.h"
@@ -30,9 +30,6 @@
 
 namespace oceanbase
 {
-namespace storage {
-  class ObColumnSchemaItem;
-}
 namespace sql
 {
 
@@ -64,7 +61,6 @@ public:
   {
   }
   int init(const ObExprPtrIArray &exprs, const int32_t extra_size);
-  int init(const ObIArray<storage::ObColumnSchemaItem> &col_array, const int32_t extra_size);
   int32_t get_row_fixed_size() const { return sizeof(ChunkRowHeader) + var_data_off_; }
   int32_t get_var_col_cnt() const { return col_cnt_ - fixed_cnt_; }
   int32_t get_fixed_length(const int64_t idx) const

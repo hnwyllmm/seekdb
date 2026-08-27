@@ -20,7 +20,7 @@
 #include "lib/lock/ob_tc_rwlock.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
 #include "storage/tmp_file/ob_tmp_file_write_buffer_index_cache.h"
-#include "observer/ob_server_struct.h"
+#include "share/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -36,7 +36,6 @@ class ObTmpFileInfo
 public:
   ObTmpFileInfo() :
     trace_id_(),
-    tenant_id_(OB_INVALID_TENANT_ID),
     dir_id_(ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID),
     fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD),
     file_size_(0),
@@ -53,7 +52,6 @@ public:
     read_info_() {}
   virtual ~ObTmpFileInfo() { reset(); }
   virtual int init(const ObCurTraceId::TraceId &trace_id,
-                   const uint64_t tenant_id,
                    const int64_t dir_id,
                    const int64_t fd,
                    const int64_t file_size,
@@ -143,7 +141,7 @@ public:
 public:
   // common info
   common::ObCurTraceId::TraceId trace_id_;
-  uint64_t tenant_id_;
+  
   int64_t dir_id_;
   int64_t fd_;
   int64_t file_size_;
@@ -159,7 +157,7 @@ public:
   ObTmpFileWriteInfo write_info_;
   ObTmpFileReadInfo read_info_;
 
-  TO_STRING_KV(K(trace_id_), K(tenant_id_), K(dir_id_), K(fd_), K(file_size_),
+  TO_STRING_KV(K(trace_id_), K(dir_id_), K(fd_), K(file_size_),
                K(truncated_offset_), K(is_deleting_), K(cached_data_page_num_),
                K(write_back_data_page_num_), K(flushed_data_page_num_),
                K(ref_cnt_), K(birth_ts_), KP(tmp_file_ptr_), K(label_),
@@ -171,8 +169,7 @@ class ObITmpFile
 public:
   ObITmpFile();
   virtual ~ObITmpFile();
-  virtual int init(const int64_t tenant_id,
-                   const int64_t dir_id,
+  virtual int init(const int64_t dir_id,
                    const int64_t fd,
                    ObTmpWriteBufferPool *wbp,
                    ObTmpFileFlushPriorityManager *flush_prio_mgr,
@@ -217,13 +214,6 @@ public:
     ObTmpFileNode(ObITmpFile &file) : file_(file) {}
     ObITmpFile &file_;
   };
-  enum class ObTmpFileMode
-  {
-    INVALID = -1,
-    SHARED_NOTHING = 0,
-    SHARED_STORAGE,
-    MAX
-  };
 
 public:
   bool can_remove();
@@ -236,7 +226,6 @@ public:
   void update_read_offset(int64_t read_offset);
   int64_t get_dirty_data_page_size_with_lock();
 
-  OB_INLINE ObTmpFileMode get_mode() const { return mode_; }
   OB_INLINE int64_t get_fd() const { return fd_; }
   OB_INLINE int64_t get_dir_id() const { return dir_id_; }
   OB_INLINE void inc_ref_cnt() { ATOMIC_INC(&ref_cnt_); }
@@ -255,7 +244,7 @@ public:
   int reinsert_data_flush_node();
   int remove_data_flush_node();
 
-  VIRTUAL_TO_STRING_KV(K(is_inited_), K(mode_), K(tenant_id_), K(dir_id_), K(fd_),
+  VIRTUAL_TO_STRING_KV(K(is_inited_), K(dir_id_), K(fd_),
                        K(is_deleting_), K(is_sealed_),
                        K(ref_cnt_), K(truncated_offset_), K(read_offset_),
                        K(file_size_),
@@ -330,20 +319,13 @@ protected:
   OB_INLINE int64_t get_offset_in_block_(int64_t file_offset) const
   {
     int64_t ret = 0;
-    if(!GCTX.is_shared_storage_mode()) {
-      ret = file_offset % ObTmpFileGlobal::SN_BLOCK_SIZE;
-    #ifdef OB_BUILD_SHARED_STORAGE
-    } else {
-      ret = file_offset % ObTmpFileGlobal::SS_BLOCK_SIZE;
-    #endif
-    }
+    ret = file_offset % ObTmpFileGlobal::SN_BLOCK_SIZE;
     return ret;
   }
 
 protected:
   bool is_inited_;
-  ObTmpFileMode mode_;
-  uint64_t tenant_id_;
+  
   int64_t dir_id_;
   int64_t fd_;
   bool is_deleting_;

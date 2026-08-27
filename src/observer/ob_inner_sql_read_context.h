@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_OBSERVER_OB_INNER_SQL_READ_CONTEXT_H_
 #define OCEANBASE_OBSERVER_OB_INNER_SQL_READ_CONTEXT_H_
 
-#include "lib/mysqlclient/ob_isql_result_handler.h"
+#include "common/mysqlclient/ob_isql_result_handler.h"
 #include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
 #include "ob_inner_sql_result.h"
 #include "ob_inner_sql_connection.h"
@@ -44,9 +44,9 @@ public:
 
 private:
   // define order dependent:
-  // %conn_ref_ (session info) need be destructed after %result_
+  // %conn_guard_ (session info) need be destructed after %result_
   // %vt_iter_factory_ need be destructed after %result_
-  ObInnerSQLConnection::RefGuard conn_ref_;
+  common::sqlclient::ObISQLConnectionGuard conn_guard_;
   ObVirtualTableIteratorFactory vt_iter_factory_;
   ObInnerSQLResult result_;
 

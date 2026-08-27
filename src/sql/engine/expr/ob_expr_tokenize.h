@@ -21,7 +21,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
 #include "sql/engine/expr/ob_expr_operator.h"
-#include "storage/fts/ob_fts_parser_property.h"
+#include "data_plane/fts/ob_fts_parser_property.h"
 
 namespace oceanbase
 {
@@ -64,7 +64,7 @@ private:
 
     // check and reform parser properties to standard format
     int reform_parser_properties(const ObString &properties);
-    int try_load_dictionary_for_ik(const uint64_t tenant_id);
+    int try_load_dictionary_for_ik();
 
   public:
     // for property and tmp json string

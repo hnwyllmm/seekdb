@@ -21,7 +21,6 @@
 #include "storage/ob_i_store.h"
 #include "common/row/ob_row_store.h"
 #include "lib/hash/ob_hashmap.h"
-#include "share/ob_time_utility2.h"
 #include "lib/string/ob_string.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/access/ob_table_read_info.h"
@@ -293,7 +292,6 @@ public:
   static const int64_t EXT_MIN_2_TRANS = 6; // for second_uncommitted_trans
   static const int64_t EXT_GHOST = 7;
   static const int64_t EXT_INT32_MIN = 8;
-  static const int64_t EXT_DELETE_INSERT_VERSION = 9;
 
   static const char CHAR_ROW_END = '\n';
   static const char CHAR_QUOTE = '\'';
@@ -304,7 +302,6 @@ public:
   static const char *STR_INT32_MIN;
   static const char *STR_MIN_2_TRANS; // for second_uncommitted_trans
   static const char *STR_MAGIC;
-  static const char *STR_DELETE_INSERT_VERSION;
 
   static common::ObObjMeta INT_TYPE;
   static common::ObObjMeta BIGINT_TYPE;

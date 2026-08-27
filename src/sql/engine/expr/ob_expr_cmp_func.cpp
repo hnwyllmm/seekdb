@@ -68,16 +68,331 @@ ObDatumCmpFuncType DATUM_DECINT_CMP_FUNCS[DECIMAL_INT_MAX][DECIMAL_INT_MAX];
 ObExpr::EvalFunc EVAL_VEC_CMP_FUNCS[CO_MAX];
 ObExpr::EvalBatchFunc EVAL_BATCH_VEC_CMP_FUNCS[CO_MAX];
 
-// int g_init_type_ret = Ob2DArrayConstIniter<ObMaxType, ObMaxType, TypeExprCmpFuncIniter>::init();
-// int g_init_tc_ret = Ob2DArrayConstIniter<ObMaxTC, ObMaxTC, TCExprCmpFuncIniter>::init();
-// int g_init_str_ret = Ob2DArrayConstIniter<CS_TYPE_MAX, CO_MAX, StrExprFuncIniter>::init();
-// int g_init_datum_str_ret = ObArrayConstIniter<CS_TYPE_MAX, DatumStrExprCmpIniter>::init();
-// int g_init_text_ret = Ob2DArrayConstIniter<CS_TYPE_MAX, CO_MAX, TextExprFuncIniter>::init();
-// int g_init_datum_text_ret = ObArrayConstIniter<CS_TYPE_MAX, DatumTextExprCmpIniter>::init();
-// int g_init_text_str_ret = Ob2DArrayConstIniter<CS_TYPE_MAX, CO_MAX, TextStrExprFuncIniter>::init();
-// int g_init_datum_text_str_ret = ObArrayConstIniter<CS_TYPE_MAX, DatumTextStrExprCmpIniter>::init();
-// int g_init_str_text_ret = Ob2DArrayConstIniter<CS_TYPE_MAX, CO_MAX, StrTextExprFuncIniter>::init();
-// int g_init_str_datum_text_ret = ObArrayConstIniter<CS_TYPE_MAX, DatumStrTextExprCmpIniter>::init();
+namespace
+{
+
+// Keep the exact constants used by ObFixedDoubleCmp<SCALE>::P.  Looking the
+// tolerance up once per evaluator avoids making SCALE a template axis while
+// preserving fixed-double comparison semantics bit for bit.
+constexpr double FIXED_DOUBLE_CMP_TOLERANCE[] = {
+  5 / 1e001, 5 / 1e002, 5 / 1e003, 5 / 1e004,
+  5 / 1e005, 5 / 1e006, 5 / 1e007, 5 / 1e008,
+  5 / 1e009, 5 / 1e010, 5 / 1e011, 5 / 1e012,
+  5 / 1e013, 5 / 1e014, 5 / 1e015, 5 / 1e016,
+  5 / 1e017, 5 / 1e018, 5 / 1e019, 5 / 1e020,
+  5 / 1e021, 5 / 1e022, 5 / 1e023, 5 / 1e024,
+  5 / 1e025, 5 / 1e026, 5 / 1e027, 5 / 1e028,
+  5 / 1e029, 5 / 1e030, 5 / 1e031,
+};
+static_assert(ARRAYSIZEOF(FIXED_DOUBLE_CMP_TOLERANCE) == OB_NOT_FIXED_SCALE,
+              "fixed-double tolerance table must cover every supported scale");
+
+int get_fixed_double_tolerance(const ObExpr &expr, double &tolerance)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != expr.arg_cnt_)
+      || OB_ISNULL(expr.args_)
+      || OB_ISNULL(expr.args_[0])
+      || OB_ISNULL(expr.args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid fixed-double comparison expression", K(ret), K(expr.arg_cnt_));
+  } else {
+    const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+    const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+    const ObScale left_scale = left_meta.scale_;
+    const ObScale right_scale = right_meta.scale_;
+    if (OB_UNLIKELY(!ob_is_double_type(left_meta.type_)
+                    || !ob_is_double_type(right_meta.type_)
+                    || left_scale <= SCALE_UNKNOWN_YET
+                    || left_scale >= OB_NOT_FIXED_SCALE
+                    || right_scale <= SCALE_UNKNOWN_YET
+                    || right_scale >= OB_NOT_FIXED_SCALE)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid fixed-double comparison metadata",
+               K(ret), K(left_meta), K(right_meta));
+    } else {
+      const ObScale scale = MAX(left_scale, right_scale);
+      tolerance = FIXED_DOUBLE_CMP_TOLERANCE[scale];
+    }
+  }
+  return ret;
+}
+
+struct RuntimeFixedDoubleCmp
+{
+  int operator()(ObDatum &res,
+                 const ObDatum &l_datum,
+                 const ObDatum &r_datum,
+                 const double &tolerance,
+                 const ObCmpOp &cmp_op) const
+  {
+    int cmp_ret = 0;
+    const double l = l_datum.get_double();
+    const double r = r_datum.get_double();
+    if (isnan(l) || isnan(r)) {
+      if (isnan(l) && isnan(r)) {
+        cmp_ret = 0;
+      } else if (isnan(l)) {
+        cmp_ret = 1;
+      } else {
+        cmp_ret = -1;
+      }
+    } else if (l == r || fabs(l - r) < tolerance) {
+      cmp_ret = 0;
+    } else {
+      cmp_ret = l < r ? -1 : 1;
+    }
+    res.set_int(get_cmp_ret(cmp_op, cmp_ret));
+    return OB_SUCCESS;
+  }
+};
+
+int get_runtime_decint_cmp_func(const ObExpr &expr, decint_cmp_fp &cmp_func)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != expr.arg_cnt_)
+      || OB_ISNULL(expr.args_)
+      || OB_ISNULL(expr.args_[0])
+      || OB_ISNULL(expr.args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid decimal-int comparison expression", K(ret), K(expr.arg_cnt_));
+  } else {
+    const ObDatumMeta &left_meta = expr.args_[0]->datum_meta_;
+    const ObDatumMeta &right_meta = expr.args_[1]->datum_meta_;
+    const ObDecimalIntWideType left_width = get_decimalint_type(left_meta.precision_);
+    const ObDecimalIntWideType right_width = get_decimalint_type(right_meta.precision_);
+    if (OB_UNLIKELY(!ob_is_decimal_int(left_meta.type_)
+                    || !ob_is_decimal_int(right_meta.type_)
+                    || left_width < DECIMAL_INT_32
+                    || left_width >= DECIMAL_INT_MAX
+                    || right_width < DECIMAL_INT_32
+                    || right_width >= DECIMAL_INT_MAX)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid decimal-int comparison metadata",
+               K(ret), K(left_meta), K(right_meta));
+    } else {
+      const int32_t left_bytes = 2 << (static_cast<int32_t>(left_width) + 1);
+      const int32_t right_bytes = 2 << (static_cast<int32_t>(right_width) + 1);
+      cmp_func = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(
+          left_bytes, right_bytes);
+      if (OB_ISNULL(cmp_func)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("decimal-int comparison function is null",
+                 K(ret), K(left_width), K(right_width));
+      }
+    }
+  }
+  return ret;
+}
+
+struct RuntimeDecintCmp
+{
+  int operator()(ObDatum &res,
+                 const ObDatum &l_datum,
+                 const ObDatum &r_datum,
+                 const decint_cmp_fp &cmp_func,
+                 const ObCmpOp &cmp_op) const
+  {
+    OB_ASSERT(nullptr != cmp_func);
+    const int cmp_ret = cmp_func(l_datum.get_decimal_int(), r_datum.get_decimal_int());
+    res.set_int(get_cmp_ret(cmp_op, cmp_ret));
+    return OB_SUCCESS;
+  }
+};
+
+int get_runtime_tc_cmp_func(const ObExpr &expr, ObDatumCmpFuncType &cmp_func)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != expr.arg_cnt_)
+      || OB_ISNULL(expr.args_)
+      || OB_ISNULL(expr.args_[0])
+      || OB_ISNULL(expr.args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type-class comparison expression", K(ret), K(expr.arg_cnt_));
+  } else {
+    const ObObjType left_type = expr.args_[0]->datum_meta_.type_;
+    const ObObjType right_type = expr.args_[1]->datum_meta_.type_;
+    if (OB_UNLIKELY(left_type < ObNullType || left_type >= ObMaxType
+                    || right_type < ObNullType || right_type >= ObMaxType)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid type-class comparison types", K(ret), K(left_type), K(right_type));
+    } else {
+      const ObObjTypeClass left_tc = ob_obj_type_class(left_type);
+      const ObObjTypeClass right_tc = ob_obj_type_class(right_type);
+      if (OB_UNLIKELY(ob_is_invalid_obj_tc(left_tc) || ob_is_invalid_obj_tc(right_tc))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid comparison type classes", K(ret), K(left_tc), K(right_tc));
+      } else if (OB_ISNULL(cmp_func = DATUM_TC_CMP_FUNCS[left_tc][right_tc])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("type-class comparison function is null", K(ret), K(left_tc), K(right_tc));
+      }
+    }
+  }
+  return ret;
+}
+
+struct RuntimeTCCmp
+{
+  int operator()(ObDatum &res,
+                 const ObDatum &l_datum,
+                 const ObDatum &r_datum,
+                 const ObDatumCmpFuncType &cmp_func,
+                 const ObDatumAccessContext *access_ctx,
+                 const ObCmpOp &cmp_op) const
+  {
+    int cmp_ret = 0;
+    int ret = cmp_func(l_datum, r_datum, cmp_ret, access_ctx);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to compare", K(ret));
+    } else {
+      res.set_int(get_cmp_ret(cmp_op, cmp_ret));
+    }
+    return ret;
+  }
+};
+
+} // namespace
+
+int ObFixedDoubleRelationFunc::eval(const ObExpr &expr,
+                                    ObEvalCtx &ctx,
+                                    ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  double tolerance = 0;
+  if (OB_FAIL(get_fixed_double_tolerance(expr, tolerance))) {
+    LOG_WARN("get fixed-double comparison tolerance failed", K(ret));
+  } else {
+    ObCmpOp cmp_op = ObExprCmpFuncsHelper::get_cmp_op(expr.type_);
+    ret = def_relational_eval_func<RuntimeFixedDoubleCmp>(
+        expr, ctx, expr_datum, tolerance, cmp_op);
+  }
+  return ret;
+}
+
+int ObFixedDoubleRelationFunc::eval_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  double tolerance = 0;
+  if (OB_FAIL(get_fixed_double_tolerance(expr, tolerance))) {
+    LOG_WARN("get fixed-double comparison tolerance failed", K(ret));
+  } else {
+    ObCmpOp cmp_op = ObExprCmpFuncsHelper::get_cmp_op(expr.type_);
+    ret = def_relational_eval_batch_func<RuntimeFixedDoubleCmp>(
+        BATCH_EVAL_FUNC_ARG_LIST, tolerance, cmp_op);
+  }
+  return ret;
+}
+
+int ObDecintRelationFunc::eval(const ObExpr &expr,
+                               ObEvalCtx &ctx,
+                               ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  decint_cmp_fp cmp_func = nullptr;
+  if (OB_FAIL(get_runtime_decint_cmp_func(expr, cmp_func))) {
+    LOG_WARN("get decimal-int comparison function failed", K(ret));
+  } else {
+    ObCmpOp cmp_op = ObExprCmpFuncsHelper::get_cmp_op(expr.type_);
+    ret = def_relational_eval_func<RuntimeDecintCmp>(
+        expr, ctx, expr_datum, cmp_func, cmp_op);
+  }
+  return ret;
+}
+
+int ObDecintRelationFunc::eval_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  decint_cmp_fp cmp_func = nullptr;
+  if (OB_FAIL(get_runtime_decint_cmp_func(expr, cmp_func))) {
+    LOG_WARN("get decimal-int comparison function failed", K(ret));
+  } else {
+    ObCmpOp cmp_op = ObExprCmpFuncsHelper::get_cmp_op(expr.type_);
+    ret = def_relational_eval_batch_func<RuntimeDecintCmp>(
+        BATCH_EVAL_FUNC_ARG_LIST, cmp_func, cmp_op);
+  }
+  return ret;
+}
+
+int ObTCRelationFunc::eval(const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatumCmpFuncType cmp_func = NULL;
+  if (OB_FAIL(get_runtime_tc_cmp_func(expr, cmp_func))) {
+    LOG_WARN("get type-class comparison function failed", K(ret));
+  } else {
+    const ObDatumAccessContext *access_ctx = nullptr;
+    ObCmpOp cmp_op = ObExprCmpFuncsHelper::get_cmp_op(expr.type_);
+    if (OB_FAIL(ctx.get_datum_access_ctx(access_ctx))) {
+      LOG_WARN("get datum access context failed", K(ret));
+    } else {
+      ret = def_relational_eval_func<RuntimeTCCmp>(
+          expr, ctx, expr_datum, cmp_func, access_ctx, cmp_op);
+    }
+  }
+  return ret;
+}
+
+int ObTCRelationFunc::eval_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ObDatumCmpFuncType cmp_func = NULL;
+  if (OB_FAIL(get_runtime_tc_cmp_func(expr, cmp_func))) {
+    LOG_WARN("get type-class comparison function failed", K(ret));
+  } else {
+    const ObDatumAccessContext *access_ctx = nullptr;
+    ObCmpOp cmp_op = ObExprCmpFuncsHelper::get_cmp_op(expr.type_);
+    if (OB_FAIL(ctx.get_datum_access_ctx(access_ctx))) {
+      LOG_WARN("get datum access context failed", K(ret));
+    } else {
+      ret = def_relational_eval_batch_func<RuntimeTCCmp>(
+          BATCH_EVAL_FUNC_ARG_LIST, cmp_func, access_ctx, cmp_op);
+    }
+  }
+  return ret;
+}
+
+OB_NOINLINE void init_expr_cmp_func_array(ObExpr::EvalFunc *eval_funcs,
+                              ObExpr::EvalBatchFunc *batch_eval_funcs,
+                              ObDatumCmpFuncType &datum_cmp_func,
+                              ObExpr::EvalFunc eval_func,
+                              ObExpr::EvalBatchFunc batch_eval_func,
+                              ObDatumCmpFuncType datum_func,
+                              const ObExpr::EvalBatchFunc *batch_eval_overrides)
+{
+  static_assert(CO_EQ == 0 && CO_CMP + 1 == CO_MAX, "comparison operators must be contiguous");
+  for (int64_t cmp_op = CO_EQ; cmp_op < CO_MAX; ++cmp_op) {
+    eval_funcs[cmp_op] = eval_func;
+    batch_eval_funcs[cmp_op] = NULL != batch_eval_overrides
+        ? batch_eval_overrides[cmp_op]
+        : (CO_CMP == cmp_op ? NULL : batch_eval_func);
+  }
+  datum_cmp_func = datum_func;
+}
+
+OB_NOINLINE void init_str_cmp_func_array(const ObCollationType cs_type)
+{
+  OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
+  for (int64_t cmp_op = CO_EQ; cmp_op < CO_MAX; ++cmp_op) {
+    EVAL_STR_CMP_FUNCS[cs_type][cmp_op][0] = &ObStrRelationEvalWrap<false>::eval;
+    EVAL_STR_CMP_FUNCS[cs_type][cmp_op][1] = &ObStrRelationEvalWrap<true>::eval;
+    EVAL_TEXT_CMP_FUNCS[cs_type][cmp_op][0] = &ObTextRelationEvalWrap<false>::eval;
+    EVAL_TEXT_CMP_FUNCS[cs_type][cmp_op][1] = &ObTextRelationEvalWrap<true>::eval;
+    EVAL_TEXT_STR_CMP_FUNCS[cs_type][cmp_op][0] = &ObTextStrRelationEvalWrap<false>::eval;
+    EVAL_TEXT_STR_CMP_FUNCS[cs_type][cmp_op][1] = &ObTextStrRelationEvalWrap<true>::eval;
+    EVAL_STR_TEXT_CMP_FUNCS[cs_type][cmp_op][0] = &ObStrTextRelationEvalWrap<false>::eval;
+    EVAL_STR_TEXT_CMP_FUNCS[cs_type][cmp_op][1] = &ObStrTextRelationEvalWrap<true>::eval;
+  }
+  DATUM_STR_CMP_FUNCS[cs_type][0] = NULL;
+  DATUM_STR_CMP_FUNCS[cs_type][1] = NULL;
+  DATUM_TEXT_CMP_FUNCS[cs_type][0] = NULL;
+  DATUM_TEXT_CMP_FUNCS[cs_type][1] = NULL;
+  DATUM_TEXT_STR_CMP_FUNCS[cs_type][0] = NULL;
+  DATUM_TEXT_STR_CMP_FUNCS[cs_type][1] = NULL;
+  DATUM_STR_TEXT_CMP_FUNCS[cs_type][0] = NULL;
+  DATUM_STR_TEXT_CMP_FUNCS[cs_type][1] = NULL;
+}
 
 static int64_t fill_type_with_tc_eval_func(void)
 {
@@ -131,6 +446,16 @@ static int64_t init_all_funcs()
 
 int64_t g_init_all_funcs = init_all_funcs();
 
+ObCmpOp ObExprCmpFuncsHelper::get_cmp_op(const ObExprOperatorType type)
+{
+  const ObCmpOp cmp_op = ObRelationalExprOperator::get_cmp_op(type);
+  // Comparison evaluators are installed only for relational expressions (and
+  // STRCMP).  Fail fast in debug builds if a future caller reuses one with an
+  // unrelated expression type instead of silently producing false.
+  OB_ASSERT(ob_is_valid_cmp_op(cmp_op));
+  return cmp_op;
+}
+
 ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType type1,
                                                               const ObObjType type2,
                                                               const ObScale scale1,
@@ -138,7 +463,6 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
                                                               const ObPrecision prec1,
                                                               const ObPrecision prec2,
                                                               const ObCmpOp cmp_op,
-                                                              const bool is_oracle_mode,
                                                               const ObCollationType cs_type,
                                                               const bool has_lob_header)
 {
@@ -175,18 +499,16 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
     func_ptr = EVAL_TYPE_CMP_FUNCS[type1][type2][cmp_op];
   } else {
     OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
-    int64_t calc_with_end_space_idx = (is_calc_with_end_space(type1, type2, is_oracle_mode,
-                                                              cs_type, cs_type) ? 1 : 0);
     if (has_lob_header && (ob_is_large_text(type1) || ob_is_large_text(type2))) {
       if (ob_is_large_text(type1) && ob_is_large_text(type2)) {
-        func_ptr = EVAL_TEXT_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx];
+        func_ptr = EVAL_TEXT_CMP_FUNCS[cs_type][cmp_op][0];
       } else if (ob_is_large_text(type1)) { // type2 not large text
-        func_ptr = EVAL_TEXT_STR_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx];
+        func_ptr = EVAL_TEXT_STR_CMP_FUNCS[cs_type][cmp_op][0];
       } else { // type1 not large text
-        func_ptr = EVAL_STR_TEXT_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx];
+        func_ptr = EVAL_STR_TEXT_CMP_FUNCS[cs_type][cmp_op][0];
       }
     } else { // no lob header or tinytext use original str cmp func
-      func_ptr = EVAL_STR_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx];
+      func_ptr = EVAL_STR_CMP_FUNCS[cs_type][cmp_op][0];
     }
   }
   return func_ptr;
@@ -200,7 +522,6 @@ ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
     const ObPrecision prec1,
     const ObPrecision prec2,
     const ObCmpOp cmp_op,
-    const bool is_oracle_mode,
     const ObCollationType cs_type,
     const bool has_lob_header)
 {
@@ -239,24 +560,22 @@ ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
     func_ptr = EVAL_BATCH_TYPE_CMP_FUNCS[type1][type2][cmp_op];
   } else {
     OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
-    int64_t calc_with_end_space_idx = (is_calc_with_end_space(type1, type2, is_oracle_mode,
-                                                              cs_type, cs_type) ? 1 : 0);
     if (has_lob_header && (ob_is_large_text(type1) || ob_is_large_text(type2))) {
       if (ob_is_large_text(type1) && ob_is_large_text(type2)) {
-        if (NULL != EVAL_TEXT_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx]) {
+        if (NULL != EVAL_TEXT_CMP_FUNCS[cs_type][cmp_op][0]) {
           func_ptr = EVAL_BATCH_TEXT_CMP_FUNCS[cmp_op];
         }
       } else if (ob_is_large_text(type1)) { // type2 not large text
-        if (NULL != EVAL_TEXT_STR_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx]) {
+        if (NULL != EVAL_TEXT_STR_CMP_FUNCS[cs_type][cmp_op][0]) {
           func_ptr = EVAL_BATCH_TEXT_STR_CMP_FUNCS[cmp_op];
         }
       } else { // type1 not large text
-        if (NULL != EVAL_STR_TEXT_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx]) {
+        if (NULL != EVAL_STR_TEXT_CMP_FUNCS[cs_type][cmp_op][0]) {
           func_ptr = EVAL_BATCH_STR_TEXT_CMP_FUNCS[cmp_op];
         }
       }
     } else { // no lob header or tinytext use original str cmp func
-      if (NULL != EVAL_STR_CMP_FUNCS[cs_type][cmp_op][calc_with_end_space_idx]) {
+      if (NULL != EVAL_STR_CMP_FUNCS[cs_type][cmp_op][0]) {
         func_ptr = EVAL_BATCH_STR_CMP_FUNCS[cmp_op];
       }
     }
@@ -270,7 +589,6 @@ DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1
                                            const ObScale scale2,
                                            const ObPrecision prec1,
                                            const ObPrecision prec2,
-                                           const bool is_oracle_mode,
                                            const ObCollationType cs_type,
                                            const bool has_lob_header)
 {
@@ -303,220 +621,20 @@ DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1
     }
   } else {
     OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
-    int64_t calc_with_end_space_idx = (is_calc_with_end_space(type1, type2, is_oracle_mode,
-                                                              cs_type, cs_type) ? 1 : 0);
     if (has_lob_header && (ob_is_large_text(type1) || ob_is_large_text(type2))) {
       if (ob_is_large_text(type1) && ob_is_large_text(type2)) {
-        func_ptr = DATUM_TEXT_CMP_FUNCS[cs_type][calc_with_end_space_idx];
+        func_ptr = DATUM_TEXT_CMP_FUNCS[cs_type][0];
       } else if (ob_is_large_text(type1)) { // type2 not large text
-        func_ptr = DATUM_TEXT_STR_CMP_FUNCS[cs_type][calc_with_end_space_idx];
+        func_ptr = DATUM_TEXT_STR_CMP_FUNCS[cs_type][0];
       } else { // type1 not large text
-        func_ptr = DATUM_STR_TEXT_CMP_FUNCS[cs_type][calc_with_end_space_idx];
+        func_ptr = DATUM_STR_TEXT_CMP_FUNCS[cs_type][0];
       }
     } else { // no lob header or tinytext use original str cmp func
-      func_ptr = DATUM_STR_CMP_FUNCS[cs_type][calc_with_end_space_idx];
+      func_ptr = DATUM_STR_CMP_FUNCS[cs_type][0];
     }
   }
   return func_ptr;
 }
-
-// register function serialization
-// Need too convert two dimension arrayto index stable one dimension array first.
-
-// register type * type evaluate functions
-static_assert(7 == CO_MAX, "unexpected size");
-void *g_ser_eval_type_cmp_funcs[ObMaxType * ObMaxType * 7];
-static_assert(sizeof(g_ser_eval_type_cmp_funcs) == sizeof(EVAL_TYPE_CMP_FUNCS),
-              "unexpected size");
-bool g_ser_eval_type_cmp_funcs_init = ObFuncSerialization::convert_NxN_array(
-    g_ser_eval_type_cmp_funcs,
-    reinterpret_cast<void **>(EVAL_TYPE_CMP_FUNCS),
-    ObMaxType,
-    7,
-    0,
-    7);
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL,
-                   g_ser_eval_type_cmp_funcs,
-                   sizeof(g_ser_eval_type_cmp_funcs) / sizeof(void *));
-
-
-static_assert(7 == CO_MAX, "unexpected size");
-void *g_ser_eval_batch_type_cmp_funcs[ObMaxType * ObMaxType * 7];
-static_assert(sizeof(g_ser_eval_batch_type_cmp_funcs) == sizeof(EVAL_BATCH_TYPE_CMP_FUNCS),
-              "unexpected size");
-bool g_ser_eval_batch_type_cmp_funcs_init = ObFuncSerialization::convert_NxN_array(
-    g_ser_eval_batch_type_cmp_funcs,
-    reinterpret_cast<void **>(EVAL_BATCH_TYPE_CMP_FUNCS),
-    ObMaxType,
-    7,
-    0,
-    7);
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_BATCH,
-                   g_ser_eval_batch_type_cmp_funcs,
-                   sizeof(g_ser_eval_batch_type_cmp_funcs) / sizeof(void *));
-
-void *g_ser_datum_type_cmp_funcs[ObMaxType * ObMaxType];
-static_assert(sizeof(g_ser_datum_type_cmp_funcs) == sizeof(DATUM_TYPE_CMP_FUNCS),
-              "unexpected size");
-bool g_ser_datum_cmp_funcs_init = ObFuncSerialization::convert_NxN_array(
-    g_ser_datum_type_cmp_funcs,
-    reinterpret_cast<void **>(DATUM_TYPE_CMP_FUNCS),
-    ObMaxType);
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP,
-                   g_ser_datum_type_cmp_funcs,
-                   sizeof(g_ser_datum_type_cmp_funcs) / sizeof(void *));
-
-
-static_assert(7 == CO_MAX && CS_TYPE_MAX * 7 * 2 == sizeof(EVAL_STR_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_STR,
-                   EVAL_STR_CMP_FUNCS,
-                   sizeof(EVAL_STR_CMP_FUNCS) / sizeof(void *));
-
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_STR_EVAL_BATCH,
-                   EVAL_BATCH_STR_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_STR_CMP_FUNCS) / sizeof(void *));
-
-static_assert(CS_TYPE_MAX * 2 == sizeof(DATUM_STR_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_STR,
-                   DATUM_STR_CMP_FUNCS,
-                   sizeof(DATUM_STR_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CS_TYPE_MAX * 7 * 2 == sizeof(EVAL_TEXT_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_TEXT,
-                   EVAL_TEXT_CMP_FUNCS,
-                   sizeof(EVAL_TEXT_CMP_FUNCS) / sizeof(void *));
-
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_TEXT_EVAL_BATCH,
-                   EVAL_BATCH_TEXT_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_TEXT_CMP_FUNCS) / sizeof(void *));
-
-static_assert(CS_TYPE_MAX * 2 == sizeof(DATUM_TEXT_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_TEXT,
-                   DATUM_TEXT_CMP_FUNCS,
-                   sizeof(DATUM_TEXT_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CS_TYPE_MAX * 7 * 2 == sizeof(EVAL_TEXT_STR_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_TEXT_STR,
-                   EVAL_TEXT_STR_CMP_FUNCS,
-                   sizeof(EVAL_TEXT_STR_CMP_FUNCS) / sizeof(void *));
-
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_TEXT_STR_EVAL_BATCH,
-                   EVAL_BATCH_TEXT_STR_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_TEXT_STR_CMP_FUNCS) / sizeof(void *));
-
-static_assert(CS_TYPE_MAX * 2 == sizeof(DATUM_TEXT_STR_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_TEXT_STR,
-                   DATUM_TEXT_STR_CMP_FUNCS,
-                   sizeof(DATUM_TEXT_STR_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CS_TYPE_MAX * 7 * 2 == sizeof(EVAL_STR_TEXT_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_STR_TEXT,
-                   EVAL_STR_TEXT_CMP_FUNCS,
-                   sizeof(EVAL_STR_TEXT_CMP_FUNCS) / sizeof(void *));
-
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_STR_TEXT_EVAL_BATCH,
-                   EVAL_BATCH_STR_TEXT_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_STR_TEXT_CMP_FUNCS) / sizeof(void *));
-
-static_assert(CS_TYPE_MAX * 2 == sizeof(DATUM_STR_TEXT_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_STR_TEXT,
-                   DATUM_STR_TEXT_CMP_FUNCS,
-                   sizeof(DATUM_STR_TEXT_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CO_MAX * 2 == sizeof(EVAL_JSON_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_JSON,
-                   EVAL_JSON_CMP_FUNCS,
-                   sizeof(EVAL_JSON_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CO_MAX == sizeof(EVAL_BATCH_JSON_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_JSON_EVAL_BATCH,
-                   EVAL_BATCH_JSON_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_JSON_CMP_FUNCS) / sizeof(void *));
-
-static_assert(2 == sizeof(DATUM_JSON_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_JSON,
-                   DATUM_JSON_CMP_FUNCS,
-                   sizeof(DATUM_JSON_CMP_FUNCS) / sizeof(void *));
-
-// Geo cmp functions reg
-static_assert(7 == CO_MAX && CO_MAX * 2 == sizeof(EVAL_GEO_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_EVAL_GEO,
-                   EVAL_GEO_CMP_FUNCS,
-                   sizeof(EVAL_GEO_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CO_MAX == sizeof(EVAL_BATCH_GEO_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_GEO_EVAL_BATCH,
-                   EVAL_BATCH_GEO_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_GEO_CMP_FUNCS) / sizeof(void *));
-
-static_assert(2 == sizeof(DATUM_GEO_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_GEO,
-                   DATUM_GEO_CMP_FUNCS,
-                   sizeof(DATUM_GEO_CMP_FUNCS) / sizeof(void *));
-
-// Collection cmp functions reg
-static_assert(7 == CO_MAX && CO_MAX * 2 == sizeof(EVAL_COLLECTION_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_COLLECTION_EVAL,
-                   EVAL_COLLECTION_CMP_FUNCS,
-                   sizeof(EVAL_COLLECTION_CMP_FUNCS) / sizeof(void *));
-
-static_assert(7 == CO_MAX && CO_MAX == sizeof(EVAL_BATCH_COLLECTION_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_RELATION_EXPR_COLLECTION_EVAL_BATCH,
-                   EVAL_BATCH_COLLECTION_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_COLLECTION_CMP_FUNCS) / sizeof(void *));
-
-static_assert(2 == sizeof(DATUM_COLLECTION_CMP_FUNCS) / sizeof(void *),
-              "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CMP_COLLECTION,
-                   DATUM_COLLECTION_CMP_FUNCS,
-                   sizeof(DATUM_COLLECTION_CMP_FUNCS) / sizeof(void *));
-
-// Fixed double cmp functions reg
-static_assert(
-  OB_NOT_FIXED_SCALE * CO_MAX == sizeof(EVAL_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
-  "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_CMP_EVAL,
-                   EVAL_FIXED_DOUBLE_CMP_FUNCS,
-                   sizeof(EVAL_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
-
-static_assert(
-  OB_NOT_FIXED_SCALE * CO_MAX == sizeof(EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
-  "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_CMP_EVAL_BATCH,
-                   EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
-
-static_assert(
-  OB_NOT_FIXED_SCALE == sizeof(DATUM_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *),
-  "unexpected size");
-REG_SER_FUNC_ARRAY(OB_SFA_DATUM_FIXED_DOUBLE_CMP,
-                   DATUM_FIXED_DOUBLE_CMP_FUNCS,
-                   sizeof(DATUM_FIXED_DOUBLE_CMP_FUNCS) / sizeof(void *));
-
-REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_CMP_EVAL, EVAL_DECINT_CMP_FUNCS,
-                   sizeof(EVAL_DECINT_CMP_FUNCS) / sizeof(void *));
-
-REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_CMP_EVAL_BATCH, EVAL_BATCH_DECINT_CMP_FUNCS,
-                   sizeof(EVAL_BATCH_DECINT_CMP_FUNCS) / sizeof(void *))
-
-REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_CMP, DATUM_DECINT_CMP_FUNCS,
-                   sizeof(DATUM_DECINT_CMP_FUNCS) / sizeof(void *));
 
 } // end namespace sql;
 } // end namespace oceanbase

@@ -22,6 +22,7 @@
 #define private public
 #define protected public
 #include "sql/resolver/expr/ob_raw_expr.h"
+#include "unittest/sql/sql_test_paths.h"
 #undef protected
 #undef private
 
@@ -32,7 +33,7 @@ namespace test
 
 #define PRINT_SIZE(out, type) out << "| " << #type << " | " << sizeof(type) << " |" << std::endl;
 
-void verify_results(const char* result_file, const char* tmp_file) {
+static void verify_results(const char* result_file, const char* tmp_file) {
   fprintf(stderr, "If tests failed, use `diff %s %s' to see the differences. \n", result_file, tmp_file);
   std::ifstream if_result(tmp_file);
   ASSERT_TRUE(if_result.is_open());
@@ -46,8 +47,9 @@ void verify_results(const char* result_file, const char* tmp_file) {
 
 TEST(TestRawExprSize, expr_size)
 {
-  static const char* tmp_file = "./expr/test_raw_expr_size.tmp";
-  static const char* result_file = "./expr/test_raw_expr_size.result";
+  const std::string tmp_file = sql_test_tmp_path("test_raw_expr_size.tmp");
+  const std::string result_file =
+      sql_test_data_path("resolver/expr/test_raw_expr_size.result");
 
   std::ofstream of_result(tmp_file);
   ASSERT_TRUE(of_result.is_open());
@@ -68,8 +70,6 @@ TEST(TestRawExprSize, expr_size)
   PRINT_SIZE(of_result, ObCaseOpRawExpr)
   PRINT_SIZE(of_result, ObAggFunRawExpr)
   PRINT_SIZE(of_result, ObSysFunRawExpr)
-  PRINT_SIZE(of_result, ObSequenceRawExpr)
-  PRINT_SIZE(of_result, ObNormalDllUdfRawExpr)
   PRINT_SIZE(of_result, ObCollectionConstructRawExpr)
   PRINT_SIZE(of_result, ObObjectConstructRawExpr)
   PRINT_SIZE(of_result, ObUDFRawExpr)
@@ -80,22 +80,20 @@ TEST(TestRawExprSize, expr_size)
   PRINT_SIZE(of_result, ObCallParamRawExpr)
   PRINT_SIZE(of_result, ObPLAssocIndexRawExpr)
   PRINT_SIZE(of_result, ObObjAccessRawExpr)
-  PRINT_SIZE(of_result, ObMultiSetRawExpr)
-  PRINT_SIZE(of_result, ObCollPredRawExpr)
   PRINT_SIZE(of_result, ObWinFunRawExpr)
   PRINT_SIZE(of_result, ObPseudoColumnRawExpr)
   PRINT_SIZE(of_result, ObOpPseudoColumnRawExpr)
   PRINT_SIZE(of_result, ObMatchFunRawExpr)
   PRINT_SIZE(of_result, ObPlQueryRefRawExpr)
-  PRINT_SIZE(of_result, ObUDTConstructorRawExpr)
   of_result.close();
-  verify_results(result_file, tmp_file);
+  verify_results(result_file.c_str(), tmp_file.c_str());
 }
 
 TEST(TestRawExprSize, expr_member_size)
 {
-  static const char* tmp_file = "./expr/test_raw_expr_member_size.tmp";
-  static const char* result_file = "./expr/test_raw_expr_member_size.result";
+  const std::string tmp_file = sql_test_tmp_path("test_raw_expr_member_size.tmp");
+  const std::string result_file =
+      sql_test_data_path("resolver/expr/test_raw_expr_member_size.result");
 
   std::ofstream of_result(tmp_file);
   ASSERT_TRUE(of_result.is_open());
@@ -162,8 +160,6 @@ TEST(TestRawExprSize, expr_member_size)
     PRINT_SIZE(of_result, expr.column_id_)
     PRINT_SIZE(of_result, expr.database_name_)
     PRINT_SIZE(of_result, expr.table_name_)
-    PRINT_SIZE(of_result, expr.synonym_name_)
-    PRINT_SIZE(of_result, expr.synonym_db_name_)
     PRINT_SIZE(of_result, expr.column_name_)
     PRINT_SIZE(of_result, expr.column_flags_)
     PRINT_SIZE(of_result, expr.dependant_expr_)
@@ -174,7 +170,6 @@ TEST(TestRawExprSize, expr_member_size)
     PRINT_SIZE(of_result, expr.is_rowkey_column_)
     PRINT_SIZE(of_result, expr.is_unique_key_column_)
     PRINT_SIZE(of_result, expr.is_mul_key_column_)
-    PRINT_SIZE(of_result, expr.is_pseudo_column_ref_)
     PRINT_SIZE(of_result, expr.is_strict_json_column_)
     PRINT_SIZE(of_result, expr.srs_id_)
     PRINT_SIZE(of_result, expr.udt_set_id_)
@@ -208,7 +203,6 @@ TEST(TestRawExprSize, expr_member_size)
     PRINT_SIZE(of_result, expr.distinct_)
     PRINT_SIZE(of_result, expr.order_items_)
     PRINT_SIZE(of_result, expr.separator_param_expr_)
-    PRINT_SIZE(of_result, expr.udf_meta_)
     PRINT_SIZE(of_result, expr.expr_in_inner_stmt_)
     PRINT_SIZE(of_result, expr.is_need_deserialize_row_)
     PRINT_SIZE(of_result, expr.pl_agg_udf_expr_)
@@ -233,9 +227,7 @@ TEST(TestRawExprSize, expr_member_size)
     PRINT_SIZE(of_result, expr.ref_stmt_)
     PRINT_SIZE(of_result, expr.output_column_)
     PRINT_SIZE(of_result, expr.is_set_)
-    PRINT_SIZE(of_result, expr.is_cursor_)
     PRINT_SIZE(of_result, expr.has_nl_param_)
-    PRINT_SIZE(of_result, expr.is_multiset_)
     PRINT_SIZE(of_result, expr.column_types_)
     PRINT_SIZE(of_result, expr.exec_params_)
     of_result << std::endl;
@@ -246,7 +238,6 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObObjAccessRawExpr)
     PRINT_SIZE(of_result, ObOpRawExpr)
-    PRINT_SIZE(of_result, expr.get_attr_func_)
     PRINT_SIZE(of_result, expr.func_name_)
     PRINT_SIZE(of_result, expr.access_indexs_)
     PRINT_SIZE(of_result, expr.var_indexs_)
@@ -256,14 +247,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   of_result.close();
-  verify_results(result_file, tmp_file);
+  verify_results(result_file.c_str(), tmp_file.c_str());
 }
 
-}
-
-int main(int argc, char **argv)
-{
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc,argv);
-  return RUN_ALL_TESTS();
 }

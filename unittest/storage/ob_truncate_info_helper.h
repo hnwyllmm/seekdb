@@ -18,6 +18,9 @@
 #define OCEANBASE_UNITTEST_TRUNCATE_INFO_HELPER
 
 #include <stdint.h>
+#undef protected
+#undef private
+
 #define protected public
 #define private public
 
@@ -30,10 +33,6 @@ class ObArenaAllocator;
 class ObRowkey;
 class ObTabletID;
 struct ObVersionRange;
-}
-namespace share
-{
-class ObLSID;
 }
 namespace storage
 {
@@ -81,7 +80,6 @@ public:
     const int64_t list_val_cnt,
     ObTruncatePartition &part);
   static int get_tablet(
-    const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     ObTabletHandle &tablet_handle);
   static int mock_part_key_idxs(
@@ -98,7 +96,6 @@ public:
     }
   static int read_distinct_truncate_info_array(
     common::ObArenaAllocator &allocator,
-    const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     const common::ObVersionRange &read_version_range,
     storage::ObTruncateInfoArray &truncate_info_array);

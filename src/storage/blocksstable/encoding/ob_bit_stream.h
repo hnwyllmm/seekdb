@@ -307,7 +307,7 @@ OB_INLINE uint64_t ObBitStream::get_mask(const int64_t len)
   if (OB_UNLIKELY(0 == mask_table_64bit[1])) {
     for (int64_t i = 0; i < TABLE_SIZE; ++i) {
       for (int64_t j = 1; j <= i; ++j) {
-        mask_table_64bit[i] |= (1UL << (j - 1));
+        mask_table_64bit[i] |= (1ULL << (j - 1));
       }
     }
   }

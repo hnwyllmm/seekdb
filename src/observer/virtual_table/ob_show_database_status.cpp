@@ -26,8 +26,7 @@ namespace observer
 {
 
 ObShowDatabaseStatus::ObShowDatabaseStatus()
-    : ObVirtualTableScannerIterator(),
-      tenant_id_(OB_INVALID_ID)
+    : ObVirtualTableScannerIterator()
 {
 }
 
@@ -38,7 +37,6 @@ ObShowDatabaseStatus::~ObShowDatabaseStatus()
 
 void ObShowDatabaseStatus::reset()
 {
-  tenant_id_ = OB_INVALID_ID;
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -83,7 +81,6 @@ int ObShowDatabaseStatus::add_database_status(const ObAddr &server_addr,
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(scanner_.add_row(cur_row_))) {
-      SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
     }
   }
   return ret;
@@ -105,13 +102,10 @@ int ObShowDatabaseStatus::add_all_database_status()
     if (OB_ISNULL(schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "schema manager should not be null", K(ret));
-    } else if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_,
-                                                                     database_schemas))) {
-      SERVER_LOG(WARN, "failed to get database schema of tenant", K_(tenant_id));
+    } else if (OB_FAIL(schema_guard_->get_database_schemas_in_runtime(database_schemas))) {
     } else {
       ObServer &server = ObServer::get_instance();
       const ObAddr server_ip = server.get_self();
-      const bool is_oracle_mode = lib::is_oracle_mode();
       for (int64_t i = 0; OB_SUCC(ret) && i < database_schemas.count(); ++i) {
         const ObDatabaseSchema* database_schema = database_schemas.at(i);
         const ObString database_name(database_schema->get_database_name());
@@ -120,11 +114,7 @@ int ObShowDatabaseStatus::add_all_database_status()
           SERVER_LOG(WARN, "database not exist", K(ret));
         } else if (database_schema->is_in_recyclebin() || database_schema->is_hidden()) {
           continue;
-        } else if (is_oracle_mode && is_oceanbase_sys_database_id(database_schema->get_database_id())) {
-          // To skip for oceanbase in Oracle mode
-          continue;
         } else if (OB_FAIL(add_database_status(server_ip, *database_schema, cells, col_count))) {
-          SERVER_LOG(WARN, "failed to add table constraint of database schema!", K(ret));
         }
       }
     }
@@ -141,13 +131,9 @@ int ObShowDatabaseStatus::inner_get_next_row(ObNewRow *&row)
   } else if (OB_ISNULL(schema_guard_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "schema manager is NULL", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id_)) {
-    ret = OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid argument", K_(tenant_id), K(ret));
   } else {
     if (!start_to_read_) {
       if (OB_FAIL(add_all_database_status())) {
-        SERVER_LOG(WARN, "failed to add all database status!", K(ret));
       } else {
         scanner_it_ = scanner_.begin();
         start_to_read_ = true;

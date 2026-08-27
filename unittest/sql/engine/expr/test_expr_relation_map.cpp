@@ -53,16 +53,8 @@ void check_type_map_symmetry(const ObObjType map[ObMaxType][ObMaxType], const ch
 TEST(ObExprRelationMap, expr_map_symmetry)
 {
   check_type_map_symmetry(RELATIONAL_CMP_TYPE, "RELATIONAL_CMP_TYPE");
-  check_type_map_symmetry(ORACLE_RELATIONAL_CMP_TYPE, "ORACLE_RELATIONAL_CMP_TYPE");
   // todo
   // check_type_map_symmetry(ARITH_RESULT_TYPE, "ARITH_RESULT_TYPE");
   // check_type_map_symmetry(MERGE_RESULT_TYPE, "MERGE_RESULT_TYPE");
-  // check_type_map_symmetry(MERGE_RESULT_TYPE_ORACLE, "MERGE_RESULT_TYPE_ORACLE");
   // check_type_map_symmetry(RELATIONAL_RESULT_TYPE, "RELATIONAL_RESULT_TYPE");
-}
-
-int main(int argc, char **argv)
-{
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
 }

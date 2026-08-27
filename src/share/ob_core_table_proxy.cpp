@@ -19,10 +19,10 @@
 #include "share/ob_core_table_proxy.h"
 
 #include "lib/container/ob_array_iterator.h"
-#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "common/mysqlclient/ob_mysql_proxy.h"
 #include "inner_table/ob_inner_table_schema.h"
 #include "share/ob_debug_sync.h"
-#include "share/ob_tenant_id_schema_version.h"
+#include "share/ob_schema_version_info.h"
 
 namespace oceanbase
 {
@@ -46,7 +46,6 @@ int ObCoreTableProxy::Row::init(const int64_t row_id,
     kv_proxy_ = &kv_proxy;
 
     if (OB_FAIL(extend_cell_array(cells.count()))) {
-      LOG_WARN("extend cell array failed", K(ret));
     } else {
       cell_cnt_ = 0;
       FOREACH_CNT(c, cells) {
@@ -171,7 +170,6 @@ int ObCoreTableProxy::Row::get_timestamp(const char *name, const common::ObTimeZ
     // gmt_modified is special treatment, get modify_time_us of __all_core_table
     const char *change_to_column = "modify_time_us";
     if (OB_FAIL(get_int(change_to_column, value))) {
-      LOG_WARN("get gmt_modified fail", K(ret), K(name), K(value));
     }
   } else if (OB_FAIL(get_cell(name, cell))) {
     // return NULL value for not found
@@ -299,7 +297,6 @@ int ObCoreTableProxy::Row::update_cell(const Cell &cell)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(cell));
   } else if (OB_FAIL(kv_proxy_->store_cell(cell, new_cell))) {
-    LOG_WARN("store cell failed", K(ret));
   } else {
     Cell *c = NULL;
     if (OB_FAIL(get_cell(cell.name_.ptr(), c))) {
@@ -309,7 +306,6 @@ int ObCoreTableProxy::Row::update_cell(const Cell &cell)
         LOG_WARN("update cell not found in row, we ignore this and continue",
             K(cell), K_(row_id), "table_name", kv_proxy_->table_name_);
         if (OB_FAIL(extend_cell_array(cell_cnt_ + 1))) {
-          LOG_WARN("extend cell array failed", K(ret), K_(cell_cnt));
         } else {
           c = std::lower_bound(cells_, cells_ + cell_cnt_, new_cell);
           for (Cell *p = cells_ + cell_cnt_; p > c; --p) {
@@ -344,10 +340,9 @@ DEF_TO_STRING(ObCoreTableProxy::Row)
 
 ObCoreTableProxy::ObCoreTableProxy(
   const char *table_name,
-  ObISQLClient &sql_client,
-  const uint64_t tenant_id)
+  ObISQLClient &sql_client)
   : table_name_(table_name), sql_client_(&sql_client), load_for_update_(false),
-    cur_idx_(-1), all_row_(), allocator_(ObModIds::OB_CORE_TABLE_PROXY), tenant_id_(tenant_id)
+    cur_idx_(-1), all_row_(), allocator_(ObModIds::OB_CORE_TABLE_PROXY)
 {
 }
 
@@ -363,7 +358,6 @@ int ObCoreTableProxy::load()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this));
   } else if (OB_FAIL(load(for_update))) {
-    LOG_WARN("load failed", K(ret), K(for_update));
   }
   return ret;
 }
@@ -376,7 +370,6 @@ int ObCoreTableProxy::load_for_update()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this));
   } else if (OB_FAIL(load(for_update))) {
-    LOG_WARN("load failed", K(ret), K(for_update));
   }
   return ret;
 }
@@ -387,7 +380,7 @@ int ObCoreTableProxy::load(const bool for_update)
   all_row_.reset();
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+  HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
     if (!is_valid()) {
       ret = OB_INVALID_ARGUMENT;
@@ -395,9 +388,7 @@ int ObCoreTableProxy::load(const bool for_update)
     } else if (OB_FAIL(sql.assign_fmt("SELECT row_id, column_name, column_value "
         "FROM %s WHERE table_name = '%s' ORDER BY row_id, column_name%s",
         OB_ALL_CORE_TABLE_TNAME, table_name_, for_update ? " FOR UPDATE" : ""))) {
-      LOG_WARN("assign sql failed", K(ret));
-    } else if (OB_FAIL(sql_client_->read(res, tenant_id_, sql.ptr()))) {
-      LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_FAIL(sql_client_->read(res, sql.ptr()))) {
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get result", K(ret), K(sql));
@@ -423,7 +414,6 @@ int ObCoreTableProxy::load(const bool for_update)
         if (OB_SUCC(ret)) {
           if (cur_row_id != row_id && OB_INVALID_INDEX != row_id) {
             if (OB_FAIL(add_row(row_id, cells))) {
-              LOG_WARN("add row failed", K(ret), K(row_id), K(cells));
             } else {
               cells.reuse();
             }
@@ -433,9 +423,7 @@ int ObCoreTableProxy::load(const bool for_update)
           row_id = cur_row_id;
           Cell stored_cell;
           if (OB_FAIL(store_cell(cell, stored_cell))) {
-            LOG_WARN("store cell failed", K(ret), K(cell));
           } else if (OB_FAIL(cells.push_back(stored_cell))) {
-            LOG_WARN("add cell failed", K(ret));
           }
         }
       }
@@ -445,14 +433,12 @@ int ObCoreTableProxy::load(const bool for_update)
         ret = OB_SUCCESS;
         if (OB_INVALID_INDEX != row_id) {
           if (OB_FAIL(add_row(row_id, cells))) {
-            LOG_WARN("add row failed", K(ret), K(row_id), K(cells));
           }
         }
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(seek_to_head())) {
-        LOG_WARN("seek to head failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -482,9 +468,7 @@ int ObCoreTableProxy::add_row(const int64_t row_id, const ObIArray<Cell> &cells)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this), K(row_id));
   } else if (OB_FAIL(row.init(row_id, *this, cells))) {
-    LOG_WARN("init row failed", K(ret), K(row_id), K(cells));
   } else if (OB_FAIL(all_row_.push_back(row))) {
-    LOG_WARN("add row failed", K(ret));
   }
   return ret;
 }
@@ -532,7 +516,6 @@ int ObCoreTableProxy::get_int(const char *name, int64_t &value) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this), K(name));
   } else if (OB_FAIL(get_cur_row(row))) {
-    LOG_WARN("get current row failed", K(ret));
   } else if (NULL == row) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL row", K(ret));
@@ -552,7 +535,6 @@ int ObCoreTableProxy::get_uint(const char *name, uint64_t &value) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this), K(name));
   } else if (OB_FAIL(get_cur_row(row))) {
-    LOG_WARN("get current row failed", K(ret));
   } else if (NULL == row) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL row", K(ret));
@@ -572,7 +554,6 @@ int ObCoreTableProxy::get_varchar(const char *name, common::ObString &value) con
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this), K(name));
   } else if (OB_FAIL(get_cur_row(row))) {
-    LOG_WARN("get current row failed", K(ret));
   } else if (NULL == row) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL row", K(ret));
@@ -593,7 +574,6 @@ int ObCoreTableProxy::get_timestamp(const char *name, const common::ObTimeZoneIn
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this), K(name));
   } else if (OB_FAIL(get_cur_row(row))) {
-    LOG_WARN("get current row failed", K(ret));
   } else if (NULL == row) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL row", K(ret));
@@ -625,14 +605,11 @@ int ObCoreTableProxy::incremental_update(const ObIArray<UpdateCell> &cells,
     FOREACH_X(row, all_row_, OB_SUCCESS == ret) {
       bool match = false;
       if (OB_FAIL(check_row_match(*row, cells, match))) {
-        LOG_WARN("check row match failed", K(ret), "row", *row, K(cells));
       } else {
         if (match) {
           match_rows++;
           if (OB_FAIL(execute_incremental_update_sql(*row, cells, affected_rows))) {
-            LOG_WARN("execute update sql failed", K(ret));
           } else if (OB_FAIL(update_row_struct(cells, *row))) {
-            LOG_WARN("update row failed", K(ret), "row", *row);
           }
         }
       }
@@ -643,28 +620,23 @@ int ObCoreTableProxy::incremental_update(const ObIArray<UpdateCell> &cells,
         Row insert_row;
         int64_t new_row_id = 0;
         if (OB_FAIL(generate_row_id(new_row_id))) {
-          LOG_WARN("generate row id failed", K(ret));
         } else {
           ObArray<Cell> empty_cells;
           if (OB_FAIL(insert_row.init(new_row_id, *this, empty_cells))) {
-            LOG_WARN("init row failed", K(ret), K(new_row_id));
           }
         }
         ObArray<Cell> new_cells;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(execute_update_sql(insert_row, cells, affected_rows))) {
-          LOG_WARN("execute update sql failed", K(ret));
         } else {
           FOREACH_CNT_X(c, cells, OB_SUCCESS == ret) {
             if (OB_FAIL(new_cells.push_back(c->cell_))) {
-              LOG_WARN("add cell failed", K(ret));
             }
           }
         }
         if (OB_SUCC(ret)) {
           lib::ob_sort(new_cells.begin(), new_cells.end());
           if (OB_FAIL(add_row(new_row_id, new_cells))) {
-            LOG_WARN("add row failed", K(ret));
           }
         }
       }
@@ -691,14 +663,11 @@ int ObCoreTableProxy::update(const ObIArray<UpdateCell> &cells,
     FOREACH_X(row, all_row_, OB_SUCCESS == ret) {
       bool match = false;
       if (OB_FAIL(check_row_match(*row, cells, match))) {
-        LOG_WARN("check row match failed", K(ret), "row", *row, K(cells));
       } else {
         if (match) {
           match_rows++;
           if (OB_FAIL(execute_update_sql(*row, cells, affected_rows))) {
-            LOG_WARN("execute update sql failed", K(ret));
           } else if (OB_FAIL(update_row_struct(cells, *row))) {
-            LOG_WARN("update row failed", K(ret), "row", *row);
           }
         }
       }
@@ -709,28 +678,23 @@ int ObCoreTableProxy::update(const ObIArray<UpdateCell> &cells,
         Row insert_row;
         int64_t new_row_id = 0;
         if (OB_FAIL(generate_row_id(new_row_id))) {
-          LOG_WARN("generate row id failed", K(ret));
         } else {
           ObArray<Cell> empty_cells;
           if (OB_FAIL(insert_row.init(new_row_id, *this, empty_cells))) {
-            LOG_WARN("init row failed", K(ret), K(new_row_id));
           }
         }
         ObArray<Cell> new_cells;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(execute_update_sql(insert_row, cells, affected_rows))) {
-          LOG_WARN("execute update sql failed", K(ret));
         } else {
           FOREACH_CNT_X(c, cells, OB_SUCCESS == ret) {
             if (OB_FAIL(new_cells.push_back(c->cell_))) {
-              LOG_WARN("add cell failed", K(ret));
             }
           }
         }
         if (OB_SUCC(ret)) {
           lib::ob_sort(new_cells.begin(), new_cells.end());
           if (OB_FAIL(add_row(new_row_id, new_cells))) {
-            LOG_WARN("add row failed", K(ret));
           }
         }
       }
@@ -748,7 +712,6 @@ int ObCoreTableProxy::update_row(const ObIArray<UpdateCell> &cells, int64_t &aff
     LOG_WARN("invalid argument", K(ret),
         KPC(this), "cell count", cells.count());
   } else if (OB_FAIL(update(cells, insert, affected_rows))) {
-    LOG_WARN("update cells failed", K(ret), K(cells), K(insert));
   }
 
   return ret;
@@ -763,7 +726,6 @@ int ObCoreTableProxy::replace_row(const ObIArray<UpdateCell> &cells, int64_t &af
     LOG_WARN("invalid argument", K(ret),
         KPC(this), "cell count", cells.count());
   } else if (OB_FAIL(update(cells, insert, affected_rows))) {
-    LOG_WARN("update cells failed", K(ret), K(cells), K(insert));
   }
 
   return ret;
@@ -778,7 +740,6 @@ int ObCoreTableProxy::incremental_update_row(const ObIArray<UpdateCell> &cells, 
     LOG_WARN("invalid argument", K(ret),
         KPC(this), "cell count", cells.count());
   } else if (OB_FAIL(incremental_update(cells, insert, affected_rows))) {
-    LOG_WARN("update cells failed", K(ret), K(cells), K(insert));
   }
 
   return ret;
@@ -793,7 +754,6 @@ int ObCoreTableProxy::incremental_replace_row(const ObIArray<UpdateCell> &cells,
     LOG_WARN("invalid argument", K(ret),
         KPC(this), "cell count", cells.count());
   } else if (OB_FAIL(incremental_update(cells, insert, affected_rows))) {
-    LOG_WARN("update cells failed", K(ret), K(cells), K(insert));
   }
 
   return ret;
@@ -823,7 +783,6 @@ int ObCoreTableProxy::delete_row(const ObIArray<UpdateCell> &cells, int64_t &aff
   for (int64_t i = 0; OB_SUCC(ret) && i < all_row_.count();) {
     bool match = false;
     if (OB_FAIL(check_row_match(all_row_.at(i), cells, match))) {
-      LOG_WARN("check row match failed", K(ret), "row", all_row_.at(i), K(cells));
     } else {
       if (!match) {
         i++;
@@ -833,11 +792,9 @@ int ObCoreTableProxy::delete_row(const ObIArray<UpdateCell> &cells, int64_t &aff
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(execute_delete_sql(all_row_.at(i).get_row_id()))) {
-        LOG_WARN("delete row failed", K(ret), GETK(all_row_.at(i), row_id));
       } else {
         affected_rows++;
         if (OB_FAIL(all_row_.remove(i))) {
-          LOG_WARN("remove row failed", K(ret), K(i));
         } else {
           if (cur_idx_ > i) {
             --cur_idx_;
@@ -860,11 +817,8 @@ int ObCoreTableProxy::execute_delete_sql(const int64_t row_id)
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE table_name = '%s' AND row_id = %ld",
         OB_ALL_CORE_TABLE_TNAME, table_name_, row_id))) {
-      LOG_WARN("assign sql failed", K(ret));
-    } else if (OB_FAIL(sql_client_->write(tenant_id_, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_FAIL(sql_client_->write(sql.ptr(), affected_rows))) {
     } else {
-      LOG_TRACE("execute sql", KR(ret), K_(tenant_id), K(sql));
     }
   }
   return ret;
@@ -901,9 +855,7 @@ int ObCoreTableProxy::store_cell(const Cell &src, Cell &dest)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(this), K(src));
   } else if (OB_FAIL(store_string(src.name_, dest.name_))) {
-    LOG_WARN("store cell name failed", K(ret), K(src));
   } else if (OB_FAIL(store_string(src.value_, dest.value_))) {
-    LOG_WARN("store cell value failed", K(ret), K(src));
   } else {
     dest.is_hex_value_ = src.is_hex_value_;
   }
@@ -987,16 +939,13 @@ int ObCoreTableProxy::execute_incremental_update_sql(const Row &row, const ObIAr
         if (OB_FAIL(value_sql.append_fmt("%s ('%s', %ld, '%.*s', NULL)",
                                          value_sql.empty() ? "" : ",", table_name_, row.get_row_id(),
                                          uc->cell_.name_.length(), uc->cell_.name_.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret));
         }
       } else {
         if (OB_FAIL(value_sql.append_fmt("%s ('%s', %ld, '%.*s', ",
                                          value_sql.empty() ? "" : ",", table_name_, row.get_row_id(),
                                          uc->cell_.name_.length(), uc->cell_.name_.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret));
         } else if (OB_FAIL(value_sql.append_fmt(uc->cell_.is_hex_value_ ? "%.*s)" : "'%.*s')",
                                                 uc->cell_.value_.length(), uc->cell_.value_.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret));
         }
       }
     }
@@ -1017,11 +966,8 @@ int ObCoreTableProxy::execute_incremental_update_sql(const Row &row, const ObIAr
       //skip
     } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (table_name, row_id, column_name, column_value) VALUES %s ",
                                       OB_ALL_CORE_TABLE_TNAME, insert_sql.ptr()))) {
-      LOG_WARN("fail to assign fmt", K(ret));
-    } else if (OB_FAIL(sql_client_->write(tenant_id_, sql.ptr(), affected))) {
-      LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_FAIL(sql_client_->write(sql.ptr(), affected))) {
     } else {
-      LOG_TRACE("execute sql", KR(ret), K_(tenant_id), K(sql), K(affected));
     }
 
     //batch update
@@ -1034,11 +980,8 @@ int ObCoreTableProxy::execute_incremental_update_sql(const Row &row, const ObIAr
                                       "and (values(column_value) != %ld), "
                                       "column_value, values(column_value))",
                                       OB_ALL_CORE_TABLE_TNAME, update_sql.ptr(), OB_INVALID_SCHEMA_VERSION))) {
-      LOG_WARN("fail to assign fmt", K(ret));
-    } else if (OB_FAIL(sql_client_->write(tenant_id_, sql.ptr(), affected))) {
-      LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_FAIL(sql_client_->write(sql.ptr(), affected))) {
     } else {
-      LOG_TRACE("execute sql", KR(ret), K_(tenant_id), K(sql), K(affected));
       if (is_zero_row(affected)) {
         LOG_WARN("core table update do nothing", K(sql));
       }
@@ -1091,16 +1034,13 @@ int ObCoreTableProxy::execute_update_sql(const Row &row, const ObIArray<UpdateCe
         if (OB_FAIL(value_sql.append_fmt("%s ('%s', %ld, '%.*s', NULL)",
                                          value_sql.empty() ? "" : ",", table_name_, row.get_row_id(),
                                          uc->cell_.name_.length(), uc->cell_.name_.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret));
         }
       } else {
         if (OB_FAIL(value_sql.append_fmt("%s ('%s', %ld, '%.*s', ",
                                          value_sql.empty() ? "" : ",", table_name_, row.get_row_id(),
                                          uc->cell_.name_.length(), uc->cell_.name_.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret));
         } else if (OB_FAIL(value_sql.append_fmt(uc->cell_.is_hex_value_ ? "%.*s)" : "'%.*s')",
                                                 uc->cell_.value_.length(), uc->cell_.value_.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret));
         }
       }
     }
@@ -1120,11 +1060,8 @@ int ObCoreTableProxy::execute_update_sql(const Row &row, const ObIArray<UpdateCe
       //skip
     } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (table_name, row_id, column_name, column_value) VALUES %s ",
                                       OB_ALL_CORE_TABLE_TNAME, insert_sql.ptr()))) {
-      LOG_WARN("fail to assign fmt", K(ret));
-    } else if (OB_FAIL(sql_client_->write(tenant_id_, sql.ptr(), affected))) {
-      LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_FAIL(sql_client_->write(sql.ptr(), affected))) {
     } else {
-      LOG_TRACE("execute sql", KR(ret), K_(tenant_id), K(sql), K(affected));
     }
 
     //batch update
@@ -1135,11 +1072,8 @@ int ObCoreTableProxy::execute_update_sql(const Row &row, const ObIArray<UpdateCe
     } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (table_name, row_id, column_name, column_value) VALUES %s "
                                       "ON DUPLICATE KEY UPDATE column_value = values(column_value)",
                                       OB_ALL_CORE_TABLE_TNAME, update_sql.ptr()))) {
-      LOG_WARN("fail to assign fmt", K(ret));
-    } else if (OB_FAIL(sql_client_->write(tenant_id_, sql.ptr(), affected))) {
-      LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_FAIL(sql_client_->write(sql.ptr(), affected))) {
     } else {
-      LOG_TRACE("execute sql", KR(ret), K_(tenant_id), K(sql), K(affected));
     }
 
     if (OB_SUCC(ret)) {
@@ -1160,7 +1094,6 @@ int ObCoreTableProxy::update_row_struct(const common::ObIArray<UpdateCell> &cell
   }
   FOREACH_CNT_X(uc, cells, OB_SUCCESS == ret) {
     if (OB_FAIL(row.update_cell(uc->cell_))) {
-      LOG_WARN("update cell failed", K(ret), "update_cell", *uc);
     }
   }
   return ret;
@@ -1199,9 +1132,7 @@ int ObCoreTableProxy::supplement_cell(const UpdateCell &cell)
     ret = cells.push_back(cell);
     FOREACH_X(row, all_row_, OB_SUCCESS == ret) {
       if (OB_FAIL(execute_update_sql(*row, cells, affected_rows))) {
-        LOG_WARN("execute update sql failed", K(ret));
       } else if (OB_FAIL(update_row_struct(cells, *row))) {
-        LOG_WARN("update row failed", K(ret), "row", *row);
       }
     }
     if (OB_SUCC(ret)) {

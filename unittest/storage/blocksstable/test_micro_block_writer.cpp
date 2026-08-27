@@ -20,6 +20,8 @@
 #include "storage/blocksstable/ob_micro_block_writer.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "ob_row_generate.h"
+#undef protected
+#undef private
 
 namespace oceanbase
 {
@@ -47,7 +49,7 @@ public:
   virtual void TearDown() {}
   void test_alloc(char *&ptr, const int64_t size);
 
-protected:
+public:
   ObRowGenerate row_generate_;
   ObArenaAllocator allocator_;
   ObTableReadInfo read_info_;
@@ -79,15 +81,12 @@ void TestMicroBlockWriter::test_alloc(char *&ptr, const int64_t size)
 
 void TestMicroBlockWriter::SetUp()
 {
-  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   const int64_t table_id = 3001;
   ObTableSchema table_schema;
   ObColumnSchemaV2 column;
   //init table schema
   table_schema.reset();
   ASSERT_EQ(OB_SUCCESS, table_schema.set_table_name("test_row_writer"));
-  table_schema.set_tenant_id(1);
-  table_schema.set_tablegroup_id(1);
   table_schema.set_database_id(1);
   table_schema.set_table_id(table_id);
   table_schema.set_rowkey_column_num(rowkey_column_count);
@@ -122,8 +121,6 @@ TEST_F(TestMicroBlockWriter, test_init)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
 
   //invalid macro_block_size
   ret = writer.init(0, 2, 5);
@@ -155,8 +152,6 @@ TEST_F(TestMicroBlockWriter, append_success)
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num + 2));
 
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
   ret = writer.init(macro_block_size, rowkey_column_count, column_num + 2);
   ASSERT_EQ(OB_SUCCESS, ret);
   for(int64_t i = 0; i < test_row_num; ++i){
@@ -174,7 +169,7 @@ TEST_F(TestMicroBlockWriter, append_success)
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(columns));
   ObTableReadInfo read_info;
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
-      allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
+      allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), columns, nullptr/*storage_cols_index*/));
   ObMicroBlockReader reader;
   ObMicroBlockData block(buf, size);
   ret = reader.init(block, read_info_);
@@ -207,8 +202,6 @@ TEST_F(TestMicroBlockWriter, append_row_error)
   ASSERT_EQ(OB_SUCCESS, multi_version_row.init(allocator_, column_num + 2));
   //not init
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
   convert_to_multi_version_row(row, row_generate_.get_schema(), SNAPSHOT_VERSION, multi_version_row);
   ASSERT_EQ(OB_NOT_INIT, writer.append_row(multi_version_row));
@@ -233,8 +226,6 @@ TEST_F(TestMicroBlockWriter, build_block_error)
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_num));
   //not init
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
   ASSERT_EQ(OB_NOT_INIT, writer.build_block(buf, size));
 }
@@ -243,8 +234,6 @@ TEST_F(TestMicroBlockWriter, init_max_column_count)
 {
   // data_buffer_ and index_buffer_ in ObMicroBlockWriter should init succeed
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
   int64_t ret = writer.init(
       common::OB_DEFAULT_MACRO_BLOCK_SIZE,
       1,
@@ -274,8 +263,6 @@ TEST_F(TestMicroBlockWriter, append_large_row)
   row.storage_datums_[1].set_string(ObString(value2_size, ptr2));
 
   ObMicroBlockWriter writer;
-  writer.data_buffer_.allocator_.set_tenant_id(500);
-  writer.index_buffer_.allocator_.set_tenant_id(500);
   int64_t ret = writer.init(common::OB_DEFAULT_MACRO_BLOCK_SIZE, 1, large_row_col_cnt);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -286,12 +273,3 @@ TEST_F(TestMicroBlockWriter, append_large_row)
 
 }//end namespace unittest
 }//end namespace oceanbase
-
-int main(int argc, char **argv)
-{
-  system("rm -rf test_micro_block_writer.log");
-  OB_LOGGER.set_file_name("test_micro_block_writer.log", true, true);
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}

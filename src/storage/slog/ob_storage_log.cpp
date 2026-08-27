@@ -15,94 +15,70 @@
  */
 
 #include "ob_storage_log.h"
-#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
 namespace oceanbase
 {
 using namespace share;
 namespace storage
 {
-
-ObCreateTenantPrepareLog::ObCreateTenantPrepareLog(omt::ObTenantMeta &meta)
+ObCreateRuntimePrepareLog::ObCreateRuntimePrepareLog(omt::ObServerRuntimeMeta &meta)
   : meta_(meta)
 {
 }
 
-bool ObCreateTenantPrepareLog::is_valid() const
+bool ObCreateRuntimePrepareLog::is_valid() const
 {
   return meta_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTenantPrepareLog, meta_);
+OB_SERIALIZE_MEMBER(ObCreateRuntimePrepareLog, meta_);
 
-ObCreateTenantCommitLog::ObCreateTenantCommitLog(uint64_t &tenant_id)
-  : tenant_id_(tenant_id)
+ObCreateRuntimeCommitLog::ObCreateRuntimeCommitLog()
 {
 }
 
-bool ObCreateTenantCommitLog::is_valid() const
+bool ObCreateRuntimeCommitLog::is_valid() const
 {
-  return OB_INVALID_TENANT_ID != tenant_id_;
+  return true;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTenantCommitLog, tenant_id_);
-ObCreateTenantAbortLog::ObCreateTenantAbortLog(uint64_t &tenant_id)
-  : tenant_id_(tenant_id)
-{
-}
+OB_SERIALIZE_MEMBER(ObCreateRuntimeCommitLog);
 
-bool ObCreateTenantAbortLog::is_valid() const
-{
-  return OB_INVALID_TENANT_ID != tenant_id_;
-}
-
-OB_SERIALIZE_MEMBER(ObCreateTenantAbortLog, tenant_id_);
-
-ObDeleteTenantPrepareLog::ObDeleteTenantPrepareLog(uint64_t &tenant_id)
-  : tenant_id_(tenant_id)
+ObCreateRuntimeAbortLog::ObCreateRuntimeAbortLog()
 {
 }
 
-bool ObDeleteTenantPrepareLog::is_valid() const
+bool ObCreateRuntimeAbortLog::is_valid() const
 {
-  return OB_INVALID_TENANT_ID != tenant_id_;
+  return true;
 }
 
-OB_SERIALIZE_MEMBER(ObDeleteTenantPrepareLog, tenant_id_);
+OB_SERIALIZE_MEMBER(ObCreateRuntimeAbortLog);
 
-ObDeleteTenantCommitLog::ObDeleteTenantCommitLog(uint64_t &tenant_id)
-  : tenant_id_(tenant_id)
+ObUpdateServerResourcesLog::ObUpdateServerResourcesLog(share::ObServerRuntimeConfig &runtime_config)
+  : runtime_config_(runtime_config)
 {
 }
 
-bool ObDeleteTenantCommitLog::is_valid() const
+bool ObUpdateServerResourcesLog::is_valid() const
 {
-  return OB_INVALID_TENANT_ID != tenant_id_;
+  return runtime_config_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObDeleteTenantCommitLog, tenant_id_);
+OB_SERIALIZE_MEMBER(ObUpdateServerResourcesLog, runtime_config_);
 
-ObUpdateTenantUnitLog::ObUpdateTenantUnitLog(share::ObUnitInfoGetter::ObTenantConfig &unit)
-  : unit_(unit)
-{
-}
-bool ObUpdateTenantUnitLog::is_valid() const
-{
-  return unit_.is_valid();
-}
-
-OB_SERIALIZE_MEMBER(ObUpdateTenantUnitLog, unit_);
-
-ObUpdateTenantSuperBlockLog::ObUpdateTenantSuperBlockLog(ObTenantSuperBlock &super_block)
+ObUpdateRuntimeSuperBlockLog::ObUpdateRuntimeSuperBlockLog(ObServerRuntimeSuperBlock &super_block)
   : super_block_(super_block)
 {
 }
-bool ObUpdateTenantSuperBlockLog::is_valid() const
+
+bool ObUpdateRuntimeSuperBlockLog::is_valid() const
 {
   return super_block_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObUpdateTenantSuperBlockLog, super_block_);
+OB_SERIALIZE_MEMBER(ObUpdateRuntimeSuperBlockLog, super_block_);
 
 ObLSMetaLog::ObLSMetaLog(const ObLSMeta &ls_meta)
   : ls_meta_(ls_meta)
@@ -126,120 +102,70 @@ DEF_TO_STRING(ObLSMetaLog)
 
 OB_SERIALIZE_MEMBER(ObLSMetaLog, ls_meta_);
 
-ObLSIDLog::ObLSIDLog(ObLSID &ls_id)
-  : ls_id_(ls_id)
-{
-}
-
-bool ObLSIDLog::is_valid() const
-{
-  return ls_id_.is_valid();
-}
-
-DEF_TO_STRING(ObLSIDLog)
+DEF_TO_STRING(ObLSMarkerLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id));
   J_OBJ_END();
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObLSIDLog, ls_id_);
-
-ObCreateTabletLog::ObCreateTabletLog(ObTablet *tablet)
-  : tablet_(tablet)
-{
-}
-
-int ObCreateTabletLog::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  return tablet_->serialize(buf, buf_len, pos);
-}
-
-int ObCreateTabletLog::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  // abandoned slog, skip deserialization
-  return OB_SUCCESS;
-}
-
-int64_t ObCreateTabletLog::get_serialize_size() const
-{
-  return tablet_->get_serialize_size();
-}
-
-bool ObCreateTabletLog::is_valid() const
-{
-  return true;
-}
-
-DEF_TO_STRING(ObCreateTabletLog)
-{
-  int64_t pos = 0;
-  J_OBJ_START();
-  J_KV(KPC_(tablet));
-  J_OBJ_END();
-  return pos;
-}
+OB_SERIALIZE_MEMBER(ObLSMarkerLog);
 
 ObDeleteTabletLog::ObDeleteTabletLog()
-  : ls_id_(), tablet_id_()
+  : tablet_id_()
 {
 }
 
-ObDeleteTabletLog::ObDeleteTabletLog(const ObLSID &ls_id, const ObTabletID &tablet_id)
-  : ls_id_(ls_id), tablet_id_(tablet_id)
+ObDeleteTabletLog::ObDeleteTabletLog(const ObTabletID &tablet_id)
+  : tablet_id_(tablet_id)
 {
 }
 
 bool ObDeleteTabletLog::is_valid() const
 {
-  return ls_id_.is_valid() && tablet_id_.is_valid();
+  return tablet_id_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObDeleteTabletLog, ls_id_, tablet_id_);
+OB_SERIALIZE_MEMBER(ObDeleteTabletLog, tablet_id_);
 
 DEF_TO_STRING(ObDeleteTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id), K_(tablet_id));
+  J_KV(K_(tablet_id));
   J_OBJ_END();
   return pos;
 }
 
 ObUpdateTabletLog::ObUpdateTabletLog(
-    const ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const ObMetaDiskAddr &disk_addr)
-  : ls_id_(ls_id),
-    tablet_id_(tablet_id),
+  : tablet_id_(tablet_id),
     disk_addr_(disk_addr)
 {
 }
 
 bool ObUpdateTabletLog::is_valid() const
 {
-  return ls_id_.is_valid() && tablet_id_.is_valid() && disk_addr_.is_valid();
+  return tablet_id_.is_valid() && disk_addr_.is_valid();
 }
 
-OB_SERIALIZE_MEMBER(ObUpdateTabletLog, ls_id_, tablet_id_, disk_addr_);
+OB_SERIALIZE_MEMBER(ObUpdateTabletLog, tablet_id_, disk_addr_);
 
 DEF_TO_STRING(ObUpdateTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id), K_(tablet_id), K_(disk_addr));
+  J_KV(K_(tablet_id), K_(disk_addr));
   J_OBJ_END();
   return pos;
 }
 
 ObEmptyShellTabletLog::ObEmptyShellTabletLog(
-    const ObLSID &ls_id,
     const ObTabletID &tablet_id,
     ObTablet *tablet)
   : version_(EMPTY_SHELL_SLOG_VERSION),
-    ls_id_(ls_id),
     tablet_id_(tablet_id),
     tablet_(tablet)
 {
@@ -252,13 +178,8 @@ int ObEmptyShellTabletLog::serialize(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::encode(buf, data_len, pos, version_))) {
-    STORAGE_LOG(WARN, "deserialize version_ failed", K(ret), KP(data_len), K(pos));
-  } else if (OB_FAIL(ls_id_.serialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize ls_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_id_.serialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize tablet_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_->serialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize tablet failed", K(ret), KP(data_len), K(pos));
   }
 
   return ret;
@@ -271,11 +192,7 @@ int ObEmptyShellTabletLog::deserialize_id(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::decode(buf, data_len, pos, version_))) {
-    STORAGE_LOG(WARN, "deserialize version_ failed", K(ret), KP(data_len), K(pos));
-  } else if (OB_FAIL(ls_id_.deserialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize ls_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize tablet_id_ failed", K(ret), KP(data_len), K(pos));
   }
   return ret;
 }
@@ -288,13 +205,8 @@ int ObEmptyShellTabletLog::deserialize(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::decode(buf, data_len, pos, version_))) {
-    STORAGE_LOG(WARN, "deserialize version_ failed", K(ret), KP(data_len), K(pos));
-  } else if (OB_FAIL(ls_id_.deserialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize ls_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize tablet_id_ failed", K(ret), KP(data_len), K(pos));
   } else if (OB_FAIL(tablet_->deserialize(buf, data_len, pos))) {
-    STORAGE_LOG(WARN, "deserialize tablet failed", K(ret), KP(data_len), K(pos));
   }
 
   return ret;
@@ -304,7 +216,6 @@ int64_t ObEmptyShellTabletLog::get_serialize_size() const
 {
   int64_t size = 0;
   size += serialization::encoded_length(version_);
-  size += ls_id_.get_serialize_size();
   size += tablet_id_.get_serialize_size();
   size += tablet_->get_serialize_size();
   return size;
@@ -312,14 +223,14 @@ int64_t ObEmptyShellTabletLog::get_serialize_size() const
 
 bool ObEmptyShellTabletLog::is_valid() const
 {
-  return ls_id_.is_valid() && tablet_id_.is_valid();
+  return tablet_id_.is_valid();
 }
 
 DEF_TO_STRING(ObEmptyShellTabletLog)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_id), K_(tablet_id));
+  J_KV(K_(tablet_id));
   J_OBJ_END();
   return pos;
 }

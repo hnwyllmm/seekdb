@@ -33,8 +33,8 @@ class ObLobMetaWriteIter;
 class ObLobMetaScanIter;
 class ObLobMetaManager {
 public:
-  explicit ObLobMetaManager(const uint64_t tenant_id) : 
-    persistent_lob_adapter_(tenant_id)
+  explicit ObLobMetaManager() : 
+    persistent_lob_adapter_{}
   {}
   ~ObLobMetaManager() {}
   // write one lob meta row
@@ -58,13 +58,6 @@ public:
   int getlength(ObLobAccessParam &param, uint64_t &char_len);
 
   TO_STRING_KV("[LOB]", "meta mngr");
-
-private:
-  int local_scan(ObLobAccessParam& param, ObLobMetaScanIter &iter);
-  int remote_scan(ObLobAccessParam& param, ObLobMetaScanIter &iter);
-
-  int getlength_local(ObLobAccessParam &param, uint64_t &char_len);
-  int getlength_remote(ObLobAccessParam &param, uint64_t &char_len);
 
 private:
   // lob adaptor
