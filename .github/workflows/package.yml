@@ -1,9 +1,7 @@
 name: Package seekdb
-run-name: Package ${{ inputs.platform || 'linux-x86_64' }} / ${{ inputs.linux_glibc || '2.17' }} / ${{ inputs.version || 'source version' }}-${{ inputs.release || '1' }}
+run-name: Package ${{ inputs.platform }} / ${{ inputs.linux_glibc }} / ${{ inputs.version || 'source version' }}-${{ inputs.release }}
 
 on:
-  push:
-    branches: [codex/package-smoke-20261112]
   workflow_dispatch:
     inputs:
       platform:
@@ -62,11 +60,11 @@ jobs:
       - name: Select and validate targets
         id: matrix
         env:
-          PACKAGE_PLATFORM: ${{ inputs.platform || 'linux-x86_64' }}
-          PACKAGE_GLIBC: ${{ inputs.linux_glibc || '2.17' }}
+          PACKAGE_PLATFORM: ${{ inputs.platform }}
+          PACKAGE_GLIBC: ${{ inputs.linux_glibc }}
           PACKAGE_VERSION: ${{ inputs.version }}
-          PACKAGE_RELEASE: ${{ inputs.release || '1' }}
-          BUILD_JOBS: ${{ inputs.jobs || 0 }}
+          PACKAGE_RELEASE: ${{ inputs.release }}
+          BUILD_JOBS: ${{ inputs.jobs }}
         run: python3 .github/scripts/package.py matrix
 
   binary:
@@ -184,7 +182,7 @@ jobs:
     env:
       PACKAGE_VERSION: ${{ needs.prepare.outputs.version }}
       PACKAGE_RELEASE: ${{ needs.prepare.outputs.release }}
-      PACKAGE_FORMATS: ${{ inputs.formats || 'all' }}
+      PACKAGE_FORMATS: ${{ inputs.formats }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
