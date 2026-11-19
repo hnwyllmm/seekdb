@@ -1,0 +1,23 @@
+src/sql/engine/expr/ob_expr_array_first.cpp
+  s_1450aec9a62cfa::t_0353648ad48569 136,139-140
+src/query/api/query/engine/expr/ob_expr_array_map.h
+  s_1450aec9a62cfa::t_0353648ad48569 75
+src/sql/engine/expr/ob_expr_array_map.cpp
+  s_1450aec9a62cfa::t_0353648ad48569 38,41,46,49-51,59,61-64,195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7778f0642c76c144f0df81e232423018061bbe5e",
+  "prompts": {},
+  "sessions": {
+    "s_1450aec9a62cfa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e8a1-2018-73d3-957b-6e23cb3716ec",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}
