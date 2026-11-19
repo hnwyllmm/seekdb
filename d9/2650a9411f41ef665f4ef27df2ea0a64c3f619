@@ -1,0 +1,21 @@
+tools/deploy/mysql_test/test_suite/executor/t/basic.test
+  s_7b315331419b8b::t_6c4618125cc379 5-35
+tools/deploy/mysql_test/test_suite/executor/r/mysql/basic.result
+  s_7b315331419b8b::t_6c4618125cc379 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d92650a9411f41ef665f4ef27df2ea0a64c3f619",
+  "prompts": {},
+  "sessions": {
+    "s_7b315331419b8b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1f31b-deda-7cb1-85b7-9cb977bf1e52",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}
