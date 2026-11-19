@@ -1,0 +1,25 @@
+src/share/inner_table/ob_inner_table_schema_def.py
+  s_46fa640584bf31::t_0fa5007b1186d1 2891
+src/sql/plan_cache/ob_lib_cache_object_manager.cpp
+  s_46fa640584bf31::t_5b74b78c5a0e21 104,123
+tools/deploy/mysql_test/test_suite/inner_table/r/mysql/show_sys_tables_in_sys.result
+  s_46fa640584bf31::t_0fa5007b1186d1 2083
+src/observer/virtual_table/ob_gv_sql.cpp
+  s_46fa640584bf31::t_0fa5007b1186d1 952-953
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5798152b43d2290525dd5ce7144e55c4730cfc90",
+  "prompts": {},
+  "sessions": {
+    "s_46fa640584bf31": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e81a-4b81-7eb0-bb35-f4b1c76ec66b",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}
