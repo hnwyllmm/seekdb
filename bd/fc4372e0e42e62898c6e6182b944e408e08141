@@ -1,0 +1,19 @@
+bazel/third_party/targets.bzl
+  s_b42ec932f17b15::t_9680e088eb3b9b 18-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bdfc4372e0e42e62898c6e6182b944e408e08141",
+  "prompts": {},
+  "sessions": {
+    "s_b42ec932f17b15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1ab24-9a6c-79d1-a199-538cb34f02cd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@U-Y44N21LQ-2319.local>"
+    }
+  }
+}
