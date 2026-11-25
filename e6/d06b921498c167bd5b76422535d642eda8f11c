@@ -1,0 +1,21 @@
+src/sql/optimizer/ob_logical_operator.h
+  s_7b315331419b8b::t_5b1c717d25ced8 347-348,368-369,390
+src/sql/optimizer/ob_logical_operator.cpp
+  s_7b315331419b8b::t_5b1c717d25ced8 3698,3742-3743,3977
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e6d06b921498c167bd5b76422535d642eda8f11c",
+  "prompts": {},
+  "sessions": {
+    "s_7b315331419b8b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1f31b-deda-7cb1-85b7-9cb977bf1e52",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}

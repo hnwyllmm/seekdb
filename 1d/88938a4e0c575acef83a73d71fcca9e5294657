@@ -1,0 +1,34 @@
+src/sql/plan_cache/ob_i_lib_cache_object.h
+  s_46fa640584bf31::t_43ddfc94eef7d2 74-80,95
+src/sql/plan_cache/ob_lib_cache_object_manager.cpp
+  s_46fa640584bf31::t_43ddfc94eef7d2 103
+  s_46fa640584bf31::t_773a05fb38e36d 104,123
+src/sql/plan_cache/ob_cache_object.cpp
+  s_46fa640584bf31::t_43ddfc94eef7d2 343,352
+src/pl/ob_pl.cpp
+  s_46fa640584bf31::t_43ddfc94eef7d2 3106,3122,3133
+src/oblib/lib/time/ob_time_utility.cpp
+  s_46fa640584bf31::t_773a05fb38e36d 190-195
+src/query/api/query/runtime/ob_request_time_guard.h
+  s_46fa640584bf31::t_773a05fb38e36d 132
+src/sql/plan_cache/ob_i_lib_cache_object.cpp
+  s_46fa640584bf31::t_43ddfc94eef7d2 45,61,69
+src/oblib/lib/time/ob_time_utility.h
+  s_46fa640584bf31::t_773a05fb38e36d 46-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1d88938a4e0c575acef83a73d71fcca9e5294657",
+  "prompts": {},
+  "sessions": {
+    "s_46fa640584bf31": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e81a-4b81-7eb0-bb35-f4b1c76ec66b",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}

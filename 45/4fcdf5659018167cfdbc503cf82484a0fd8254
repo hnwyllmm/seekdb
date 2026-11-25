@@ -1,0 +1,19 @@
+tools/deploy/mysql_test/test_suite/inner_table/r/mysql/show_sys_tables_in_sys.result
+  s_46fa640584bf31::t_c357fbaa8a81e1 2021,2083-2086
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "454fcdf5659018167cfdbc503cf82484a0fd8254",
+  "prompts": {},
+  "sessions": {
+    "s_46fa640584bf31": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e81a-4b81-7eb0-bb35-f4b1c76ec66b",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}

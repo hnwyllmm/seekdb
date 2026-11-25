@@ -1,0 +1,21 @@
+tools/deploy/mysql_test/test_suite/array/t/array_arith_op_mysql.test
+  s_1450aec9a62cfa::t_a3a3beb4b7fa96 68-381
+tools/deploy/mysql_test/test_suite/array/r/mysql/array_arith_op_mysql.result
+  s_1450aec9a62cfa::t_a3a3beb4b7fa96 1654-1962
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "75a89f9f04ee0c9d9bca8f202c8ab76e19877440",
+  "prompts": {},
+  "sessions": {
+    "s_1450aec9a62cfa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e8a1-2018-73d3-957b-6e23cb3716ec",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}

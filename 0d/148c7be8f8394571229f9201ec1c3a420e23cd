@@ -1,0 +1,36 @@
+tests/mysqltest/t/lambda_capture_eval.test
+  s_1450aec9a62cfa::t_107d5adbda52e7 25-29,72-81,114-126
+  s_99bd9318300c1c::t_b3a2abd8158ad0 127
+src/sql/engine/expr/ob_expr_array_map.cpp
+  s_1450aec9a62cfa::t_2ea536705355d4 37-39,65-74,208-209,238
+tests/mysqltest/r/lambda_capture_eval.result
+  s_1450aec9a62cfa::t_107d5adbda52e7 12-18,121-130,170-179
+src/sql/engine/expr/ob_expr_array_first.cpp
+  s_1450aec9a62cfa::t_2ea536705355d4 22,124-125,131-132,137-138,141-144
+src/query/api/query/engine/expr/ob_expr_array_map.h
+  s_1450aec9a62cfa::t_2ea536705355d4 75-78,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0d148c7be8f8394571229f9201ec1c3a420e23cd",
+  "prompts": {},
+  "sessions": {
+    "s_1450aec9a62cfa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e8a1-2018-73d3-957b-6e23cb3716ec",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    },
+    "s_99bd9318300c1c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c972-d73b-7203-b5c1-870abbb05adf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "wangyunlai.wyl <wangyunlai.wyl@B-X5EBQ6LT-0055.local>"
+    }
+  }
+}
